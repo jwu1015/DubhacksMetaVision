@@ -31,9 +31,9 @@ log = logging.getLogger("gtl.search")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-# Per-source budget so search_all stays under ~3.5s. SerpAPI's published 30-day average for Lens
-# is ~6.3s, so expect Lens timeouts; raising "lens" needs A1 to accept a longer search budget.
-TIMEOUT_S = {"lens": 3.2, "shopping": 3.2, "ebay": 3.2}
+# Per-source limits, set so results come back rather than for speed (the 3.5s target is on hold).
+# Real calls took ~1s (Shopping), ~3.5s (eBay) and 7-8s (Lens), with a 13s Lens outlier.
+TIMEOUT_S = {"lens": 15.0, "shopping": 10.0, "ebay": 10.0}
 # "all" (the default) returned only an ai_overview link and no visual_matches in our one test, so ask
 # for visual_matches directly. Compare again once Lens returns results.
 LENS_TYPE = "visual_matches"
