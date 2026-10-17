@@ -18,10 +18,12 @@ struct ProductCard: View {
                 .accessibilityHint("Opens matches and prices")
 
             HStack(spacing: 8) {
-                VerdictChip(verdict: search.pricing.verdict)
-                Text("typical \(Money.short(search.pricing.p25))–\(Money.short(search.pricing.p75))")
-                    .font(.spottedCaption)
-                    .foregroundStyle(.labelSecondary)
+                VerdictChip(verdict: search.priceInsight.bestMatchVerdict)
+                if let low = search.priceInsight.typicalLow, let high = search.priceInsight.typicalHigh {
+                    Text("typical \(Money.short(low))–\(Money.short(high))")
+                        .font(.spottedCaption)
+                        .foregroundStyle(.labelSecondary)
+                }
             }
 
             HStack(spacing: 8) {
@@ -46,12 +48,12 @@ struct ProductCard: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ProductThumbnail(source: search.bestMatch?.thumbnail ?? detect.cutoutURL)
+            ProductThumbnail(source: search.bestMatch?.imageURL ?? detect.cutoutURL ?? "")
             VStack(alignment: .leading, spacing: 2) {
                 Text(search.bestMatch?.title ?? detect.category.sentenceCased)
                     .font(.spottedHeadline)
                     .foregroundStyle(.labelPrimary)
-                Text("\(search.bestMatch?.store ?? detect.brandGuess ?? "") · \(search.sourcesOK.count) stores")
+                Text(search.bestMatch.map { "\($0.store) · \(search.storeCount) stores" } ?? "No exact match for sale")
                     .font(.spottedFootnote)
                     .foregroundStyle(.labelSecondary)
             }
@@ -70,19 +72,21 @@ struct ProductCard: View {
 /// 01b · After /detect: cutout, quick phrase and skeleton prices while /search runs.
 struct SearchingCard: View {
     let detect: DetectResponse
-    let finishedSources: Set<Source>
+    let finishedSources: Set<ProductSource>
     let isSaved: Bool
     let onSave: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                ProductThumbnail(source: detect.cutoutURL, background: .white)
+                // The cutout is a crop of the photo, so it keeps the default surface background.
+                ProductThumbnail(source: detect.cutoutURL ?? "")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(detect.category.sentenceCased)
                         .font(.spottedHeadline)
                         .foregroundStyle(.labelPrimary)
-                    Text("\(detect.style.sentenceCased) · \(detect.description)")
+                    // Description and style are usually empty at /detect time; Claude fills them in server-side.
+                    Text(detect.item.description.flatMap { $0.isEmpty ? nil : $0 } ?? "Finding prices")
                         .font(.spottedFootnote)
                         .foregroundStyle(.labelSecondary)
                 }
@@ -96,12 +100,12 @@ struct SearchingCard: View {
                 skeletonRow(store: 150, meta: 88)
                 skeletonRow(store: 118, meta: 64)
                 HStack {
-                    Text("Checking \(Source.allCases.count) stores…")
+                    Text("Checking \(ProductSource.searchable.count) stores…")
                         .font(.spottedCaption)
                         .foregroundStyle(.labelSecondary)
                     Spacer(minLength: 8)
                     HStack(spacing: 10) {
-                        ForEach(Source.allCases, id: \.self) { source in
+                        ForEach(ProductSource.searchable, id: \.self) { source in
                             let isDone = finishedSources.contains(source)
                             HStack(spacing: 4) {
                                 Icon(name: isDone ? "dot-done" : "dot-checking", size: 6)

@@ -35,9 +35,9 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 | Target | iOS 17+ (designed for iOS 26 Liquid Glass) | Glasses SDK requires iOS 17+. A physical iPhone is required; there is no simulator support. |
 | Glasses | **Meta Wearables Device Access Toolkit (DAT)** | Swift Package: `https://github.com/facebook/meta-wearables-dat-ios`. Start from the sample app in `/samples`. |
 | Networking (stream) | **WebRTC** (`stasel/WebRTC` Swift package, prebuilt Google WebRTC) | **Continuous** video track from the glasses to the backend's **WebRTC page**; detections come back over a data channel for live hotspots. |
-| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `/detect`, `/search/:id` and `/checkout` on the FastAPI backend, exposed through **ngrok**. |
+| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `/detect`, `/search/{captureID}`, `/checkout`, `/cart`, `/health` on the FastAPI backend (ngrok HTTPS). Types: backend's `Models.swift`. |
 | Speech in | Apple `Speech` framework | Glasses mic arrives over Bluetooth audio. |
-| Speech out | `AVSpeechSynthesizer` | Speaks the backend's `quick_phrase` and `spoken_summary` through the glasses' speakers. |
+| Speech out | `AVSpeechSynthesizer` | Speaks the backend's `quickPhrase`, `spokenSummary` and `Cart.spokenSummary` through the glasses' speakers. |
 | Agent | **Claude** (Anthropic API, tool use), called **from the backend** via `POST /agent` (streamed) | Understands requests and acts through tools. The phone executes app-side actions and confirms anything with money. |
 | Checkout | **Stripe Checkout (test mode)** in `SFSafariViewController` | The backend returns a checkout URL. Face ID (`LocalAuthentication`) gates opening it. |
 | Dev machine | macOS + Xcode | |
@@ -62,13 +62,13 @@ mics, speakers
                  │  (JSON validated, one retry)    ║  fallback: Roboflow SAM 3,    │
                  │                                 ║  then box crop                │
                  │            └──────► Python match + cutout ◄──────┘             │
-                 │            mask overlapping Claude's box → item on white → URL │
+                 │            mask overlapping Claude's box → photo crop → URL      │
                  │                         ▼                                       │
                  │  DetectResponse → phone: quick phrase spoken in the glasses,    │
                  │                         /search starts in the background        │
                  └─────────────────────────────────────────────────────────────────┘
                                            │ cutout URL
-                 ┌── POST /search/:id ─────▼───────────────────────────────────────┐
+                 ┌── POST /search/{id} ────▼───────────────────────────────────────┐
                  │  Sources in parallel, ~4 s timeout each:                        │
                  │  Google Lens (exact visual) · Google Shopping (new, top 2       │
                  │  queries) · eBay (used / pre-owned)          — all via SerpAPI  │
@@ -106,7 +106,7 @@ Glasses ══ continuous video (DAT, 504×896 @ 15 fps) ══► Phone
    Phone ◄═══════════ WebRTC data channel "detections" ═══════════┘
                                                                  (boxes + labels → unselected hotspots, 01a)
    On select (tap · gaze dwell ≥ 0.5 s · "what's this?"):
-   Phone ── best recent full-res frame ──► POST /detect ──► POST /search/:id   (diagram above)
+   Phone ── best recent full-res frame ──► POST /detect ──► POST /search/{captureID}  (diagram above)
 ```
 
 - **Stream layer (always on while Live):**
@@ -129,19 +129,19 @@ Glasses ══ continuous video (DAT, 504×896 @ 15 fps) ══► Phone
    - **Selecting** a hotspot, or saying "what's this?", grabs the best full-resolution frame.
 2. **`POST /detect`:** upload that frame and show "Looking…" immediately. Send the selected hotspot's box as a hint so Claude and SAM focus on the right object.
 3. **On `DetectResponse`:**
-   - Speak `quick_phrase` through the glasses ("Looks like a walnut lounge chair").
-   - Place the hotspot/brackets from `box`.
-   - Show the product card in a **searching** state with the cutout image and category.
-4. **`POST /search/:id`:** the phone calls this right away with the returned `id`.
+   - Speak `quickPhrase` through the glasses ("Lamp. Finding prices."). If `foundSomething` is false, speak it and stop (01c).
+   - Place the brackets from `segmentation.bbox` (normalized x/y/w/h).
+   - Show the product card in a **searching** state with the cutout crop and `item.category`.
+4. **`POST /search/{captureID}`:** call right away (the server is already searching); ~30 s timeout.
 5. **On `SearchResponse`:**
    - Fill the card with the best match, price and **price verdict** (low / fair / high).
    - Fill the detail view: Best match / Dupes / Used.
-   - Speak `spoken_summary`.
+   - Speak `spokenSummary`.
 6. **Actions:** Save / Add to cart (client state). **Check out:** send the cart, receive a Stripe URL, confirm with Face ID, and open it in `SFSafariViewController`.
 
 **Latency budget:**
 - `/detect`: about 2–3 s (Claude and SAM in parallel). Cover it with the "Looking…" state and an earcon.
-- `/search`: about 4–6 s, since the sources share a ~4 s timeout and then CLIP and pricing run. The card shows skeleton rows with "Checking 3 stores…" until it fills.
+- `/detect`: ~1.5 s measured. `/search`: ~4 s today, 8–10 s once real store search lands (use a 30 s timeout). The card shows skeleton rows with "Checking 3 stores…" until it fills.
 - The spoken quick phrase lands before search finishes, so the user is never waiting in silence.
 
 ---
@@ -157,7 +157,7 @@ Claude is the brain users talk to. The detect/search pipeline **finds** things; 
 | "What's this?" | Triggers a scan (`identify_current`) → reads `DetectResponse` | "Lounge chair. $1,299." |
 | "Save it for later" | `save_item` | "Saved." |
 | "Add it to my cart" | `add_to_cart` | "Chair added. Undo?" |
-| "Is that a good price?" | Reads `pricing` from `SearchResponse` | "Fair. Typical is $899 to $1,349." |
+| "Is that a good price?" | Reads `priceInsight` from `SearchResponse` | "Fair. Typical is $899 to $1,349." |
 | "Find it cheaper" / "Any used ones?" | `show_results(tab: dupes / used)` | "Used from $640 on eBay." |
 | "Compare the chair and the lamp" | `compare_items` | "Chair's $1,299, lamp's $189." (detail on phone) |
 | "Remove the lamp" | `remove_from_cart` (asks first) | "Remove the lamp?" |
@@ -179,7 +179,7 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
 - **Two kinds of tools:**
   - **Server tools**, run by the backend: `identify_current`, `search_more`, `compare_items`, `price_check`.
   - **App tools**, returned to the phone as `action` events and executed locally:
-    - `save_item`, `add_to_cart`, `remove_from_cart`, `undo_last`
+    - `save_item`, `add_to_cart` (→ `POST /cart`), `remove_from_cart` (→ `DELETE /cart/{index}`), `undo_last`
     - `show_results`, `open_screen`, `list_saved`, `start_checkout`
 
     The phone sends each action's result back so Claude can continue.
@@ -219,7 +219,7 @@ Spotted/
 │  ├─ WebRTCPublisher.swift     // RTCPeerConnection: signaling, video track, "detections" data channel
 │  ├─ GlassesVideoCapturer.swift// RTCVideoCapturer: DAT CMSampleBuffer → RTCCVPixelBuffer → RTCVideoFrame
 │  ├─ FrameBuffer.swift         // keeps the sharpest recent full-res frame for /detect
-│  ├─ APIClient.swift           // POST /detect (multipart JPEG), POST /search/:id, POST /checkout
+│  ├─ APIClient.swift           // POST /detect (multipart JPEG), /search/{captureID}, /checkout, /cart, GET /health
 │  ├─ Config.swift              // BASE_URL = current ngrok https URL
 │  └─ Models.swift              // DetectResponse, SearchResponse, Listing, PriceVerdict (Codable)
 ├─ Agent/
@@ -292,10 +292,10 @@ Each screen exists in Figma in both themes: **📱 Screens** (Lime) and **📱 S
 
 ### Pipeline-driven design updates (now in Figma)
 - **01 · Searching state:**
-  - The card shows the **cutout** thumbnail, the category and `quick_phrase`.
+  - The card shows the **cutout** crop, `item.category` and `quickPhrase` (no description; it's empty at detect time).
   - Skeleton price rows read "Checking 3 stores…".
 - **01 · Price verdict chip:** "Fair price · typical $899–$1,349" next to the price.
-- **03 · Segments:** **Best match / Dupes / Used** replace Stores / Reviews / Similar. Each row shows its similarity ("Exact match" or "Similar").
+- **03 · Segments:** **Best match / Dupes / Used** replace Stores / Reviews / Similar. Each row shows "Similar" until `matchScore` is live, then "Exact match" at ≥ 85. Dupes show `savingsPct`, any row can show `matchReason`.
 - **06 · Checkout:**
   - The final step hands off to **Stripe Checkout (test mode)** in a Safari sheet, gated by Face ID.
   - The Visa card shown is the one the user enters in Stripe (test card `4242…`).
@@ -459,7 +459,20 @@ Target: **WCAG 2.2 AA** (the standard that the ADA, Section 508 and the European
 
 Base URL: the current **ngrok HTTPS** URL, set in `Config.swift`. It changes each time ngrok restarts unless the team uses a reserved domain.
 
-> These field names are a **proposal** for the frontend. Confirm them against the backend's `DetectResponse` / `SearchResponse` models, then build the UI against a mock that returns exactly this.
+> **Source of truth: `Models.swift`** from the backend team. It matches `backend/models.py` exactly, decodes 14 real server responses (including null cases and error bodies), and compiles in Swift 5 and 6. Drop it into `Network/Models.swift` as-is.
+> - Decode with a plain `JSONDecoder()` (all keys are mapped in `CodingKeys`; don't set `keyDecodingStrategy`).
+> - Optionals really can be `nil` at runtime. Never force-unwrap them.
+> - Errors (any non-2xx) decode as `APIError { detail }`.
+
+| Endpoint | Request | Response | Status |
+|---|---|---|---|
+| `POST /detect` | multipart `image` (JPEG, quality ~0.8, long side ≤ 2048 px); soon optional `hint_box` | `DetectResponse` | Live (~1.5 s) |
+| `POST /search/{captureID}` | no body | `SearchResponse` (404 if unknown id) | Live (~4 s now, 8–10 s with real store search) |
+| `POST /identify` | multipart `image` | `IdentifyResponse` (detect + search) | Live; **testing only** |
+| `POST /checkout` | `CheckoutRequest` | `CheckoutResponse` | Live (test "Order placed!" page; Stripe test mode coming) |
+| `POST /cart` · `GET /cart` · `DELETE /cart/{index}` | `AddToCartRequest` | `Cart` (with `spokenSummary`) | Coming with the search/cart PR |
+| `GET /health` | — | `HealthResponse` | Live; use for the connection indicator |
+| `POST /offer` + data channel `detections` | `SessionDescription` | `SessionDescription`, `DetectionsMessage` | Our format, adopted by the backend; not live yet |
 
 ### WebRTC page (continuous stream)
 The backend hosts a **WebRTC page**; the phone is a publisher.
@@ -488,40 +501,41 @@ The backend hosts a **WebRTC page**; the phone is a publisher.
 > - **Different networks or a strict venue Wi-Fi:** you need a **TURN** server (e.g., Cloudflare or Twilio TURN), configured on both peers.
 > - Demo safest bet: phone and laptop on the same phone hotspot.
 
-### `POST /detect`
-Request: `multipart/form-data`, field `image` (best full-res JPEG), optional `hint_box` (the selected `track_id`'s box).
+### `POST /detect` → `DetectResponse`
+Request: `multipart/form-data`, field `image` (JPEG, quality ~0.8, long side ≤ 2048 px). Coming soon: optional `hint_box` form field, the tapped hotspot's box as JSON `{"x","y","w","h"}` (use `BBox(corners: detection.box)`), so the backend cuts out the object the user chose.
 
-```jsonc
-// DetectResponse
-{
-  "id": "det_7f3a",                          // used for /search/:id
-  "category": "lounge chair",
-  "description": "Mid-century walnut lounge chair, black leather",
-  "style": "mid-century modern",
-  "brand_guess": "Article",                  // may be null
-  "box": [0.31, 0.22, 0.58, 0.71],           // normalized x1, y1, x2, y2 (Claude's rough box)
-  "mask_score": 0.91,                        // SAM 3 score; null if box-crop fallback
-  "cutout_url": "https://…/cutouts/det_7f3a.png",   // item on white
-  "search_queries": ["walnut leather lounge chair", "article lounge chair", "mid-century lounge chair"],
-  "quick_phrase": "Looks like a walnut lounge chair."
-}
-```
+| Field | Use in the app |
+|---|---|
+| `captureID` | Pass to `/search/{captureID}`; ignore any response whose `captureID` isn't the current scan |
+| `quickPhrase` | **Speak immediately** ("Lamp. Finding prices.") |
+| `foundSomething` (computed) | `false` → speak `quickPhrase` ("I couldn't spot a product there…"), show 01c, **stop** |
+| `segmentation.bbox` | SAM's tight box, **normalized `{x, y, w, h}`** → `bbox.rect(in: viewSize)` for brackets |
+| `segmentation.cutoutURL` | Thumbnail on the searching card. It's a **crop of the photo**, not the item on white. |
+| `segmentation.maskScore` | SAM confidence; `nil` on fallback crop |
+| `item.category` | Card title while searching ("Lamp") |
+| `item.description / style / brandGuess / searchQueries` | **Usually empty at `/detect` time** (SAM answers first; Claude describes the item server-side). Don't show them from `/detect`. |
 
-### `POST /search/:id`
-```jsonc
-// SearchResponse
-{
-  "id": "det_7f3a",
-  "best_match": { "title": "Walnut Lounge Chair", "source": "google_lens", "store": "Article",
-                  "price": 1299.00, "currency": "USD", "url": "…", "thumbnail": "…",
-                  "similarity": 92, "condition": "new" },
-  "dupes": [ { "title": "…", "store": "Wayfair", "price": 489.00, "similarity": 71, "condition": "new", "url": "…", "thumbnail": "…" } ],
-  "used":  [ { "title": "…", "store": "eBay", "price": 640.00, "similarity": 84, "condition": "pre-owned", "url": "…", "thumbnail": "…" } ],
-  "pricing": { "median": 1180.00, "p25": 899.00, "p75": 1349.00, "verdict": "fair" },  // low | fair | high
-  "sources_ok": ["google_lens", "google_shopping", "ebay"],   // any that timed out are missing
-  "spoken_summary": "Article has it for $1,299. Fair price. Used from $640."
-}
-```
+### `POST /search/{captureID}` → `SearchResponse`
+The server already started searching during `/detect`, so this call just waits for the result. Use a **~30 s request timeout** and keep the card in the searching state (01b) meanwhile.
+
+| Field | Use in the app |
+|---|---|
+| `bestMatch: Product?` | Main card. Can be **nil** (nothing for sale), so show "No exact match for sale" and fall back to dupes/used. |
+| `dupes: [Product]` | Dupes tab; cheapest savings first. Can be empty. |
+| `used: [Product]` | Used tab. Can be empty. |
+| `priceInsight.verdictText` | Ready-made line for the price verdict block ("West Elm is above the typical $120–$329 range.") |
+| `priceInsight.bestMatchVerdict.label` | Verdict chip: "Low price" / "Fair price" / "High price" |
+| `priceInsight.typicalLow / typicalHigh / median` | Range bar (p25 / p75 / median). Can be **nil**, so hide the bar. |
+| `spokenSummary` | **Speak when the cards appear** |
+| `sourcesOK` | Not sent yet, so it decodes as `nil`. **Treat `nil` as "all stores fine".** |
+
+`Product` fields that differ from the design's earlier names:
+- **Image:** `imageURL` (optional), not `thumbnail`.
+- **Similarity:** `matchScore` (optional, 0–100), not `similarity`. It's **`nil` until CLIP scoring is live**, so show **"Similar"**, never "Exact match", until `isExactMatch` can be true.
+- **Tier:** `tier` is `new` / `dupe` / `used`, and `tier.condition` gives "new" / "pre-owned".
+- **Source:** `source` is `lens` / `shopping` / `ebay`, and `source.displayName` gives "Google Lens" and so on.
+- **New fields:** `savingsPct` (dupes: "Save 34%") and `matchReason` (e.g. "Same tripod base and drum shade"), both great as a caption.
+- **Buy:** opens `product.url`.
 
 ### `POST /agent`  (streamed, Server-Sent Events)
 ```jsonc
@@ -554,25 +568,35 @@ event: done     data: { "session_id": "s_91c2", "awaiting_tool_results": ["tu_1"
   event: confirm  data: { "tool_use_id": "tu_3", "kind": "checkout", "summary": "2 items · $1,642.01 · Visa 4242", "within_limit": true }
   ```
 
-### `POST /checkout`
-```jsonc
-// request: selected items from the cart
-{ "items": [ { "title": "Walnut Lounge Chair", "price": 1299.00, "url": "…", "thumbnail": "…" } ] }
-// response
-{ "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_…" }
-```
+### `POST /checkout` → `CheckoutResponse`
+Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `checkoutURL` in `SFSafariViewController` (after the Face ID gate). Today it returns a test "Order placed!" page; Stripe test mode is coming.
+
+### Cart (server-side, coming with the search/cart PR)
+- `POST /cart` with `AddToCartRequest(product:)`: send a `Product` exactly as `/search` returned it.
+- `GET /cart` and `DELETE /cart/{index}`.
+- Each returns `Cart { items, total, spokenSummary }`. Speak `spokenSummary` after adds and removes.
+- Until the PR lands, keep the cart in `AppState` and switch to the server cart when the endpoints are live.
+
+### `GET /health` → `HealthResponse`
+Poll every ~10 s while the app is open.
+- `ok` drives the status pill.
+- `modelService == false` → show "Segmentation offline".
+- `fixtures == true` → show a small **"Test data"** badge in debug builds so nobody mistakes canned results for real ones.
 
 ### UI rules
 - **Hotspots from the stream:**
   - Each `objects[]` entry with `score ≥ 0.6` becomes an **unselected Hotspot** (01a) at the center of its `box`.
   - Key hotspots by `track_id` and animate them to new positions. Fade one out after ~1 s without updates.
   - While the data channel is disconnected, show the stream as "Reconnecting…" in the status pill.
-- **Selected:** tapping a hotspot, gaze dwell or "what's this?" makes that object **selected** (brackets) and starts `/detect`.
-- **Low confidence:** if `mask_score < 0.5` or `category` is empty, show **Which one?** (07) or "Couldn't tell, try again".
-- **Similarity:** results already exclude CLIP scores under 40. Show "Exact match" at ≥ 85, otherwise "Similar".
-- **Price verdict chip:** **Low** (success color) / **Fair** (secondary) / **High** (warning). Always text plus color, never color alone.
-- **Partial results:** if `sources_ok` is missing a source, show that tab as "Unavailable right now" instead of empty.
-- **Stale responses:** ignore any response whose `id` isn't the current scan.
+- **Selected:** tapping a hotspot, gaze dwell or "what's this?" makes that object **selected** (brackets from `segmentation.bbox`) and starts `/detect`.
+- **Nothing found:** `foundSomething == false` → speak `quickPhrase`, show **Couldn't tell** (01c), and don't call `/search`.
+- **Low confidence:** if `segmentation.maskScore < 0.5`, show **Which one?** (07) when there are two hotspots, otherwise proceed.
+- **Similarity:** show "Exact match" only when `product.isExactMatch` (`matchScore ≥ 85`). While `matchScore` is `nil` (today), show **"Similar"**.
+- **Price verdict chip:** text is `bestMatchVerdict.label`. Color: Low = success, Fair = secondary, High = warning. Always text plus color.
+- **Empty states:** `bestMatch == nil` → "No exact match for sale"; empty `dupes` or `used` → "No dupes found" / "No used listings".
+- **Partial results:** only when `sourcesOK` is non-nil and missing a source, show that source as "Unavailable right now". `nil` means all fine.
+- **Stale responses:** ignore any response whose `captureID` isn't the current scan.
+- **Errors:** show `APIError.detail` only in debug builds. Users see the verbal-guide line ("Couldn't reach the store search. Try again.").
 
 ---
 
@@ -587,9 +611,10 @@ event: done     data: { "session_id": "s_91c2", "awaiting_tool_results": ["tu_1"
    - `UIBackgroundModes` → `bluetooth-central`, plus `NSBluetoothAlwaysUsageDescription`
    - `NSLocalNetworkUsageDescription` + `NSBonjourServices`: as required by the DAT SDK for Wi-Fi streaming
    - `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`, `NSFaceIDUsageDescription`
-5. Set `BASE_URL` in `Config.swift` to the backend's current **ngrok HTTPS** URL. HTTPS means no App Transport Security exceptions, and the phone and laptop don't need to share a network.
-   - Use an ngrok reserved domain for the demo so the URL doesn't change on restart.
-   - Add the `ngrok-skip-browser-warning: true` header to requests if the free tier shows its interstitial page.
+5. **Base URL (secret):** the backend team shares it by DM. **Never commit it.** The repo is public, and every `/detect` costs a Claude call.
+   - Put it in an **untracked** `Config.xcconfig` (`API_BASE_URL = https:/$()/…`) read via Info.plist, or an untracked `Config.swift`.
+   - Add the file to `.gitignore` and commit a `Config.example.xcconfig` with a placeholder.
+   - HTTPS means no App Transport Security exceptions. No ngrok header is needed; `URLSession` requests (API and images) go straight through.
 
 ---
 
@@ -597,11 +622,11 @@ event: done     data: { "session_id": "s_91c2", "awaiting_tool_results": ["tu_1"
 
 - [ ] 1. Meta sample app running with the glasses' camera visible on the phone
 - [ ] 2. Own app with the live preview + `AppState`
-- [ ] 3. Mock server returning the exact `DetectResponse` / `SearchResponse` JSON above + `APIClient`
+- [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/health`, `/detect`, `/search`, `/checkout`) against the real backend (or `/identify` for quick tests)
 - [ ] 4a. WebRTC: add `stasel/WebRTC`, publish a test track (phone camera) to the backend page via `POST /offer`, and confirm it plays on the laptop
 - [ ] 4b. Swap in `GlassesVideoCapturer` (DAT frames → track); handle `detections` → live hotspots
-- [ ] 4c. Select a hotspot → best full-res frame → `/detect` → speak `quick_phrase` → card in searching state (01)
-- [ ] 5. `/search/:id` → fill card: best match, price verdict chip, `spoken_summary`
+- [ ] 4c. Select a hotspot → best full-res frame → `/detect` → speak `quickPhrase` → card in searching state (01b)
+- [ ] 5. `/search/{captureID}` → fill card: `bestMatch`, verdict chip, `verdictText`; speak `spokenSummary`; handle nil/empty
 - [ ] 6. Hotspot (01a) → selection → brackets
 - [ ] 7. Product Detail (03): Best match / Dupes / Used
 - [ ] 8. Saved (04) and Cart (05)
@@ -624,7 +649,7 @@ event: done     data: { "session_id": "s_91c2", "awaiting_tool_results": ["tu_1"
 - **Assistant name:** "Spotted assistant" (powered by Claude) or a named persona? Keep the disclosure either way.
 - **Phone "hover":** gaze vs press-and-hold for revealing the item tag.
 - **Visa track story:** checkout runs on **Stripe test mode**. Decide how Visa shows up for judges: Visa test cards in Stripe, the "agent limit" concept, or a Visa sandbox API (Intelligent Commerce / Token Service) layered on. Ask the Visa mentors early.
-- **Field names:** confirm `DetectResponse` / `SearchResponse` with the backend team (see the proposal above).
+- **`/agent` owner:** not on the backend yet. Decide who builds it, or fall back to on-device keyword commands (see the agent section).
 - **WebRTC page details:** confirm with the backend team:
   - the signaling route (`POST /offer`?) and SDP format
   - codec (H.264 vs VP8)

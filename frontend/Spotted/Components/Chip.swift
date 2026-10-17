@@ -41,15 +41,15 @@ struct VerdictChip: View {
     private var color: Color {
         switch verdict {
         case .low: .success
-        case .fair: .labelSecondary
+        case .fair, .unknown: .labelSecondary
         case .high: .warning
         }
     }
 
     @ViewBuilder private var marker: some View {
         switch (verdict, detailed) {
-        case (.fair, false): Icon(name: "dot-verdict", size: 6)
-        case (.fair, true): Icon(name: "icon-verdict-fair", size: 12)
+        case (.fair, false), (.unknown, false): Icon(name: "dot-verdict", size: 6)
+        case (.fair, true), (.unknown, true): Icon(name: "icon-verdict-fair", size: 12)
         case (_, false): Circle().fill(color).frame(width: 6, height: 6)
         case (.low, true):
             Image(systemName: "arrow.down").font(.system(size: 10, weight: .bold)).foregroundStyle(color)
@@ -59,7 +59,7 @@ struct VerdictChip: View {
     }
 }
 
-/// "Exact match" (similarity ≥ 85) or "Similar".
+/// "Exact match" (matchScore ≥ 85) or "Similar". matchScore is nil until visual scoring is live.
 struct MatchTag: View {
     let isExact: Bool
 

@@ -22,19 +22,20 @@ struct ProductDetail: View {
         return ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 0) {
-                    hero(image: search.bestMatch?.thumbnail ?? detect.cutoutURL)
+                    hero(image: search.bestMatch?.imageURL ?? detect.cutoutURL ?? "")
 
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text((search.bestMatch?.store ?? detect.brandGuess ?? "").uppercased())
+                            Text((search.bestMatch?.store ?? detect.item.brandGuess ?? "").uppercased())
                                 .font(.spottedCaption)
                                 .foregroundStyle(.labelSecondary)
                             Text(title)
                                 .font(.spottedTitle1)
                                 .foregroundStyle(.labelPrimary)
                             HStack(spacing: 6) {
-                                Text(detect.style.sentenceCased).foregroundStyle(.labelPrimary)
-                                Text("· \(detect.description) · \(app.currentRoom)").foregroundStyle(.labelSecondary)
+                                Text((detect.item.style ?? detect.category).sentenceCased)
+                                    .foregroundStyle(.labelPrimary)
+                                Text("· \(app.currentRoom)").foregroundStyle(.labelSecondary)
                             }
                             .font(.spottedFootnote)
                             .lineLimit(1)
@@ -119,10 +120,14 @@ struct ProductDetail: View {
         case .bestMatch:
             if let match = search.bestMatch {
                 listingGroup([match])
+            } else {
+                Text("No exact match for sale")
+                    .font(.spottedFootnote)
+                    .foregroundStyle(.labelSecondary)
             }
-            VerdictCard(pricing: search.pricing, price: search.bestMatch?.price ?? search.pricing.median)
+            VerdictCard(insight: search.priceInsight, price: search.bestMatch?.price)
         case .dupes:
-            if search.isAvailable(.googleShopping) {
+            if search.isAvailable(.shopping) {
                 listingSection(search.dupes, noun: search.dupes.count == 1 ? "similar item" : "similar items",
                                empty: "No similar items found")
             }
@@ -133,13 +138,13 @@ struct ProductDetail: View {
                                empty: "No pre-owned listings found")
             }
         }
-        ForEach(Source.allCases.filter { !search.isAvailable($0) }, id: \.self) { source in
+        ForEach(ProductSource.searchable.filter { !search.isAvailable($0) }, id: \.self) { source in
             UnavailableSourceCard(source: source, onRetry: app.retrySearch)
         }
     }
 
     @ViewBuilder
-    private func listingSection(_ listings: [Listing], noun: String, empty: String) -> some View {
+    private func listingSection(_ listings: [Product], noun: String, empty: String) -> some View {
         if let cheapest = listings.map(\.price).min() {
             Text("\(listings.count) \(noun) · from \(Money.short(cheapest))")
                 .font(.spottedFootnote)
@@ -152,7 +157,7 @@ struct ProductDetail: View {
         }
     }
 
-    private func listingGroup(_ listings: [Listing]) -> some View {
+    private func listingGroup(_ listings: [Product]) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(listings.enumerated()), id: \.element.id) { index, listing in
                 Button {
@@ -173,16 +178,16 @@ struct ProductDetail: View {
 
     // MARK: - Bottom bar
 
-    private func bottomBar(match: Listing, search: SearchResponse) -> some View {
-        let newPrices = ([match] + search.dupes).filter { $0.condition == "new" && $0.isExactMatch }.map(\.price)
-        let isLowestNew = match.condition == "new" && match.price <= (newPrices.min() ?? match.price)
+    private func bottomBar(match: Product, search: SearchResponse) -> some View {
+        let newPrices = ([match] + search.dupes).filter { !$0.isUsed && $0.isExactMatch }.map(\.price)
+        let isLowestNew = !match.isUsed && match.price <= (newPrices.min() ?? match.price)
 
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Money.short(match.price))
                     .font(.spottedTitle2.monospacedDigit())
                     .foregroundStyle(.labelPrimary)
-                Text(search.pricing.verdict.label + (isLowestNew ? " · lowest new" : ""))
+                Text(search.priceInsight.bestMatchVerdict.label + (isLowestNew ? " · lowest new" : ""))
                     .font(.spottedCaption)
                     .foregroundStyle(.labelSecondary)
             }
@@ -199,7 +204,7 @@ struct ProductDetail: View {
 
 /// One store result: name, match tag, source/condition, price.
 struct ListingRow: View {
-    let listing: Listing
+    let listing: Product
 
     var body: some View {
         HStack(spacing: 12) {
@@ -231,35 +236,48 @@ struct ListingRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var isUsed: Bool { listing.condition != "new" }
-
     private var icon: String {
-        if isUsed { return "icon-pre-owned" }
-        return listing.source == Source.googleLens.rawValue ? "icon-lens" : "icon-tag"
+        if listing.isUsed { return "icon-pre-owned" }
+        return listing.source == .lens ? "icon-lens" : "icon-tag"
     }
 
+    /// e.g. "Google Lens · New · 92% match", "Google Shopping · New · Save 62%", "eBay · Pre-owned".
     private var subtitle: String {
-        if isUsed { return "Pre-owned · \(listing.similarity)% match" }
-        let source = listing.source.flatMap(Source.init(rawValue:))?.name ?? listing.store
-        return "\(source) · New · \(listing.similarity)% match"
+        var parts = [listing.source.displayName, listing.isUsed ? "Pre-owned" : "New"]
+        if let score = listing.matchScore {
+            parts.append("\(score)% match")
+        } else if let savings = listing.savingsPct {
+            parts.append("Save \(savings)%")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
 /// Price verdict with the typical range (p25–p75), median and this price.
+/// The range can be missing (too few comparable prices), so the bar only shows when it's complete.
 struct VerdictCard: View {
-    let pricing: Pricing
-    let price: Double
+    let insight: PriceInsight
+    let price: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                VerdictChip(verdict: pricing.verdict, detailed: true)
+                VerdictChip(verdict: insight.bestMatchVerdict, detailed: true)
                 Spacer()
-                Text("Median \(Money.short(pricing.median))")
-                    .font(.spottedFootnote)
-                    .foregroundStyle(.labelSecondary)
+                if let median = insight.median {
+                    Text("Median \(Money.short(median))")
+                        .font(.spottedFootnote)
+                        .foregroundStyle(.labelSecondary)
+                }
             }
-            PriceRangeBar(pricing: pricing, price: price)
+            if let low = insight.typicalLow, let high = insight.typicalHigh, let median = insight.median,
+               let price, high > low {
+                PriceRangeBar(low: low, high: high, median: median, price: price)
+            }
+            Text(insight.verdictText)
+                .font(.spottedFootnote)
+                .foregroundStyle(.labelSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -268,26 +286,29 @@ struct VerdictCard: View {
 }
 
 struct PriceRangeBar: View {
-    let pricing: Pricing
+    /// Typical range: p25 and p75.
+    let low: Double
+    let high: Double
+    let median: Double
     let price: Double
 
     var body: some View {
         GeometryReader { geo in
-            let span = pricing.p75 - pricing.p25
-            let low = min(pricing.p25, price) - span * 0.45
-            let high = max(pricing.p75, price) + span * 0.35
-            let x = { (value: Double) -> CGFloat in CGFloat((value - low) / (high - low)) * geo.size.width }
+            let span = high - low
+            let start = min(low, price) - span * 0.45
+            let end = max(high, price) + span * 0.35
+            let x = { (value: Double) -> CGFloat in CGFloat((value - start) / (end - start)) * geo.size.width }
 
             ZStack(alignment: .topLeading) {
                 Capsule().fill(.white.opacity(0.1))
                     .frame(width: geo.size.width, height: 6)
                     .offset(y: 22)
                 Capsule().fill(.white.opacity(0.32))
-                    .frame(width: x(pricing.p75) - x(pricing.p25), height: 6)
-                    .offset(x: x(pricing.p25), y: 22)
+                    .frame(width: x(high) - x(low), height: 6)
+                    .offset(x: x(low), y: 22)
                 RoundedRectangle(cornerRadius: 1).fill(.white.opacity(0.85))
                     .frame(width: 2, height: 14)
-                    .offset(x: x(pricing.median) - 1, y: 18)
+                    .offset(x: x(median) - 1, y: 18)
                 Image("range-this-price")
                     .resizable()
                     .frame(width: 18, height: 18)
@@ -300,9 +321,9 @@ struct PriceRangeBar: View {
                     .position(x: x(price), y: 8)
 
                 Group {
-                    Text(Money.short(pricing.p25)).position(x: x(pricing.p25), y: 52)
-                    Text("typical range").position(x: (x(pricing.p25) + x(pricing.p75)) / 2, y: 52)
-                    Text(Money.short(pricing.p75)).position(x: x(pricing.p75), y: 52)
+                    Text(Money.short(low)).position(x: x(low), y: 52)
+                    Text("typical range").position(x: (x(low) + x(high)) / 2, y: 52)
+                    Text(Money.short(high)).position(x: x(high), y: 52)
                 }
                 .font(.spottedCaption)
                 .foregroundStyle(.labelTertiary)
@@ -311,20 +332,20 @@ struct PriceRangeBar: View {
         }
         .frame(height: 60)
         .accessibilityElement()
-        .accessibilityLabel("Typical range \(Money.short(pricing.p25)) to \(Money.short(pricing.p75)), median \(Money.short(pricing.median)). This price \(Money.short(price)).")
+        .accessibilityLabel("Typical range \(Money.short(low)) to \(Money.short(high)), median \(Money.short(median)). This price \(Money.short(price)).")
     }
 }
 
 /// Partial results: a source that timed out shows as unavailable, never as empty.
 struct UnavailableSourceCard: View {
-    let source: Source
+    let source: ProductSource
     let onRetry: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Icon(name: "icon-timeout", size: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(source.name)
+                Text(source.displayName)
                     .font(.spottedCallout)
                     .foregroundStyle(.labelPrimary)
                 Text("Unavailable right now")
@@ -345,7 +366,7 @@ struct UnavailableSourceCard: View {
                 .background(.white.opacity(0.12), in: Capsule())
             }
             .buttonStyle(PressableStyle())
-            .accessibilityLabel("Retry \(source.name)")
+            .accessibilityLabel("Retry \(source.displayName)")
         }
         .padding(.leading, 16)
         .padding(.trailing, 12)

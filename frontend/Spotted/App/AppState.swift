@@ -25,7 +25,7 @@ final class AppState {
     var scan: ScanState = .idle
     var selectedTrackID: String?
     /// Sources that have answered while /search runs.
-    var finishedSources: Set<Source> = []
+    var finishedSources: Set<ProductSource> = []
     var currentRoom = "Maya’s apartment"
 
     // Sheets
@@ -72,11 +72,11 @@ final class AppState {
 
             try? await Task.sleep(for: .seconds(0.9))
             guard case .detected = scan else { return }
-            finishedSources.insert(.googleLens)
+            finishedSources.insert(.lens)
 
             try? await Task.sleep(for: .seconds(1.6))
             guard case .detected = scan else { return }
-            finishedSources = Set(Source.allCases)
+            finishedSources = Set(ProductSource.searchable)
             scan = .matched(MockData.detect, MockData.search)
         }
     }
@@ -114,8 +114,9 @@ final class AppState {
         } else {
             let match = currentSearch?.bestMatch
             saved.insert(
-                SavedItem(id: UUID().uuidString, title: title, store: match?.store ?? detect.brandGuess ?? "",
-                          price: match?.price ?? 0, image: match?.thumbnail ?? detect.cutoutURL, room: currentRoom),
+                SavedItem(id: UUID().uuidString, title: title, store: match?.store ?? detect.item.brandGuess ?? "",
+                          price: match?.price ?? 0, image: match?.imageURL ?? detect.cutoutURL ?? "",
+                          room: currentRoom),
                 at: 0
             )
         }
@@ -135,7 +136,8 @@ final class AppState {
             let short = match.title.split(separator: " ").dropFirst().joined(separator: " ")
             cart.append(CartItem(id: UUID().uuidString, title: match.title,
                                  shortTitle: short.isEmpty ? match.title : short, store: match.store,
-                                 room: currentRoom, price: match.price, quantity: 1, image: match.thumbnail))
+                                 room: currentRoom, price: match.price, quantity: 1,
+                                 image: match.imageURL ?? currentDetect?.cutoutURL ?? ""))
         }
     }
 
@@ -174,7 +176,7 @@ final class AppState {
         case .unselected: clearScan()
         case .searching:
             selectedTrackID = MockData.chair.trackID
-            finishedSources = [.googleLens]
+            finishedSources = [.lens]
             scan = .detected(MockData.detect)
         case .matched:
             selectedTrackID = MockData.chair.trackID
