@@ -99,7 +99,9 @@ async def model_service_ok(timeout: float = 3.0) -> bool:
             f"{config.MODEL_SERVICE_URL}/health", timeout=timeout,
             headers={"Authorization": f"Bearer {config.MODEL_SERVICE_TOKEN}"},
         )
-        return r.status_code == 200 and r.json().get("ok") is True
+        body = r.json()
+        # Baptiste's SAM server answers {"status": "ok"}; the spec's model service {"ok": true}.
+        return r.status_code == 200 and (body.get("ok") is True or body.get("status") == "ok")
     except Exception:  # unreachable, timeout, bad JSON: all just mean "not ok"
         return False
 
