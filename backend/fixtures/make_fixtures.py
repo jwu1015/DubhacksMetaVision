@@ -6,8 +6,6 @@ URLs served by our backend use the placeholder __BASE__; main.py swaps in
 PUBLIC_BASE_URL when it serves fixtures. Product links point at example.com and
 thumbnails at placehold.co so the iOS team gets loadable images without fake store links.
 """
-import base64
-import io
 import json
 import statistics
 import sys
@@ -82,10 +80,7 @@ def make_images():
     # Mask preview: the original with a translucent overlay on the object.
     tinted = Image.blend(room, Image.new("RGB", room.size, (255, 60, 60)), 0.45)
     Image.composite(tinted, room, mask).save(HERE / "lamp_mask.jpg", quality=85)
-
-    buf = io.BytesIO()
-    mask.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode(), tight
+    return tight
 
 
 # ---------- data ----------
@@ -212,7 +207,7 @@ def write(name: str, obj):
 
 
 def main():
-    mask_b64, tight = make_images()
+    tight = make_images()
     raw, ranked, sims = make_products()
 
     segmentation = Segmentation(
@@ -235,9 +230,15 @@ def main():
     write("products_ranked_lamp.json", [p.model_dump(mode="json") for p in ranked])
     write("detect_response.json", detect)
     write("search_response.json", search)
+    # Baptiste's segmentation server (POST /segment): pixel boxes [x1, y1, x2, y2] of the submitted
+    # frame, highest score first, no masks yet.
     write("segment_service_response.json", {
-        "masks": [{"score": 0.93, "bbox": tight.model_dump(), "mask_png_b64": mask_b64}],
-        "latency_ms": 420,
+        "width": IMG_W, "height": IMG_H,
+        "objects": [{
+            "id": 0, "score": 0.93, "prompt": ITEM.category,
+            "box": [round(tight.x * IMG_W, 1), round(tight.y * IMG_H, 1),
+                    round((tight.x + tight.w) * IMG_W, 1), round((tight.y + tight.h) * IMG_H, 1)],
+        }],
     })
     # Only products with a thumbnail are sent; similarities line up with candidate_urls.
     with_thumb = [(p, s) for p, s in zip(raw, sims) if p.image_url]
