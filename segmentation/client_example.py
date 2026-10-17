@@ -1,12 +1,24 @@
-"""Usage: python client_example.py image.jpg [prompt] [url]"""
+"""Stream JPEG frames to a tracking session.
+Usage: python client_example.py "person" frame1.jpg frame2.jpg ... [--url http://localhost:8000]
+"""
 import sys
 
 import requests
 
-path = sys.argv[1]
-prompt = sys.argv[2] if len(sys.argv) > 2 else "person"
-url = sys.argv[3] if len(sys.argv) > 3 else "http://localhost:8000/segment"
-with open(path, "rb") as f:
-    r = requests.post(url, params={"prompt": prompt}, data=f.read(), headers={"Content-Type": "image/jpeg"})
-r.raise_for_status()
-print(r.json())
+args = sys.argv[1:]
+url = "http://localhost:8000"
+if "--url" in args:
+    i = args.index("--url")
+    url = args[i + 1]
+    del args[i : i + 2]
+prompt, frames = args[0], args[1:]
+
+sid = requests.post(f"{url}/session", json={"prompt": prompt}).json()["session_id"]
+try:
+    for path in frames:
+        with open(path, "rb") as f:
+            r = requests.post(f"{url}/session/{sid}/frame", data=f.read(), headers={"Content-Type": "image/jpeg"})
+        r.raise_for_status()
+        print(path, r.json())
+finally:
+    requests.delete(f"{url}/session/{sid}")
