@@ -7,7 +7,8 @@ import pytest
 
 import search
 from models import Item, Product
-from search import dedupe, normalize_url, parse_ebay, parse_lens, parse_price, parse_shopping
+from search import (dedupe, normalize_url, parse_ebay, parse_lens, parse_price, parse_shopping,
+                    queries_from_lens)
 
 DATA = Path(__file__).resolve().parent / "data"
 
@@ -158,13 +159,45 @@ def test_parse_lens_no_results_response():
     assert parse_lens(raw("lens_no_results.json")) == ([], 0)
 
 
-# ---------- search_all ----------
+# ---------- queries_from_lens ----------
 
-ITEM = Item(category="table lamp", search_queries=["white rice paper square table lamp", "paper table lamp", "lamp"])
+def test_queries_from_lens_cleans_titles_and_skips_dupes():
+    titles = ["Rattan Arc Floor Lamp - Wayfair", "rattan arc floor lamp | Etsy", "Lamp", "Brass Tripod Floor Lamp"]
+    assert queries_from_lens("floor lamp", titles) == ["Rattan Arc Floor Lamp", "Brass Tripod Floor Lamp"]
 
 
-def fake_serp(lens_behavior):
+def test_queries_from_lens_puts_label_in_front_when_missing():
+    assert queries_from_lens("lamp", ["Mid-Century Brass Fixture"]) == ["lamp Mid-Century Brass Fixture"]
+
+
+def test_queries_from_lens_limit_and_word_cap():
+    titles = [f"Walnut Side Table Model {i} with a very long marketing description attached" for i in range(5)]
+    qs = queries_from_lens("table", titles)
+    assert len(qs) == 3 and all(len(q.split()) <= 8 for q in qs)
+
+
+@pytest.mark.parametrize("titles", [[], ["Lamp"], ["  "]])
+def test_queries_from_lens_falls_back_to_label(titles):
+    assert queries_from_lens("table lamp", titles) == ["table lamp"]
+
+
+def test_queries_from_lens_nothing_at_all():
+    assert queries_from_lens("", []) == []
+
+
+# ---------- search_item / search_room ----------
+
+LENS_RAW = {"visual_matches": [
+    {"title": "White Rice Paper Table Lamp - Wayfair", "link": "https://w.example/1", "source": "Wayfair"},  # no price
+    {"title": "Paper Lantern Lamp", "link": "https://w.example/2", "source": "Etsy",
+     "price": {"value": "$40.00", "extracted_value": 40.0, "currency": "$"}},
+]}
+
+
+def fake_serp(lens_behavior, seen=None):
     async def serp(params, capture_id=None, name=None):
+        if seen is not None:
+            seen.append((params["engine"], params.get("q") or params.get("_nkw")))
         if params["engine"] == "google_lens":
             return await lens_behavior()
         if params["engine"] == "ebay":
@@ -178,25 +211,83 @@ def fake_serp(lens_behavior):
     return serp
 
 
-def test_search_all_survives_failing_source(monkeypatch):
-    async def lens_down():
-        raise search.SerpError("HTTP 401: Invalid API key")
+async def lens_ok():
+    return LENS_RAW
 
-    monkeypatch.setattr(search, "serp", fake_serp(lens_down))
-    products = asyncio.run(search.search_all("https://img.example/cutout.jpg", ITEM))
-    sources = {p.source for p in products}
-    assert sources == {"shopping", "ebay"}
+
+def test_search_item_uses_lens_titles_as_queries_even_when_unpriced(monkeypatch):
+    seen = []
+    monkeypatch.setattr(search, "serp", fake_serp(lens_ok, seen))
+    products, stats, queries = asyncio.run(search.search_item_with_stats("https://img.example/c.jpg", "table lamp"))
+    assert queries == ["White Rice Paper Table Lamp", "table lamp Paper Lantern Lamp"]
+    assert ("google_shopping", queries[0]) in seen and ("google_shopping", queries[1]) in seen
+    assert ("ebay", queries[0]) in seen
+    assert stats["lens"]["dropped_no_price"] == 1
+    assert {p.source for p in products} == {"lens", "shopping", "ebay"}
     shop1 = [p.source_rank for p in products if p.store.endswith("(q1)")]
     assert shop1 == list(range(6, 12))  # query 1 continues query 0's numbering
 
 
-def test_search_all_survives_slow_source(monkeypatch):
+def test_search_item_survives_failing_lens(monkeypatch):
+    async def lens_down():
+        raise search.SerpError("HTTP 401: Invalid API key")
+
+    seen = []
+    monkeypatch.setattr(search, "serp", fake_serp(lens_down, seen))
+    products = asyncio.run(search.search_item("https://img.example/c.jpg", "table lamp"))
+    assert {p.source for p in products} == {"shopping", "ebay"}
+    assert ("google_shopping", "table lamp") in seen  # fell back to the SAM label
+
+
+def test_search_item_survives_slow_lens(monkeypatch):
     async def lens_hangs():
         await asyncio.sleep(5)
         return {}
 
     monkeypatch.setattr(search, "serp", fake_serp(lens_hangs))
     monkeypatch.setitem(search.TIMEOUT_S, "lens", 0.05)
-    products, stats = asyncio.run(search.search_all_with_stats("https://img.example/cutout.jpg", ITEM))
+    products, stats, _ = asyncio.run(search.search_item_with_stats("https://img.example/c.jpg", "table lamp"))
     assert stats["lens"]["status"].startswith("timeout")
     assert {p.source for p in products} == {"shopping", "ebay"}
+
+
+def test_search_all_wrapper_uses_category_as_label(monkeypatch):
+    seen = []
+    monkeypatch.setattr(search, "serp", fake_serp(lens_ok, seen))
+    asyncio.run(search.search_all("https://img.example/c.jpg", Item(category="table lamp")))
+    assert any(e == "google_lens" for e, _ in seen)
+
+
+def test_search_room_one_failing_item_does_not_affect_others(monkeypatch):
+    async def fake_item(url, label, capture_id=None):
+        if label == "bad":
+            raise RuntimeError("boom")
+        return [product(title=label)]
+
+    monkeypatch.setattr(search, "search_item", fake_item)
+    done = []
+
+    async def on_result(i, label, products):
+        done.append((i, label, len(products)))
+
+    items = [("lamp", "https://i/1"), ("bad", "https://i/2"), ("chair", "https://i/3")]
+    results = asyncio.run(search.search_room(items, "c_1", on_result))
+    assert [len(r) for r in results] == [1, 0, 1]
+    assert sorted(done) == [(0, "lamp", 1), (1, "bad", 0), (2, "chair", 1)]
+
+
+def test_search_room_caps_items_and_concurrency(monkeypatch):
+    running = peak = 0
+
+    async def fake_item(url, label, capture_id=None):
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.02)
+        running -= 1
+        return []
+
+    monkeypatch.setattr(search, "search_item", fake_item)
+    results = asyncio.run(search.search_room([(f"item{i}", f"https://i/{i}") for i in range(8)]))
+    assert len(results) == search.MAX_ROOM_ITEMS
+    assert peak <= search.ROOM_CONCURRENCY
