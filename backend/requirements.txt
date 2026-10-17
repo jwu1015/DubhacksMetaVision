@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+httpx
+pillow
+numpy
+python-dotenv
+anthropic
+stripe

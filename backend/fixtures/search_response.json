@@ -1,0 +1,78 @@
+{
+  "capture_id": "c_fixture",
+  "best_match": {
+    "title": "Mid-Century Tripod Floor Lamp",
+    "store": "West Elm",
+    "price": 349.0,
+    "currency": "USD",
+    "url": "https://example.com/?store=west-elm&item=mid-century-tripod-floor-lamp",
+    "image_url": "https://placehold.co/400x400/png?text=West+Elm+0",
+    "source": "lens",
+    "tier": "new",
+    "source_rank": 0,
+    "match_score": 92,
+    "savings_pct": null,
+    "match_reason": "Same tripod base and drum shade"
+  },
+  "dupes": [
+    {
+      "title": "Tripod Floor Lamp, Walnut Finish",
+      "store": "Target",
+      "price": 89.99,
+      "currency": "USD",
+      "url": "https://example.com/?store=target&item=tripod-floor-lamp--walnut-finish",
+      "image_url": "https://placehold.co/400x400/png?text=Target+2",
+      "source": "lens",
+      "tier": "dupe",
+      "source_rank": 2,
+      "match_score": 84,
+      "savings_pct": 74,
+      "match_reason": "Same silhouette, lighter wood"
+    },
+    {
+      "title": "Wood Tripod Floor Lamp",
+      "store": "Amazon",
+      "price": 119.99,
+      "currency": "USD",
+      "url": "https://example.com/?store=amazon&item=wood-tripod-floor-lamp",
+      "image_url": "https://placehold.co/400x400/png?text=Amazon+3",
+      "source": "lens",
+      "tier": "dupe",
+      "source_rank": 3,
+      "match_score": 76,
+      "savings_pct": 66,
+      "match_reason": "Similar tripod legs and drum shade"
+    }
+  ],
+  "used": [
+    {
+      "title": "West Elm Mid-Century Tripod Floor Lamp - Pre-owned",
+      "store": "eBay",
+      "price": 120.0,
+      "currency": "USD",
+      "url": "https://example.com/?store=ebay&item=west-elm-mid-century-tripod-floor-lamp---pre-owned",
+      "image_url": "https://placehold.co/400x400/png?text=eBay+0",
+      "source": "ebay",
+      "tier": "used",
+      "source_rank": 0,
+      "match_score": 78,
+      "savings_pct": 66,
+      "match_reason": "Likely the same West Elm lamp"
+    }
+  ],
+  "price_insight": {
+    "typical_low": 119.99,
+    "typical_high": 329.0,
+    "median": 265.0,
+    "sample_size": 9,
+    "best_match_verdict": "high",
+    "verdict_text": "West Elm is above the typical $120-$329 range. The Target dupe saves you $259."
+  },
+  "spoken_summary": "That's a West Elm tripod lamp, about 349 dollars. Target has a close lookalike for 90.",
+  "timing_ms": {
+    "search": 2100,
+    "rerank": 450,
+    "rank": 1200,
+    "total": 3900
+  }
+}

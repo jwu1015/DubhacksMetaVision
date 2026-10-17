@@ -1,0 +1,21 @@
+{
+  "query_url": "__BASE__/uploads/c_fixture_cutout.jpg",
+  "candidate_urls": [
+    "https://placehold.co/400x400/png?text=West+Elm+0",
+    "https://placehold.co/400x400/png?text=Wayfair+1",
+    "https://placehold.co/400x400/png?text=Target+2",
+    "https://placehold.co/400x400/png?text=Amazon+3",
+    "https://placehold.co/400x400/png?text=Etsy+4",
+    "https://placehold.co/400x400/png?text=IKEA+5",
+    "https://placehold.co/400x400/png?text=CB2+6",
+    "https://placehold.co/400x400/png?text=Pottery+Barn+0",
+    "https://placehold.co/400x400/png?text=Article+1",
+    "https://placehold.co/400x400/png?text=Walmart+2",
+    "https://placehold.co/400x400/png?text=Crate+&+Barrel+3",
+    "https://placehold.co/400x400/png?text=Home+Depot+4",
+    "https://placehold.co/400x400/png?text=Amazon+6",
+    "https://placehold.co/400x400/png?text=eBay+0",
+    "https://placehold.co/400x400/png?text=eBay+1",
+    "https://placehold.co/400x400/png?text=eBay+2"
+  ]
+}

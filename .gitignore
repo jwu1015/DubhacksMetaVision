@@ -130,3 +130,11 @@ tmp/
 temp/
 *.tmp
 nohup.out
+
+# ---- Backend runtime files (keep the folders, ignore their contents) ----
+# Must stay after the generic `logs/` rule above so the re-include works.
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/logs/
+backend/logs/*
+!backend/logs/.gitkeep
