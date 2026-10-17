@@ -7,21 +7,10 @@
 main.py mounts this with app.include_router(cart.router).
 """
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from models import Product
+from models import AddToCartRequest, Cart, Product
 
 router = APIRouter()
-
-
-class AddToCartRequest(BaseModel):   # PROPOSED for models.py
-    product: Product
-
-
-class Cart(BaseModel):               # PROPOSED for models.py
-    items: list[Product]
-    total: float
-    spoken_summary: str
 
 
 items: list[Product] = []

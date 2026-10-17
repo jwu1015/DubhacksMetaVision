@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+import cart
 import config
 import net
 from models import (
@@ -264,6 +265,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Get the Look backend", lifespan=lifespan)
 app.mount("/uploads", StaticFiles(directory=config.UPLOADS), name="uploads")
+app.include_router(cart.router)
 
 
 @app.post("/detect", response_model=DetectResponse)

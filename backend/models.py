@@ -96,6 +96,16 @@ class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search mer
 
 # --- Request/response bodies for the remaining routes (typed versions of Section 4e) ---
 
+class AddToCartRequest(BaseModel):
+    product: Product
+
+
+class Cart(BaseModel):
+    items: list[Product]
+    total: float
+    spoken_summary: str
+
+
 class CheckoutItem(BaseModel):
     title: str
     price: float
