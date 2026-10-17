@@ -1,12 +1,14 @@
-"""W3: cut the item out of the photo.
+"""W3: find the item and cut it out of the photo, with SAM on Baptiste's segmentation server
+(segmentation/server.py). The server returns boxes only (no masks yet), so a cutout is a crop.
 
-1. SAM (Baptiste's segmentation server, segmentation/server.py): send the photo with the item's
-   category as the text prompt and take the detected box that overlaps Claude's box. It is much
-   tighter than Claude's. Claude knows which object the user means; SAM knows its exact edges.
-   A lone detection is used even without overlap; with several and none overlapping, Claude's
-   box wins. The server returns boxes only (no masks yet), so the cutout is a crop, not the
-   item on white.
-2. Fallback: a padded crop around Claude's box, or a center crop when there is no usable box.
+SAM first (main.py, when a segmentation server is configured): sam_objects() with SAM_CATEGORIES
+finds every home-goods object in view, and center_object() picks the one at the center of the view,
+where glasses point. Claude then only describes that object for search.
+
+Claude first (the fallback, segment()): Claude has picked the item; SAM is asked about Claude's
+category and its box that overlaps Claude's is used, since it is much tighter. A lone detection is
+used even without overlap; with several and none overlapping, Claude's box wins. Without a usable
+SAM box: a padded crop around Claude's box, or a center crop when there is no usable box.
 
     python segment.py fixtures/lamp_room.jpg fixtures/item_lamp.json   # writes uploads/cli_cutout.jpg + cli_mask.jpg
 """
@@ -14,8 +16,11 @@ import asyncio
 import io
 import json
 import logging
+import math
+import os
 import sys
 import time
+from typing import NamedTuple
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -31,11 +36,25 @@ CENTER = 0.60        # the center crop covers 60% of each side
 SAM_PAD = 0.08       # SAM's box is tight, so it gets less padding
 SAM_MIN_AREA = 0.02  # a SAM box under 2% of the image is ignored
 SAM_IOU = 0.3        # a SAM box must overlap Claude's this much to count as the same item
-SAM_TIMEOUT = 2.0    # seconds; vision already uses most of /detect's ~3s budget
+CENTER_MAX = 0.25    # SAM first: an object further than this from the center of the view isn't "looked at"
+SAM_TIMEOUT = 2.0    # seconds, Claude first: SAM runs after Claude, inside /detect's budget
+SAM_FIRST_TIMEOUT = 2.5  # seconds, SAM first: about Claude's own time, so a busy scene that makes SAM
+                         # slow is no slower than going through Claude
+# SAM first asks only about these: the server checks each category separately, so its full default
+# list took ~1.9s per photo against ~0.8s for these 12 (17 Oct). Anything else falls back to Claude,
+# which then asks SAM about its exact category. SAM_CATEGORIES="" uses the server's own list.
+SAM_CATEGORIES = os.getenv(
+    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
 SAM_EDGE = 640       # the server resizes internally, so bigger photos only cost upload time
 MAX_EDGE = 1024      # saved images are capped at this size
 
 RED, YELLOW = (255, 60, 60), (255, 210, 0)
+
+
+class Found(NamedTuple):
+    box: BBox     # normalized to the photo
+    score: float
+    label: str    # the category that matched, e.g. "sofa"
 
 
 def ms_since(t0: float) -> int:
@@ -66,9 +85,10 @@ def iou(a: BBox, b: BBox) -> float:
     return inter / (a.w * a.h + b.w * b.h - inter)
 
 
-async def sam_box(image: Image.Image, item: Item) -> tuple[BBox, float] | None:
-    """SAM's box for the item and its score, or None (no server, failure, nothing usable). Never raises."""
-    if not config.MODEL_SERVICE_URL or not item.category:
+async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = SAM_TIMEOUT) -> list[Found] | None:
+    """Every object SAM finds (prompt None: the server's own shopping categories), highest score first;
+    None if the call failed. Never raises."""
+    if not config.MODEL_SERVICE_URL:
         return None
     small = image.copy()
     small.thumbnail((SAM_EDGE, SAM_EDGE))
@@ -77,11 +97,11 @@ async def sam_box(image: Image.Image, item: Item) -> tuple[BBox, float] | None:
     headers = {"Content-Type": "image/jpeg", **config.segmentation_headers()}
     t0 = time.perf_counter()
     try:
-        # wait_for makes SAM_TIMEOUT a hard cap; httpx's timeout only bounds each wait for data.
+        # wait_for makes the timeout a hard cap; httpx's timeout only bounds each wait for data.
         # No redirects: without a valid token Cloudflare redirects to a login page.
         r = await asyncio.wait_for(net.client().post(
-            f"{config.MODEL_SERVICE_URL}/segment", params={"prompt": item.category},
-            content=buf.getvalue(), headers=headers, timeout=SAM_TIMEOUT, follow_redirects=False), SAM_TIMEOUT)
+            f"{config.MODEL_SERVICE_URL}/segment", params={"prompt": prompt} if prompt else None,
+            content=buf.getvalue(), headers=headers, timeout=timeout, follow_redirects=False), timeout)
         if r.status_code in (302, 401, 403):
             log.warning("sam: Cloudflare Access rejected the request (%d); check CF_ACCESS_CLIENT_ID/SECRET "
                         "and the server's access policy", r.status_code)
@@ -89,30 +109,47 @@ async def sam_box(image: Image.Image, item: Item) -> tuple[BBox, float] | None:
         r.raise_for_status()
         data = r.json()
         W, H = data["width"], data["height"]
-        found = [(pad(BBox(x=x0 / W, y=y0 / H, w=(x1 - x0) / W, h=(y1 - y0) / H), 0.0), float(o["score"]))
+        found = [Found(pad(BBox(x=x0 / W, y=y0 / H, w=(x1 - x0) / W, h=(y1 - y0) / H), 0.0),
+                       float(o["score"]), o.get("prompt") or prompt or "item")
                  for o in data["objects"] for x0, y0, x1, y1 in [o["box"]]]
     except Exception as e:  # unreachable, too slow, error status, unexpected JSON
         log.warning("sam failed after %dms: %r", ms_since(t0), e)
         return None
-    if not found:
-        log.info("sam %dms: nothing found for %r", ms_since(t0), item.category)
+    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "default categories")
+    return sorted(found, key=lambda f: -f.score)
+
+
+def center_object(found: list[Found]) -> Found | None:
+    """The object the user is looking at: the smallest box covering the center of the view (a lamp
+    in front of a sofa, not the sofa), else the nearest box within CENTER_MAX. Tiny boxes are ignored."""
+    def distance(b: BBox) -> float:  # from the center of the view to the box; 0 when the box covers it
+        dx = max(b.x - 0.5, 0.0, 0.5 - (b.x + b.w))
+        dy = max(b.y - 0.5, 0.0, 0.5 - (b.y + b.h))
+        return math.hypot(dx, dy)
+
+    usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA and distance(f.box) <= CENTER_MAX]
+    return min(usable, key=lambda f: (distance(f.box), f.box.w * f.box.h), default=None)
+
+
+async def sam_box(image: Image.Image, item: Item) -> Found | None:
+    """Claude first: SAM's box for Claude's item, or None (no server, failure, nothing usable)."""
+    if not item.category:
         return None
-    matches = [f for f in found if item.bbox and iou(f[0], item.bbox) > SAM_IOU]
+    found = await sam_objects(image, item.category)
+    if not found:
+        return None
+    matches = [f for f in found if item.bbox and iou(f.box, item.bbox) > SAM_IOU]
     if matches:
-        box, score = max(matches, key=lambda f: f[1])
+        pick = max(matches, key=lambda f: f.score)
     elif len(found) == 1:
-        box, score = found[0]  # a lone detection: Claude's box was probably just off
+        pick = found[0]  # a lone detection: Claude's box was probably just off
     else:
         # Several candidates and none where Claude looked: a rough crop of the right item
         # beats a tight crop of the wrong one.
-        log.info("sam %dms: %d objects, none overlap Claude's box; using Claude's box",
-                 ms_since(t0), len(found))
+        log.info("sam: %d objects, none overlap Claude's box; using Claude's box", len(found))
         return None
-    log.info("sam %dms: %d objects, %d overlap Claude's box, picked score=%.2f",
-             ms_since(t0), len(found), len(matches), score)
-    if box.w * box.h < SAM_MIN_AREA:
-        return None
-    return box, score
+    log.info("sam: %d objects, %d overlap Claude's box, picked score=%.2f", len(found), len(matches), pick.score)
+    return pick if pick.box.w * pick.box.h >= SAM_MIN_AREA else None
 
 
 def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tuple[BBox, tuple]]) -> tuple[str, str]:
@@ -138,32 +175,38 @@ def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tupl
     return cutout_path, mask_path
 
 
-async def segment(image: Image.Image, item: Item, capture_id: str) -> Segmentation:
-    """Never raises: SAM's box if usable, else Claude's padded box, else the center crop.
-
-    The preview shows the cropped region in red and Claude's box in yellow.
-    """
-    t0 = time.perf_counter()
-    sam = await sam_box(image, item)
-    if sam:
-        method, bbox, score = "sam3", sam[0], sam[1]
-        crop = pad(bbox, SAM_PAD)
-    else:
-        method, score = "bbox_fallback", None
-        bbox = crop = padded_box(item.bbox)
-    try:
-        cutout_path, mask_path = save_images(
-            image, crop, capture_id, [(crop, RED)] + ([(item.bbox, YELLOW)] if item.bbox else []))
-    except Exception:
-        log.exception("segment %s: crop failed, using center crop", capture_id)
-        method, score = "bbox_fallback", None
-        bbox = crop = padded_box(None)
-        cutout_path, mask_path = save_images(image, crop, capture_id, [(crop, RED)])
+def result(method: str, bbox: BBox, score: float | None, paths: tuple[str, str], t0: float) -> Segmentation:
+    cutout_path, mask_path = paths
     return Segmentation(
         method=method, bbox=bbox, mask_score=score,
         cutout_path=cutout_path, cutout_url=f"{config.PUBLIC_BASE_URL}/{cutout_path}",
         mask_preview_url=f"{config.PUBLIC_BASE_URL}/{mask_path}", latency_ms=ms_since(t0),
     )
+
+
+def sam_crop(image: Image.Image, found: Found, capture_id: str, t0: float, rough: BBox | None = None) -> Segmentation:
+    """The cutout for a SAM box: the box plus SAM_PAD. The preview shows the crop in red and, if
+    given, Claude's box in yellow."""
+    crop = pad(found.box, SAM_PAD)
+    paths = save_images(image, crop, capture_id, [(crop, RED)] + ([(rough, YELLOW)] if rough else []))
+    return result("sam3", found.box, found.score, paths, t0)
+
+
+async def segment(image: Image.Image, item: Item, capture_id: str, use_sam: bool = True) -> Segmentation:
+    """Claude first. Never raises: SAM's box if usable, else Claude's padded box, else the center crop.
+    use_sam=False skips SAM (e.g. it just failed for this photo)."""
+    t0 = time.perf_counter()
+    found = await sam_box(image, item) if use_sam else None
+    try:
+        if found:
+            return sam_crop(image, found, capture_id, t0, rough=item.bbox)
+        crop = padded_box(item.bbox)
+        paths = save_images(image, crop, capture_id, [(crop, RED)] + ([(item.bbox, YELLOW)] if item.bbox else []))
+        return result("bbox_fallback", crop, None, paths, t0)
+    except Exception:
+        log.exception("segment %s: crop failed, using center crop", capture_id)
+        crop = padded_box(None)
+        return result("bbox_fallback", crop, None, save_images(image, crop, capture_id, [(crop, RED)]), t0)
 
 
 async def _cli(image_path: str, item_path: str):
