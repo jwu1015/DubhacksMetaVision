@@ -10,7 +10,7 @@ Object ids stay stable across the frames of a session.
   GET    /health
 
 Boxes are [x1, y1, x2, y2] in pixels of the submitted frame.
-Config via env vars: SAM_MODEL, SAM_PROMPT, SAM_THRESHOLD, MAX_SESSIONS, SESSION_TTL, HOST, PORT.
+Config via env vars: SAM_MODEL, SAM_PROMPT (comma-separated phrases), SAM_THRESHOLD, MERGE_IOU, MAX_SESSIONS, SESSION_TTL, HOST, PORT.
 Run: python server.py
 """
 import io
@@ -27,8 +27,20 @@ from PIL import Image, UnidentifiedImageError
 from transformers import Sam3VideoConfig, Sam3VideoModel, Sam3VideoProcessor
 
 MODEL_ID = os.environ.get("SAM_MODEL", "facebook/sam3.1")
-DEFAULT_PROMPT = os.environ.get("SAM_PROMPT", "person")
+
+
+def parse_prompt(text):
+    """'chair, lamp' -> ['chair', 'lamp']; a single phrase stays a string."""
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    return parts[0] if len(parts) == 1 else parts
+
+
+# Comma-separated noun phrases; each one is detected separately.
+DEFAULT_PROMPT = parse_prompt(os.environ.get("SAM_PROMPT", "person"))
 THRESHOLD = float(os.environ.get("SAM_THRESHOLD", "0.5"))
+# Boxes overlapping at least this much (IoU) are treated as one object matched by several
+# prompts (e.g. "sofa" and "furniture"); only the highest-scoring one is kept.
+MERGE_IOU = float(os.environ.get("MERGE_IOU", "0.7"))
 MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "4"))
 SESSION_TTL = float(os.environ.get("SESSION_TTL", "120"))  # seconds idle before a session is evicted
 
@@ -70,6 +82,23 @@ def decode(data: bytes) -> Image.Image:
         raise HTTPException(400, "could not decode image")
 
 
+def iou(a, b):
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    inter = w * h
+    return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter)
+
+
+def merge_duplicates(objects):
+    kept = []
+    for obj in sorted(objects, key=lambda o: o["score"], reverse=True):
+        if all(iou(obj["box"], k["box"]) < MERGE_IOU for k in kept):
+            kept.append(obj)
+    return kept
+
+
 def process_frame(session: Session, image: Image.Image):
     with session.lock:
         session.last_used = time.monotonic()
@@ -91,10 +120,10 @@ def process_frame(session: Session, image: Image.Image):
         "frame_idx": frame_idx,
         "width": image.width,
         "height": image.height,
-        "objects": [
+        "objects": merge_duplicates([
             {"id": i, "score": round(s, 4), "box": [round(v, 1) for v in b], "prompt": id_to_prompt.get(i)}
             for i, s, b in zip(ids, scores, boxes)
-        ],
+        ]),
     }
 
 
@@ -142,7 +171,8 @@ def delete_session(sid: str):
 
 
 @app.post("/segment")
-async def segment(request: Request, prompt: str = DEFAULT_PROMPT):
+async def segment(request: Request, prompt: str | None = None):
+    prompt = parse_prompt(prompt) if prompt else DEFAULT_PROMPT
     image = decode(await request.body())
     result = await run_in_threadpool(lambda: process_frame(Session(prompt), image))
     result.pop("frame_idx")
