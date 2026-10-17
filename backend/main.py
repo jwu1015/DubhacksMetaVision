@@ -43,6 +43,10 @@ FIXTURE_IMAGES = {
 }
 
 captures: dict[str, Capture] = {}
+# /search work, started as soon as /detect finishes so it is underway (or done) when the app asks.
+search_tasks: dict[str, asyncio.Task] = {}
+
+STAGES = ("vision", "segment", "search", "rerank", "pricing", "rank")
 
 
 # ---------- helpers ----------
@@ -151,6 +155,9 @@ async def run_detect(data: bytes) -> DetectResponse:
         capture_id=capture_id, image_path=image_path, image_url=image_url, item=item,
         segmentation=segmentation, image_sha256=hashlib.sha256(data).hexdigest(),
     )
+    if segmentation is not None:
+        # Start searching now; the app's /search call picks up the result (saves a round trip).
+        search_tasks[capture_id] = asyncio.create_task(compute_search(captures[capture_id]))
     latency = ms_since(t0)
     log.info("detect %s category=%r %s total=%dms", capture_id, item.category, timing, latency)
     return DetectResponse(
@@ -160,7 +167,6 @@ async def run_detect(data: bytes) -> DetectResponse:
 
 
 async def run_search(capture_id: str) -> SearchResponse:
-    t0 = time.perf_counter()
     cap = captures.get(capture_id)
     if cap is None:
         raise HTTPException(404, f"unknown capture_id {capture_id}")
@@ -169,6 +175,24 @@ async def run_search(capture_id: str) -> SearchResponse:
     if cap.item.category is None or cap.segmentation is None:
         return empty_search(capture_id)
 
+    task = search_tasks.get(capture_id)
+    if task is not None:
+        t0 = time.perf_counter()
+        try:
+            # shield: an app that hangs up mid-request must not cancel the shared search
+            resp = await asyncio.shield(task)
+            log.info("search %s: started at /detect, waited %dms for it", capture_id, ms_since(t0))
+            return resp
+        except Exception:
+            log.exception("search %s: early search failed; running it again", capture_id)
+            search_tasks.pop(capture_id, None)
+    return await compute_search(cap)
+
+
+async def compute_search(cap: Capture) -> SearchResponse:
+    """search -> rerank -> pricing + rank for one capture."""
+    t0 = time.perf_counter()
+    capture_id = cap.capture_id
     timing: dict[str, int] = {}
     cutout_url = cap.segmentation.cutout_url
 
@@ -200,6 +224,24 @@ async def run_search(capture_id: str) -> SearchResponse:
     return resp
 
 
+async def warm_up():
+    """Make the first real request as fast as later ones: import the stages now, and make one vision
+    call so the Claude connection is open and the API has prepared our output schema (under a cent)."""
+    for name in STAGES:
+        try:
+            stage(name)
+        except Exception:
+            log.exception("warm-up: stage %s failed to import", name)
+    vision = stage("vision") if config.WARMUP and not config.USE_FIXTURES else None
+    if vision:
+        t0 = time.perf_counter()
+        try:
+            await vision.detect((config.FIXTURES / "lamp_room.jpg").read_bytes())
+            log.info("warm-up: vision call %dms", ms_since(t0))
+        except Exception as e:
+            log.warning("warm-up: vision call failed: %r", e)
+
+
 # ---------- app ----------
 
 config.UPLOADS.mkdir(exist_ok=True)
@@ -209,12 +251,14 @@ config.LOGS.mkdir(exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     install_fixtures()
-    # Wake the Modal container now so the first real request isn't a cold start.
-    wake = asyncio.create_task(model_service_ok(timeout=90.0))
-    log.info("ready: fixtures=%s demo_mode=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
-             config.PUBLIC_BASE_URL)
+    # In the background, so the server accepts requests right away: wake the segmentation server
+    # (no cold start on the first request) and warm up our own stages.
+    background = [asyncio.create_task(model_service_ok(timeout=90.0)), asyncio.create_task(warm_up())]
+    log.info("ready: fixtures=%s demo_mode=%s warmup=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
+             config.WARMUP, config.PUBLIC_BASE_URL)
     yield
-    wake.cancel()
+    for task in background + list(search_tasks.values()):
+        task.cancel()
     await net.close()
 
 
