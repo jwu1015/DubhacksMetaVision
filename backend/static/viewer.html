@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get the Look · Live</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0c;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --off: #71717a;
+    --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--fg); font: 600 16px/1.25 var(--font);
+  }
+  #app { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; }
+  #stage { position: relative; flex: 1 1 auto; min-width: 0; }
+  #video, #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  #video { object-fit: contain; }
+  #overlay { pointer-events: none; }
+  #waiting {
+    position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
+    text-align: center; color: var(--muted); font-size: clamp(24px, 4.5vh, 56px);
+  }
+  #badge {
+    position: absolute; top: clamp(12px, 2.5vh, 32px); right: clamp(12px, 2vw, 32px);
+    display: flex; align-items: center; gap: 0.5em; padding: 0.45em 0.95em;
+    border-radius: 999px; background: rgba(0, 0, 0, 0.65);
+    font-size: clamp(16px, 3vh, 34px); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  #badge .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--off); }
+  #badge[data-state="ok"] .dot { background: var(--ok); }
+  #badge[data-state="stale"] .dot, #badge[data-state="offline"] .dot { background: var(--warn); }
+  /* Product cards for the item being looked at; filled from "look" events later. */
+  #look {
+    flex: 0 0 min(34vw, 560px); padding: 3vh 2vw; overflow: hidden;
+    background: #141418; border-left: 1px solid #26262b; font-size: clamp(18px, 2.8vh, 32px);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="stage">
+    <img id="video" alt="">
+    <canvas id="overlay"></canvas>
+    <div id="waiting">Waiting for video…</div>
+    <div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting…</span></div>
+  </main>
+  <aside id="look" hidden aria-live="polite"></aside>
+</div>
+<script>
+"use strict";
+const stage = document.getElementById("stage");
+const video = document.getElementById("video");
+const canvas = document.getElementById("overlay");
+const ctx = canvas.getContext("2d");
+const waiting = document.getElementById("waiting");
+const badge = document.getElementById("badge");
+const badgeText = document.getElementById("badge-text");
+
+const MOVE_MS = 400;      // a box glides to its new position
+const FADE_IN_MS = 250;
+const FADE_OUT_MS = 1500; // a box missing from the latest update fades out
+const STALE_S = 10;       // the badge turns amber when the boxes are older than this
+const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font").trim();
+
+// Labels arrive every few seconds; between updates each box stays where it was last seen.
+const tracks = new Map(); // "epoch:id" -> {id, label, from, to, t0, born, gone}
+let epoch = 0;            // bumps when the tracking session restarts (its ids restart)
+let lastFrameIdx = -1;
+let updatedAt = null;     // performance.now() when the frame behind the latest boxes was captured
+let count = 0;
+let tracking = "connecting";
+
+function color(id) { return "hsl(" + Math.round((id * 137.508) % 360) + ", 90%, 62%)"; }
+function ease(k) { return 1 - Math.pow(1 - k, 3); }
+
+function boxAt(t, now) {
+  const k = ease(Math.min(1, (now - t.t0) / MOVE_MS));
+  return t.from.map((v, i) => v + (t.to[i] - v) * k);
+}
+
+function alphaAt(t, now) {
+  const a = Math.min(1, (now - t.born) / FADE_IN_MS);
+  return t.gone === null ? a : a * Math.max(0, 1 - (now - t.gone) / FADE_OUT_MS);
+}
+
+function fadeAll(now) {
+  for (const t of tracks.values()) if (t.gone === null) t.gone = now;
+}
+
+function onObjects(ev) {
+  const now = performance.now();
+  if (ev.frame_idx < lastFrameIdx) { fadeAll(now); epoch++; }
+  lastFrameIdx = ev.frame_idx;
+  updatedAt = now - ev.age_ms;
+  count = ev.objects.length;
+  const seen = new Set();
+  for (const o of ev.objects) {
+    const key = epoch + ":" + o.id;
+    const box = [o.box.x, o.box.y, o.box.w, o.box.h];
+    const t = tracks.get(key);
+    seen.add(key);
+    if (t) {
+      t.from = boxAt(t, now);
+      t.born = now - alphaAt(t, now) * FADE_IN_MS; // fading out: fade back in from where it is
+      t.to = box; t.t0 = now; t.gone = null; t.label = o.label;
+    } else {
+      tracks.set(key, { id: o.id, label: o.label, from: box, to: box, t0: now, born: now, gone: null });
+    }
+  }
+  for (const [key, t] of tracks) if (!seen.has(key) && t.gone === null) t.gone = now;
+}
+
+function handle(ev) {
+  if (ev.type === "objects") {
+    onObjects(ev);
+  } else if (ev.type === "status") {
+    tracking = ev.tracking;
+    if (tracking === "stopped") { fadeAll(performance.now()); updatedAt = null; lastFrameIdx = -1; epoch++; }
+  }
+  // "look" events (product cards for #look) come later.
+}
+
+// ---------- drawing ----------
+
+let cw = 0, ch = 0, dpr = 0;
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight, r = window.devicePixelRatio || 1;
+  if (w === cw && h === ch && r === dpr) return;
+  cw = w; ch = h; dpr = r;
+  canvas.width = Math.round(w * r);
+  canvas.height = Math.round(h * r);
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+}
+
+function videoRect() {
+  const iw = video.naturalWidth, ih = video.naturalHeight;
+  if (!iw || !ih) return null;
+  const s = Math.min(cw / iw, ch / ih), w = iw * s, h = ih * s;
+  return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
+}
+
+function roundRect(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawTrack(t, b, alpha, v, font, line) {
+  const x = v.x + b[0] * v.w, y = v.y + b[1] * v.h, w = b[2] * v.w, h = b[3] * v.h;
+  const c = color(t.id);
+  ctx.globalAlpha = alpha;
+  roundRect(x, y, w, h, Math.min(14, w / 4, h / 4));
+  ctx.lineWidth = line + 3;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.stroke();
+  ctx.lineWidth = line;
+  ctx.strokeStyle = c;
+  ctx.stroke();
+
+  const text = t.label.charAt(0).toUpperCase() + t.label.slice(1) + "  #" + t.id;
+  ctx.font = "700 " + font + "px " + FONT;
+  const pad = font * 0.4, tw = ctx.measureText(text).width + pad * 2, th = font * 1.4;
+  const lx = Math.max(v.x, Math.min(x - line / 2, v.x + v.w - tw));
+  let ly = y - th - line / 2;
+  if (ly < v.y) ly = y + line / 2; // no room above: inside the top edge
+  roundRect(lx, ly, tw, th, th * 0.25);
+  ctx.fillStyle = c;
+  ctx.fill();
+  ctx.fillStyle = "#0a0a0c";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, lx + pad, ly + th / 2 + font * 0.05);
+  ctx.globalAlpha = 1;
+}
+
+let shownText = "", shownState = "";
+
+function updateBadge(now) {
+  let state = tracking === "offline" ? "offline" : "off", text;
+  if (tracking === "connecting") text = "Connecting…";
+  else if (tracking === "stopped") text = "Stopped";
+  else if (tracking === "offline") text = "Tracking offline · retrying";
+  else if (updatedAt === null) text = "Finding items…";
+  else {
+    const s = Math.max(0, Math.floor((now - updatedAt) / 1000));
+    state = s > STALE_S ? "stale" : "ok";
+    text = count + (count === 1 ? " item" : " items") + " · updated " + (s < 1 ? "just now" : s + "s ago");
+  }
+  if (text !== shownText) badgeText.textContent = shownText = text;
+  if (state !== shownState) badge.dataset.state = shownState = state;
+}
+
+function draw() {
+  const now = performance.now();
+  resize();
+  ctx.clearRect(0, 0, cw, ch);
+  const v = videoRect();
+  waiting.hidden = !!v;
+  if (v) {
+    const font = Math.round(Math.max(18, Math.min(v.h * 0.045, 56)));
+    const line = Math.max(3, Math.round(v.h * 0.005));
+    for (const [key, t] of tracks) {
+      const a = alphaAt(t, now);
+      if (t.gone !== null && a <= 0) tracks.delete(key);
+      else drawTrack(t, boxAt(t, now), a, v, font, line);
+    }
+  }
+  updateBadge(now);
+  requestAnimationFrame(draw);
+}
+
+// ---------- connections ----------
+
+function reloadVideo() { video.src = "video.mjpg?t=" + Date.now(); }
+video.onerror = () => setTimeout(reloadVideo, 1000);
+
+let retryMs = 500, opened = false;
+
+function connect() {
+  const url = new URL("events", location.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.search = url.hash = "";
+  const ws = new WebSocket(url.href);
+  ws.onopen = () => {
+    retryMs = 500;
+    if (opened) reloadVideo(); // the server came back: the old video connection is gone too
+    opened = true;
+  };
+  ws.onmessage = (e) => {
+    let ev;
+    try { ev = JSON.parse(e.data); } catch (err) { return; }
+    handle(ev);
+  };
+  ws.onclose = () => {
+    tracking = "connecting";
+    setTimeout(connect, retryMs);
+    retryMs = Math.min(retryMs * 2, 5000);
+  };
+}
+
+reloadVideo();
+connect();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

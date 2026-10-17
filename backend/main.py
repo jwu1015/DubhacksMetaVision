@@ -1,6 +1,9 @@
 """W6: routes, static uploads, capture store, timing.
 
-    uvicorn main:app --reload --port 8000        (from backend/)
+    uvicorn main:app --reload --port 8000 --timeout-graceful-shutdown 1        (from backend/)
+
+(--timeout-graceful-shutdown 1: an open projector page streams forever, which would otherwise block
+Ctrl+C and --reload.)
 
 USE_FIXTURES=true  -> every route returns fixture JSON (for the iOS team).
 USE_FIXTURES=false -> each stage runs once its module exists (vision.py, segment.py, ...);
@@ -24,6 +27,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 import config
 import net
+import stream
 from models import (
     Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
     IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
@@ -43,6 +47,10 @@ FIXTURE_IMAGES = {
 }
 
 captures: dict[str, Capture] = {}
+# /search work, started as soon as /detect finishes so it is underway (or done) when the app asks.
+search_tasks: dict[str, asyncio.Task] = {}
+
+STAGES = ("vision", "segment", "search", "rerank", "pricing", "rank")
 
 
 # ---------- helpers ----------
@@ -97,7 +105,7 @@ async def model_service_ok(timeout: float = 3.0) -> bool:
     try:
         r = await net.client().get(
             f"{config.MODEL_SERVICE_URL}/health", timeout=timeout,
-            headers={"Authorization": f"Bearer {config.MODEL_SERVICE_TOKEN}"},
+            headers=config.segmentation_headers(), follow_redirects=False,  # no login-page redirects
         )
         body = r.json()
         # Baptiste's SAM server answers {"status": "ok"}; the spec's model service {"ok": true}.
@@ -133,34 +141,88 @@ async def run_detect(data: bytes) -> DetectResponse:
     (config.ROOT / image_path).write_bytes(buf.getvalue())
     image_url = f"{config.PUBLIC_BASE_URL}/{image_path}"
 
-    timing: dict[str, int] = {}
-    vision = stage("vision")
-    with timed(timing, "vision"):
-        item = await vision.detect(buf.getvalue()) if vision else Item.model_validate(fixture("item_lamp.json"))
+    def done(item: Item, segmentation: Segmentation | None, path: str) -> DetectResponse:
+        captures[capture_id] = Capture(
+            capture_id=capture_id, image_path=image_path, image_url=image_url, item=item,
+            segmentation=segmentation, image_sha256=hashlib.sha256(data).hexdigest(),
+        )
+        latency = ms_since(t0)
+        log.info("detect %s %s category=%r %s total=%dms", capture_id, path, item.category, timing, latency)
+        return DetectResponse(capture_id=capture_id, image_url=image_url, item=item,
+                              segmentation=segmentation, quick_phrase=item.quick_phrase, latency_ms=latency)
 
+    timing: dict[str, int] = {}
+    vision, segment = stage("vision"), stage("segment")
+    # Claude starts now either way: SAM first needs its description, Claude first its whole answer.
+    claude = asyncio.create_task(vision.detect(buf.getvalue())) if vision else None
+
+    sam_failed = False
+    if claude and segment and config.MODEL_SERVICE_URL:
+        # SAM first: every home-goods object in view; the user is looking at the one at the center of
+        # the view. Answer with SAM's label right away; Claude's description arrives in the
+        # background, before the search needs it.
+        with timed(timing, "sam"):
+            found = await segment.sam_objects(img, segment.SAM_CATEGORIES or None,
+                                              timeout=segment.SAM_FIRST_TIMEOUT)
+        target = segment.center_object(found or [])
+        if target:
+            label = target.label.strip()
+            item = Item(category=label, bbox=target.box, search_queries=[label],
+                        quick_phrase=f"{label[:1].upper()}{label[1:]}. Finding prices.")
+            resp = done(item, segment.sam_crop(img, target, capture_id, t0), "sam-first")
+            search_tasks[capture_id] = asyncio.create_task(describe_then_search(captures[capture_id], claude))
+            return resp
+        sam_failed = found is None  # down or too slow: don't ask it again below
+
+    # Claude first: no segmentation server, or nothing buyable at the center of the view.
+    with timed(timing, "vision"):
+        item = await claude if claude else Item.model_validate(fixture("item_lamp.json"))
     segmentation = None
     if item.category is None:
         item.quick_phrase = NO_ITEM_PHRASE
     else:
-        segment = stage("segment")
         with timed(timing, "segment"):
-            segmentation = (await segment.segment(img, item, capture_id) if segment
+            segmentation = (await segment.segment(img, item, capture_id, use_sam=not sam_failed) if segment
                             else Segmentation.model_validate(fixture("segmentation_lamp.json")))
+    resp = done(item, segmentation, "claude-first")
+    if segmentation is not None:
+        # Start searching now; the app's /search call picks up the result (saves a round trip).
+        search_tasks[capture_id] = asyncio.create_task(compute_search(captures[capture_id]))
+    return resp
 
-    captures[capture_id] = Capture(
-        capture_id=capture_id, image_path=image_path, image_url=image_url, item=item,
-        segmentation=segmentation, image_sha256=hashlib.sha256(data).hexdigest(),
-    )
-    latency = ms_since(t0)
-    log.info("detect %s category=%r %s total=%dms", capture_id, item.category, timing, latency)
-    return DetectResponse(
-        capture_id=capture_id, image_url=image_url, item=item, segmentation=segmentation,
-        quick_phrase=item.quick_phrase, latency_ms=latency,
-    )
+
+def start_search(cap: Capture) -> asyncio.Task | None:
+    """Start the store search now, if the search stage exists. It needs only the crop and a label:
+    Lens on the crop, then Shopping and eBay from Lens's titles."""
+    search = stage("search")
+    if search is None:
+        return None
+    return asyncio.create_task(search.search_all(cap.segmentation.cutout_url, cap.item, capture_id=cap.capture_id))
+
+
+async def describe_then_search(cap: Capture, claude: asyncio.Task) -> SearchResponse:
+    """SAM first: the store search starts right away on SAM's crop and label, while Claude describes
+    the item (asking about SAM's crop if Claude looked at a different object) for ranking. Claude
+    failing leaves SAM's label."""
+    t0 = time.perf_counter()
+    products = start_search(cap)
+    vision, segment = stage("vision"), stage("segment")
+    sam_item = cap.item
+    try:
+        item = await claude
+        if item.category is None or item.bbox is None or segment.iou(item.bbox, sam_item.bbox) <= segment.SAM_IOU:
+            log.info("describe %s: Claude looked elsewhere; asking about SAM's crop", cap.capture_id)
+            item = await vision.detect((config.ROOT / cap.segmentation.cutout_path).read_bytes())
+        if item.category:
+            cap.item = item.model_copy(update={"bbox": sam_item.bbox, "quick_phrase": sam_item.quick_phrase})
+    except Exception as e:
+        log.warning("describe %s: Claude failed (%r); searching with SAM's label", cap.capture_id, e)
+    log.info("describe %s: %dms category=%r queries=%s", cap.capture_id, ms_since(t0),
+             cap.item.category, cap.item.search_queries)
+    return await compute_search(cap, products)
 
 
 async def run_search(capture_id: str) -> SearchResponse:
-    t0 = time.perf_counter()
     cap = captures.get(capture_id)
     if cap is None:
         raise HTTPException(404, f"unknown capture_id {capture_id}")
@@ -169,12 +231,33 @@ async def run_search(capture_id: str) -> SearchResponse:
     if cap.item.category is None or cap.segmentation is None:
         return empty_search(capture_id)
 
+    task = search_tasks.get(capture_id)
+    if task is not None:
+        t0 = time.perf_counter()
+        try:
+            # shield: an app that hangs up mid-request must not cancel the shared search
+            resp = await asyncio.shield(task)
+            log.info("search %s: started at /detect, waited %dms for it", capture_id, ms_since(t0))
+            return resp
+        except Exception:
+            log.exception("search %s: early search failed; running it again", capture_id)
+            search_tasks.pop(capture_id, None)
+    return await compute_search(cap)
+
+
+async def compute_search(cap: Capture, products_task: asyncio.Task | None = None) -> SearchResponse:
+    """search -> rerank -> pricing + rank for one capture. products_task: a search already started
+    (timing_ms["search"] is then only the time left to wait for it)."""
+    t0 = time.perf_counter()
+    capture_id = cap.capture_id
     timing: dict[str, int] = {}
     cutout_url = cap.segmentation.cutout_url
 
     search = stage("search")
     with timed(timing, "search"):
-        if search:
+        if products_task is not None:
+            products = await products_task
+        elif search:
             products = await search.search_all(cutout_url, cap.item, capture_id=capture_id)
         else:
             products = [Product.model_validate(p) for p in fixture("products_raw_lamp.json")]
@@ -200,6 +283,34 @@ async def run_search(capture_id: str) -> SearchResponse:
     return resp
 
 
+async def warm_up():
+    """Make the first real request as fast as later ones: import the stages now, and make one call per
+    Claude stage (vision, rank) so each connection is open and the API has prepared its output schema
+    (about a cent in total)."""
+    for name in STAGES:
+        try:
+            stage(name)
+        except Exception:
+            log.exception("warm-up: stage %s failed to import", name)
+    if not config.WARMUP or config.USE_FIXTURES:
+        return
+    vision, pricing, rank = stage("vision"), stage("pricing"), stage("rank")
+    calls = []
+    if vision:
+        calls.append(("vision", vision.detect((config.FIXTURES / "lamp_room.jpg").read_bytes())))
+    if pricing and rank:
+        item = Item.model_validate(fixture("item_lamp.json"))
+        products = [Product.model_validate(p) for p in fixture("products_ranked_lamp.json")]
+        calls.append(("rank", rank.choose(item, products, pricing.compute_price_insight(products))))
+    for name, call in calls:
+        t0 = time.perf_counter()
+        try:
+            await call
+            log.info("warm-up: %s call %dms", name, ms_since(t0))
+        except Exception as e:
+            log.warning("warm-up: %s call failed: %r", name, e)
+
+
 # ---------- app ----------
 
 config.UPLOADS.mkdir(exist_ok=True)
@@ -209,12 +320,15 @@ config.LOGS.mkdir(exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     install_fixtures()
-    # Wake the Modal container now so the first real request isn't a cold start.
-    wake = asyncio.create_task(model_service_ok(timeout=90.0))
-    log.info("ready: fixtures=%s demo_mode=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
-             config.PUBLIC_BASE_URL)
+    # In the background, so the server accepts requests right away: wake the segmentation server
+    # (no cold start on the first request) and warm up our own stages.
+    background = [asyncio.create_task(model_service_ok(timeout=90.0)), asyncio.create_task(warm_up())]
+    log.info("ready: fixtures=%s demo_mode=%s warmup=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
+             config.WARMUP, config.PUBLIC_BASE_URL)
     yield
-    wake.cancel()
+    for task in background + list(search_tasks.values()):
+        task.cancel()
+    await stream.live.stop()  # deletes the tracking session on the segmentation server
     await net.close()
 
 
@@ -243,6 +357,10 @@ async def identify_route(image: UploadFile = File(...)):
 async def health_route():
     return HealthResponse(ok=True, model_service=await model_service_ok(),
                           fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE)
+
+
+# The live stream (stream.py): the projector page at /stream/viewer, its video and its events.
+app.include_router(stream.router)
 
 
 _checkout = None if config.USE_FIXTURES else stage("checkout")
