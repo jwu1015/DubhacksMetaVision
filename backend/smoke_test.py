@@ -45,15 +45,21 @@ def main():
         d = state["detect"]
         urls = [d.image_url] + ([d.segmentation.cutout_url, d.segmentation.mask_preview_url]
                                 if d.segmentation else [])
+        browser_blocked = 0
         for u in filter(None, urls):
             if not u.startswith(base):
                 raise ValueError(f"{u} doesn't start with {base} (is PUBLIC_BASE_URL set to this URL?)")
-            # Fetch like Lens / the model service would: browser-ish UA, no ngrok skip header.
-            r = httpx.get(u, timeout=20, headers={"User-Agent": "Mozilla/5.0"}).raise_for_status()
+            # How the iOS app, our server and the model service fetch: must work.
+            r = httpx.get(u, timeout=20).raise_for_status()
             if not r.headers.get("content-type", "").startswith("image/"):
-                raise ValueError(f"{u} returned {r.headers.get('content-type')}, not an image "
-                                 "(ngrok warning page? outside services can't fetch our images)")
-        return f"{len(urls)} image URLs load for outside fetchers"
+                raise ValueError(f"{u} returned {r.headers.get('content-type')}, not an image")
+            # How a browser-like fetcher (possibly Google Lens) fetches: ngrok's free plan may answer
+            # with its warning page instead.
+            r = httpx.get(u, timeout=20, headers={"User-Agent": "Mozilla/5.0 (Macintosh) Chrome/141.0"})
+            browser_blocked += not r.headers.get("content-type", "").startswith("image/")
+        note = (" | WARNING: browser-like fetchers get ngrok's warning page, so Lens may not see our images"
+                if browser_blocked else "")
+        return f"{len(urls)} image URLs load{note}"
 
     def search():
         r = c.post(f"/search/{state['detect'].capture_id}").raise_for_status()
