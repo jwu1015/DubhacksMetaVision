@@ -32,7 +32,8 @@ SAM_PAD = 0.08       # SAM's box is tight, so it gets less padding
 SAM_MIN_AREA = 0.02  # a SAM box under 2% of the image is ignored
 SAM_IOU = 0.3        # a SAM box must overlap Claude's this much to count as the same item
 SAM_TIMEOUT = 2.0    # seconds; vision already uses most of /detect's ~3s budget
-MAX_EDGE = 1024      # saved images, and the photo sent to SAM, are capped at this size
+SAM_EDGE = 640       # the server resizes internally, so bigger photos only cost upload time
+MAX_EDGE = 1024      # saved images are capped at this size
 
 RED, YELLOW = (255, 60, 60), (255, 210, 0)
 
@@ -70,18 +71,21 @@ async def sam_box(image: Image.Image, item: Item) -> tuple[BBox, float] | None:
     if not config.MODEL_SERVICE_URL or not item.category:
         return None
     small = image.copy()
-    small.thumbnail((MAX_EDGE, MAX_EDGE))
+    small.thumbnail((SAM_EDGE, SAM_EDGE))
     buf = io.BytesIO()
-    small.save(buf, format="JPEG", quality=85)
-    headers = {"Content-Type": "image/jpeg"}
-    if config.MODEL_SERVICE_TOKEN:
-        headers["Authorization"] = f"Bearer {config.MODEL_SERVICE_TOKEN}"
+    small.save(buf, format="JPEG", quality=80)
+    headers = {"Content-Type": "image/jpeg", **config.segmentation_headers()}
     t0 = time.perf_counter()
     try:
         # wait_for makes SAM_TIMEOUT a hard cap; httpx's timeout only bounds each wait for data.
+        # No redirects: without a valid token Cloudflare redirects to a login page.
         r = await asyncio.wait_for(net.client().post(
             f"{config.MODEL_SERVICE_URL}/segment", params={"prompt": item.category},
-            content=buf.getvalue(), headers=headers, timeout=SAM_TIMEOUT), SAM_TIMEOUT)
+            content=buf.getvalue(), headers=headers, timeout=SAM_TIMEOUT, follow_redirects=False), SAM_TIMEOUT)
+        if r.status_code in (302, 401, 403):
+            log.warning("sam: Cloudflare Access rejected the request (%d); check CF_ACCESS_CLIENT_ID/SECRET "
+                        "and the server's access policy", r.status_code)
+            return None
         r.raise_for_status()
         data = r.json()
         W, H = data["width"], data["height"]

@@ -101,7 +101,7 @@ async def model_service_ok(timeout: float = 3.0) -> bool:
     try:
         r = await net.client().get(
             f"{config.MODEL_SERVICE_URL}/health", timeout=timeout,
-            headers={"Authorization": f"Bearer {config.MODEL_SERVICE_TOKEN}"},
+            headers=config.segmentation_headers(), follow_redirects=False,  # no login-page redirects
         )
         body = r.json()
         # Baptiste's SAM server answers {"status": "ok"}; the spec's model service {"ok": true}.

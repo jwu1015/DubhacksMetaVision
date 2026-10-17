@@ -13,8 +13,18 @@ def _flag(name: str, default: str = "false") -> bool:
 
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
-MODEL_SERVICE_URL = os.getenv("MODEL_SERVICE_URL", "").rstrip("/")
-MODEL_SERVICE_TOKEN = os.getenv("MODEL_SERVICE_TOKEN", "")
+MODEL_SERVICE_URL = os.getenv("MODEL_SERVICE_URL", "").rstrip("/")  # Baptiste's segmentation server
+MODEL_SERVICE_TOKEN = os.getenv("MODEL_SERVICE_TOKEN", "")  # bearer token for the CLIP /embed service
+# The segmentation server sits behind Cloudflare Access: every request needs this service token.
+CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", "")
+CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", "")
+
+
+def segmentation_headers() -> dict[str, str]:
+    """Cloudflare Access headers for the segmentation server; empty if no token is configured."""
+    if not CF_ACCESS_CLIENT_ID:
+        return {}
+    return {"CF-Access-Client-Id": CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": CF_ACCESS_CLIENT_SECRET}
 USE_FIXTURES = _flag("USE_FIXTURES")
 DEMO_MODE = _flag("DEMO_MODE")
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast
