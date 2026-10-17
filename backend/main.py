@@ -225,21 +225,31 @@ async def compute_search(cap: Capture) -> SearchResponse:
 
 
 async def warm_up():
-    """Make the first real request as fast as later ones: import the stages now, and make one vision
-    call so the Claude connection is open and the API has prepared our output schema (under a cent)."""
+    """Make the first real request as fast as later ones: import the stages now, and make one call per
+    Claude stage (vision, rank) so each connection is open and the API has prepared its output schema
+    (about a cent in total)."""
     for name in STAGES:
         try:
             stage(name)
         except Exception:
             log.exception("warm-up: stage %s failed to import", name)
-    vision = stage("vision") if config.WARMUP and not config.USE_FIXTURES else None
+    if not config.WARMUP or config.USE_FIXTURES:
+        return
+    vision, pricing, rank = stage("vision"), stage("pricing"), stage("rank")
+    calls = []
     if vision:
+        calls.append(("vision", vision.detect((config.FIXTURES / "lamp_room.jpg").read_bytes())))
+    if pricing and rank:
+        item = Item.model_validate(fixture("item_lamp.json"))
+        products = [Product.model_validate(p) for p in fixture("products_ranked_lamp.json")]
+        calls.append(("rank", rank.choose(item, products, pricing.compute_price_insight(products))))
+    for name, call in calls:
         t0 = time.perf_counter()
         try:
-            await vision.detect((config.FIXTURES / "lamp_room.jpg").read_bytes())
-            log.info("warm-up: vision call %dms", ms_since(t0))
+            await call
+            log.info("warm-up: %s call %dms", name, ms_since(t0))
         except Exception as e:
-            log.warning("warm-up: vision call failed: %r", e)
+            log.warning("warm-up: %s call failed: %r", name, e)
 
 
 # ---------- app ----------

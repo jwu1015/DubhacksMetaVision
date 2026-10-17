@@ -22,7 +22,8 @@ from models import Product
 
 log = logging.getLogger("gtl")
 
-EMBED_URL = (os.getenv("EMBED_SERVICE_URL") or config.MODEL_SERVICE_URL).rstrip("/")
+# The CLIP service. Not MODEL_SERVICE_URL: that is the segmentation server, which has no /embed.
+EMBED_URL = os.getenv("EMBED_SERVICE_URL", "").rstrip("/")
 TIMEOUT_S = 3.0
 MAX_CANDIDATES = 25
 LOW, HIGH = 0.55, 0.92  # raw similarity that maps to score 0 and 100; tune on real results
@@ -45,7 +46,7 @@ def unscored(products: list[Product]) -> list[Product]:
 async def embed(cutout_url: str, urls: list[str], client: httpx.AsyncClient) -> EmbedResponse:
     """POST /embed; raises on anything other than a well-formed answer for every URL."""
     if not EMBED_URL:
-        raise RuntimeError("EMBED_SERVICE_URL and MODEL_SERVICE_URL are both unset")
+        raise RuntimeError("EMBED_SERVICE_URL is unset")
     token = config.MODEL_SERVICE_TOKEN  # an empty "Bearer " header is illegal, so skip it when unset
     async with asyncio.timeout(TIMEOUT_S):
         r = await client.post(
