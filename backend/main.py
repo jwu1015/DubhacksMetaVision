@@ -1,6 +1,9 @@
 """W6: routes, static uploads, capture store, timing.
 
-    uvicorn main:app --reload --port 8000        (from backend/)
+    uvicorn main:app --reload --port 8000 --timeout-graceful-shutdown 1        (from backend/)
+
+(--timeout-graceful-shutdown 1: an open projector page streams forever, which would otherwise block
+Ctrl+C and --reload.)
 
 USE_FIXTURES=true  -> every route returns fixture JSON (for the iOS team).
 USE_FIXTURES=false -> each stage runs once its module exists (vision.py, segment.py, ...);
@@ -24,6 +27,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 import config
 import net
+import stream
 from models import (
     Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
     IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
@@ -324,6 +328,7 @@ async def lifespan(app: FastAPI):
     yield
     for task in background + list(search_tasks.values()):
         task.cancel()
+    await stream.live.stop()  # deletes the tracking session on the segmentation server
     await net.close()
 
 
@@ -352,6 +357,10 @@ async def identify_route(image: UploadFile = File(...)):
 async def health_route():
     return HealthResponse(ok=True, model_service=await model_service_ok(),
                           fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE)
+
+
+# The live stream (stream.py): the projector page at /stream/viewer, its video and its events.
+app.include_router(stream.router)
 
 
 _checkout = None if config.USE_FIXTURES else stage("checkout")
