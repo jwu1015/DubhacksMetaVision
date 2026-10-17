@@ -10,7 +10,7 @@ Object ids stay stable across the frames of a session.
   GET    /health
 
 Boxes are [x1, y1, x2, y2] in pixels of the submitted frame.
-Config via env vars: SAM_MODEL, SAM_PROMPT (comma-separated phrases), SAM_THRESHOLD, MERGE_IOU, MAX_SESSIONS, SESSION_TTL, HOST, PORT.
+Config via env vars: SAM_MODEL, SAM_PROMPT (comma-separated phrases), SAM_THRESHOLD, MERGE_IOU, MAX_SESSIONS, SESSION_TTL, HOST, PORT, ROOT_PATH.
 Run: python server.py
 """
 import io
@@ -55,6 +55,22 @@ config = Sam3VideoConfig.from_pretrained(MODEL_ID)
 config.score_threshold_detection = THRESHOLD
 processor = Sam3VideoProcessor.from_pretrained(MODEL_ID)
 model = Sam3VideoModel.from_pretrained(MODEL_ID, config=config).to(device).eval()
+
+ROOT_PATH = os.environ.get("ROOT_PATH", "").rstrip("/")
+
+
+class StripPrefix:
+    """Serve the app under ROOT_PATH (e.g. "/inference" behind a tunnel); unprefixed paths still work."""
+
+    def __init__(self, app, prefix):
+        self.app, self.prefix = app, prefix
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] in ("http", "websocket") and (path == self.prefix or path.startswith(self.prefix + "/")):
+            scope = {**scope, "path": path[len(self.prefix):] or "/", "root_path": scope.get("root_path", "") + self.prefix}
+        await self.app(scope, receive, send)
+
 
 app = FastAPI(title="SAM segmentation server")
 model_lock = threading.Lock()  # one forward pass at a time
@@ -180,4 +196,8 @@ async def segment(request: Request, prompt: str | None = None):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=os.environ.get("HOST", "0.0.0.0"), port=int(os.environ.get("PORT", "8000")))
+    uvicorn.run(
+        StripPrefix(app, ROOT_PATH) if ROOT_PATH else app,
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "8000")),
+    )
