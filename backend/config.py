@@ -22,6 +22,8 @@ CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", "")
 # segmentation server's own list
 SAM_CATEGORIES = os.getenv(
     "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
+# With SAM_CATEGORIES empty, the server's Claude picks labels within this category instead (slower)
+SAM_AUTO_CATEGORY = os.getenv("SAM_AUTO_CATEGORY", "furniture and home decor").strip()
 
 
 def segmentation_headers() -> dict[str, str]:

@@ -111,11 +111,12 @@ class Tracker:
         return r
 
     async def _create(self):
-        # The server needs to be told what to track (17 Oct): our categories, or /session/auto for its own.
+        # The server needs to be told what to track (17 Oct): our categories, or /session/auto, where its
+        # Claude picks labels within SAM_AUTO_CATEGORY from the first frame.
         if self.categories:
             r = await self._request("POST", "/session", json={"prompt": self.categories})
         else:
-            r = await self._request("POST", "/session/auto", json={})
+            r = await self._request("POST", "/session/auto", json={"category": config.SAM_AUTO_CATEGORY})
         r.raise_for_status()
         self.session_id = r.json()["session_id"]
         log.info("tracker: session %s started", self.session_id[:8])

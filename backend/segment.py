@@ -85,23 +85,54 @@ def iou(a: BBox, b: BBox) -> float:
     return inter / (a.w * a.h + b.w * b.h - inter)
 
 
+_deleting: set[asyncio.Task] = set()  # one-frame sessions being deleted, kept so they aren't garbage-collected
+
+
+async def _delete_session(sid: str):
+    try:
+        await net.client().delete(f"{config.MODEL_SERVICE_URL}/session/{sid}", headers=config.segmentation_headers(),
+                                  timeout=5.0, follow_redirects=False)
+    except Exception as e:  # it expires after 120s idle anyway
+        log.info("sam: deleting one-frame session %s failed: %r", sid[:8], e)
+
+
+async def _segment(jpeg: bytes, prompt: str | None, timeout: float):
+    """The server's answer for one photo. Since 18 Oct its /segment only takes a category, and its Claude
+    picks the labels (2-4.5s); a one-frame tracking session takes our labels as given and answers as fast
+    as /segment used to (~0.3s). Without a prompt: /segment with SAM_AUTO_CATEGORY."""
+    base, auth = config.MODEL_SERVICE_URL, config.segmentation_headers()
+    image_headers = {"Content-Type": "image/jpeg", **auth}
+    # No redirects: without a valid token Cloudflare redirects to a login page.
+    if not prompt:
+        return await net.client().post(f"{base}/segment", params={"category": config.SAM_AUTO_CATEGORY},
+                                       content=jpeg, headers=image_headers, timeout=timeout, follow_redirects=False)
+    r = await net.client().post(f"{base}/session", json={"prompt": prompt}, headers=auth, timeout=timeout,
+                                follow_redirects=False)
+    if r.status_code != 200:
+        return r
+    sid = r.json()["session_id"]
+    try:
+        return await net.client().post(f"{base}/session/{sid}/frame", content=jpeg, headers=image_headers,
+                                       timeout=timeout, follow_redirects=False)
+    finally:  # in the background, even when cancelled: the answer doesn't wait on it
+        task = asyncio.create_task(_delete_session(sid))
+        _deleting.add(task)
+        task.add_done_callback(_deleting.discard)
+
+
 async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = SAM_TIMEOUT) -> list[Found] | None:
-    """Every object SAM finds (prompt None: the server's own shopping categories), highest score first;
-    None if the call failed. Never raises."""
+    """Every object SAM finds for prompt (comma-separated labels; None: labels the server's Claude picks
+    for SAM_AUTO_CATEGORY), highest score first; None if the call failed. Never raises."""
     if not config.MODEL_SERVICE_URL:
         return None
     small = image.copy()
     small.thumbnail((SAM_EDGE, SAM_EDGE))
     buf = io.BytesIO()
     small.save(buf, format="JPEG", quality=80)
-    headers = {"Content-Type": "image/jpeg", **config.segmentation_headers()}
     t0 = time.perf_counter()
     try:
         # wait_for makes the timeout a hard cap; httpx's timeout only bounds each wait for data.
-        # No redirects: without a valid token Cloudflare redirects to a login page.
-        r = await asyncio.wait_for(net.client().post(
-            f"{config.MODEL_SERVICE_URL}/segment", params={"prompt": prompt} if prompt else None,
-            content=buf.getvalue(), headers=headers, timeout=timeout, follow_redirects=False), timeout)
+        r = await asyncio.wait_for(_segment(buf.getvalue(), prompt, timeout), timeout)
         if r.status_code in (302, 401, 403):
             log.warning("sam: Cloudflare Access rejected the request (%d); check CF_ACCESS_CLIENT_ID/SECRET "
                         "and the server's access policy", r.status_code)
@@ -115,7 +146,7 @@ async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = S
     except Exception as e:  # unreachable, too slow, error status, unexpected JSON
         log.warning("sam failed after %dms: %r", ms_since(t0), e)
         return None
-    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "default categories")
+    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "the server's labels")
     return sorted(found, key=lambda f: -f.score)
 
 
