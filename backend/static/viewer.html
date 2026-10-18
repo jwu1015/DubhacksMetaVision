@@ -5,85 +5,71 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storefront · Live</title>
 <style>
+  /* The app's Lime palette and glass (frontend/Spotted/Design). */
   :root {
     color-scheme: dark;
-    --bg: #0a0a0c;
-    --fg: #f4f4f5;
-    --muted: #a1a1aa;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --off: #71717a;
-    --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+    --ink: #0a0a0c;
+    --surface: #16161a;
+    --surface-raised: #222228;
+    --separator: #2c2c32;
+    --on-accent: #0a0a0c;
+    --label: #ffffff;
+    --label-secondary: #a1a1aa;
+    --accent: #c8ff3d;
+    --success: #30d158;
+    --warning: #ffd60a;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body {
-    margin: 0; height: 100%; overflow: hidden;
-    background: var(--bg); color: var(--fg); font: 600 16px/1.25 var(--font);
-  }
-  #app { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--label); font: 15px/1.3 var(--font); }
+  #app { position: fixed; inset: 0; display: flex; }
   #stage { position: relative; flex: 1 1 auto; min-width: 0; }
-  #video, #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  #video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
   #video { object-fit: contain; }
   #overlay { pointer-events: none; }
-  #waiting {
-    position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
-    text-align: center; color: var(--muted); font-size: clamp(24px, 4.5vh, 56px);
+  .glass {
+    background: rgba(22, 22, 26, 0.62); border: 1px solid rgba(255, 255, 255, 0.18);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
   }
-  #badge {
-    position: absolute; top: clamp(12px, 2.5vh, 32px); right: clamp(12px, 2vw, 32px);
-    display: flex; align-items: center; gap: 0.5em; padding: 0.45em 0.95em;
-    border-radius: 999px; background: rgba(0, 0, 0, 0.65);
-    font-size: clamp(16px, 3vh, 34px); font-variant-numeric: tabular-nums; white-space: nowrap;
+  #waiting { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-secondary); }
+  #status {
+    position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px 10px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   }
-  #badge .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--off); }
-  #badge[data-state="ok"] .dot { background: var(--ok); }
-  #badge[data-state="stale"] .dot, #badge[data-state="offline"] .dot { background: var(--warn); }
-  /* The item the user picked, and where to buy it: filled from "look" events. */
-  #look, #look-results { display: flex; flex-direction: column; gap: 1.4vh; }
+  #status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+  #status.live .dot { background: var(--accent); }
+  /* The item the user picked, and where to buy it. */
   #look {
-    flex: 0 0 min(34vw, 560px); padding: 2.5vh 2vw; overflow: hidden;
-    background: #141418; border-left: 1px solid #26262b; font-size: clamp(16px, 2.5vh, 30px);
+    flex: 0 0 min(34vw, 420px); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;
+    background: var(--surface); border-left: 1px solid var(--separator);
   }
-  .thumb { overflow: hidden; border-radius: 0.35em; background: #26262b; }
-  .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  #look-crop { flex: 0 1 26vh; min-height: 0; background: #0a0a0c; }
-  #look-crop img { object-fit: contain; }
-  #look-name { font-size: 1.3em; font-weight: 800; line-height: 1.1; }
-  #look-desc, #look-status, .verdict, .store, .reason, .summary { color: var(--muted); font-weight: 500; }
-  #look-desc, .verdict, .reason { font-size: 0.68em; }
-  #look-desc, .ptitle, .reason {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  }
-  #look-status { font-size: 0.8em; }
+  #crop { aspect-ratio: 4 / 3; border-radius: 20px; background: var(--ink) center / contain no-repeat; }
+  #name { font-size: 22px; font-weight: 700; line-height: 1.15; }
+  #desc, #look-status, .sub { color: var(--label-secondary); font-size: 13px; }
+  #desc { margin-top: 4px; }
   #look-status.busy { animation: pulse 1.4s ease-in-out infinite; }
-  #look-status.error { color: var(--warn); }
+  #look-status.error { color: var(--warning); }
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+          background: rgba(255, 255, 255, 0.1); font-size: 12px; font-weight: 500; }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-secondary); }
+  .chip.low .dot { background: var(--success); }
+  .chip.high .dot { background: var(--warning); }
+  .chip.exact { background: var(--accent); color: var(--on-accent); }
+  .tag { margin-bottom: 6px; }
+  .product { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .best { padding: 12px; border-radius: 20px; background: var(--surface-raised); }
+  .thumb { width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--surface-raised) center / cover; }
+  .best .thumb { width: 56px; height: 56px; border-radius: 14px; background-color: var(--ink); }
+  .info { flex: 1; min-width: 0; }
+  .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .best .price { font-size: 22px; }
+  .save { color: var(--success); }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--label-secondary); }
+  .group { display: flex; flex-direction: column; gap: 10px; }
   @keyframes pulse { 50% { opacity: 0.4; } }
-  .chip {
-    display: inline-block; margin-right: 0.5em; padding: 0.1em 0.55em; border-radius: 999px;
-    background: #e4e4e7; color: #0a0a0c; font-weight: 800;
-  }
-  .chip.low { background: var(--ok); }
-  .chip.high { background: #f87171; }
-  .best, .row { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6em; align-items: center; }
-  .best { padding: 0.5em; border-radius: 0.5em; background: #1c1c22; border: 1px solid #2e2e35; }
-  .best .thumb { width: 3.6em; height: 3.6em; }
-  .row { padding: 0.2em 0; }
-  .row .thumb { width: 2em; height: 2em; }
-  .info { min-width: 0; }
-  .tag { font-size: 0.55em; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ok); }
-  .ptitle { font-size: 0.75em; }
-  .row .ptitle { -webkit-line-clamp: 1; }
-  .store { font-size: 0.6em; }
-  .save { color: var(--ok); font-weight: 800; }
-  .price { font-size: 1.05em; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .best .price { font-size: 1.35em; }
-  .reason { margin-top: 0.2em; font-size: 0.6em; }
-  .group h2 {
-    margin: 0 0 0.2em; font-size: 0.55em; font-weight: 800; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--muted);
-  }
-  .summary { font-size: 0.8em; }
 </style>
 </head>
 <body>
@@ -92,35 +78,33 @@
     <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay"></canvas>
     <div id="waiting">Waiting for video…</div>
-    <div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting…</span></div>
+    <div id="status" class="glass"><span class="dot"></span><span id="status-text">Connecting…</span></div>
   </main>
   <aside id="look" hidden aria-live="polite">
-    <div id="look-crop" class="thumb"><img alt=""></div>
-    <div id="look-name"></div>
-    <div id="look-desc"></div>
+    <div id="crop"></div>
+    <div><div id="name"></div><div id="desc"></div></div>
     <div id="look-status"></div>
-    <div id="look-results"></div>
+    <div id="results" class="group"></div>
   </aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.js"></script>
 <script>
 "use strict";
-const stage = document.getElementById("stage");
 const video = document.getElementById("video");
 const canvas = document.getElementById("overlay");
 const ctx = canvas.getContext("2d");
+const stage = document.getElementById("stage");
 const waiting = document.getElementById("waiting");
-const badge = document.getElementById("badge");
-const badgeText = document.getElementById("badge-text");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("status-text");
+const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font").trim();
 
 const MOVE_MS = 150;      // a label glides to its new position
 const FADE_IN_MS = 80;
 const FADE_OUT_MS = 200;  // a label missing from the latest update fades out
-const STALE_S = 10;       // the badge turns amber when the boxes are older than this
 const DIM = 0.35;         // the other labels, while one is picked
 const TOP = 4;            // labels shown in full; the other labeled objects get a dot
 const W_SCORE = 0.2, W_SIZE = 0.8; // how labels are ranked: SAM's score and the box's share of the frame
-const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font").trim();
 
 // Positions arrive a few times a second; between updates each label stays where it was last seen.
 const tracks = new Map(); // uid -> {uid, label, from, to, t0, born, gone}
@@ -182,88 +166,73 @@ function handle(ev) {
   }
 }
 
-// ---------- the Look panel: the item the user picked, and where to buy it ----------
+// ---------- the sidebar: the item the user picked, and where to buy it ----------
 
-const panel = document.getElementById("look");
-const crop = document.getElementById("look-crop");
-const cropImg = crop.querySelector("img");
-const nameEl = document.getElementById("look-name");
-const descEl = document.getElementById("look-desc");
-const statusEl = document.getElementById("look-status");
-const resultsEl = document.getElementById("look-results");
+const $ = (id) => document.getElementById(id);
 const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
-const EXACT = 85;         // match_score from here up is an "Exact match"
-let look = null;          // the Look on the panel: {look_id, uid, name, price}
-const picks = new Set();  // look_ids of every pick so far: the newest one is on the panel
+const EXACT = 85;         // match_score from here up is an "Exact match", as in the app
+let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price}
+const picks = new Set();  // look_ids of every pick so far: the newest one is in the sidebar
 
-// Each "look" message carries the whole Look so far, so the panel is drawn from it alone.
+// Each "look" message carries the whole Look so far, so the sidebar is drawn from it alone.
 function showLook(ev) {
-  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the panel
+  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the sidebar
   else if (!look || ev.look_id !== look.look_id) return; // an older pick, already replaced
-  look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label), price: null };
-  panel.hidden = false;
-  crop.hidden = !ev.crop_url;
-  if (ev.crop_url && cropImg.getAttribute("src") !== ev.crop_url) cropImg.src = ev.crop_url;
-  nameEl.textContent = look.name;
-  descEl.textContent = (ev.item && ev.item.description) || "";
-  resultsEl.replaceChildren();
-  if (ev.stage === "results") {
-    look.price = ev.search.best_match ? money(ev.search.best_match) : null;
-    setStatus("", "");
-    showResults(ev.search);
-  } else if (ev.stage === "failed") {
-    setStatus(ev.message || "Couldn't get prices.", "error");
-  } else {
-    setStatus("Finding prices…", "busy");
-  }
+  const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
+  look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
+           price: best ? money(best.price, best.currency) : null };
+  $("look").hidden = false;
+  $("crop").hidden = !ev.crop_url;
+  $("crop").style.backgroundImage = cssUrl(ev.crop_url);
+  $("name").textContent = look.name;
+  $("desc").textContent = (ev.item && ev.item.description) || "";
+  const st = $("look-status");
+  st.className = ev.stage === "failed" ? "error" : s ? "" : "busy";
+  st.textContent = ev.stage === "failed" ? ev.message || "Couldn't get prices." : s ? "" : "Finding prices…";
+  st.hidden = !st.textContent;
+  $("results").replaceChildren(...(s ? results(s) : []));
 }
 
-function setStatus(text, cls) {
-  statusEl.textContent = text || "";
-  statusEl.className = cls;
-  statusEl.hidden = !text;
-}
-
-function showResults(s) {
+function results(s) {
   const parts = [];
   if (s.best_match) {
-    const pi = s.price_insight;
-    if (pi.verdict_text) {
-      const v = el("div", "verdict");
-      v.append(el("span", "chip " + pi.best_match_verdict, VERDICT[pi.best_match_verdict] || "Price"), pi.verdict_text);
-      parts.push(v);
+    const pi = s.price_insight, chips = el("div", "chips");
+    const verdict = el("span", "chip " + pi.best_match_verdict);
+    verdict.append(el("span", "dot"), VERDICT[pi.best_match_verdict] || "Price");
+    chips.append(verdict);
+    if (pi.typical_low != null && pi.typical_high != null) {
+      chips.append(el("span", "sub", "typical " + money(pi.typical_low) + "–" + money(pi.typical_high)));
     }
-    parts.push(card(s.best_match));
+    parts.push(chips, product(s.best_match, true));
   } else {
-    parts.push(el("div", "summary", s.spoken_summary));
+    parts.push(el("div", "sub", s.spoken_summary || "No exact match for sale."));
   }
   if (s.dupes.length) parts.push(group("Cheaper dupes", s.dupes));
   if (s.used.length) parts.push(group("Used", s.used));
-  resultsEl.replaceChildren(...parts);
+  return parts;
 }
 
-function card(p) {
-  const tag = p.match_score == null ? "Best match" : p.match_score >= EXACT ? "Exact match" : "Similar";
+function product(p, best) {
   const info = el("div", "info");
-  info.append(el("div", "tag", tag), el("div", "ptitle", p.title), el("div", "store", p.store));
-  if (p.match_reason) info.append(el("div", "reason", p.match_reason));
-  const c = el("div", "best");
-  c.append(thumb(p.image_url), info, el("div", "price", money(p)));
-  return c;
+  if (best) {
+    const exact = p.match_score != null && p.match_score >= EXACT;
+    const tag = el("div", "chips tag");
+    tag.append(el("span", "chip" + (exact ? " exact" : ""), exact ? "Exact match" : "Similar"));
+    info.append(tag);
+  }
+  const sub = el("div", "sub", p.store);
+  if (!best && p.savings_pct) sub.append(" · ", el("span", "save", "Save " + p.savings_pct + "%"));
+  info.append(el("div", "title", p.title), sub);
+  const thumb = el("div", "thumb");
+  thumb.style.backgroundImage = cssUrl(p.image_url);
+  const row = el("div", "product" + (best ? " best" : ""));
+  row.append(thumb, info, el("div", "price", money(p.price, p.currency)));
+  return row;
 }
 
 function group(name, products) {
   const g = el("section", "group");
-  g.append(el("h2", "", name));
-  for (const p of products.slice(0, 2)) {
-    const store = el("div", "store", p.store);
-    if (p.savings_pct) store.append(" · ", el("span", "save", "Save " + p.savings_pct + "%"));
-    const info = el("div", "info");
-    info.append(el("div", "ptitle", p.title), store);
-    const row = el("div", "row");
-    row.append(thumb(p.image_url), info, el("div", "price", money(p)));
-    g.append(row);
-  }
+  g.append(el("h2", "", name), ...products.slice(0, 2).map((p) => product(p, false)));
   return g;
 }
 
@@ -275,41 +244,32 @@ function el(tag, cls, text) {
   return e;
 }
 
-function thumb(src) {
-  const box = el("div", "thumb");
+function cssUrl(src) {
   let url = null;
-  try { url = new URL(src, location.href); } catch (err) { /* no picture */ }
-  if (src && url && (url.protocol === "https:" || url.protocol === "http:")) {
-    const img = el("img");
-    img.alt = "";
-    img.referrerPolicy = "no-referrer";
-    img.onerror = () => img.remove();
-    img.src = url.href;
-    box.append(img);
-  }
-  return box;
+  try { url = src ? new URL(src, location.href) : null; } catch (err) { /* no picture */ }
+  const ok = url && (url.protocol === "https:" || url.protocol === "http:");
+  return ok ? 'url("' + url.href.replace(/"/g, "%22") + '")' : "";
 }
 
-function priceRange(q) {
-  return q.price_low === q.price_high ? "$" + q.price_low : "$" + q.price_low + "–" + q.price_high;
-}
-
-function money(p) {
-  const digits = Number.isInteger(p.price) || p.price >= 100 ? 0 : 2;
+function money(value, currency) {
   try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: p.currency || "USD",
-      minimumFractionDigits: digits, maximumFractionDigits: digits }).format(p.price);
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD",
+      maximumFractionDigits: Number.isInteger(value) || value >= 100 ? 0 : 2 }).format(value);
   } catch (err) { // an unknown currency code
-    return "$" + p.price.toFixed(digits);
+    return "$" + Math.round(value);
   }
 }
 
-// ---------- drawing ----------
+function estimate(q) { // "~$30–50", as the app's hotspots say it
+  return q.price_low === q.price_high ? "~$" + q.price_low : "~$" + q.price_low + "–" + q.price_high;
+}
+
+// ---------- drawing: the app's hotspots over the video ----------
 
 let cw = 0, ch = 0, dpr = 0;
 
 function resize() {
-  const w = stage.clientWidth, h = stage.clientHeight, r = window.devicePixelRatio || 1;
+  const w = stage.clientWidth, h = stage.clientHeight, r = devicePixelRatio || 1;
   if (w === cw && h === ch && r === dpr) return;
   cw = w; ch = h; dpr = r;
   canvas.width = Math.round(w * r);
@@ -324,87 +284,67 @@ function videoRect() {
   return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
 }
 
-function roundRect(x, y, w, h, r) {
-  r = Math.max(0, Math.min(r, w / 2, h / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-// Only objects with a quick label are drawn, at the middle of their box; no boxes. The TOP best ranked get a
-// small pill with the label, the rest a dot saying something was found. picked: the text for the object the
-// user picked (a pill with a glow, always).
 function rank(t, b) {
   return W_SCORE * t.score + W_SIZE * b[2] * b[3];
 }
 
+// Only objects with a quick label are drawn, at the middle of their box. The TOP best ranked get a hotspot
+// (name and estimate on glass), the rest a dot saying something was found; the picked one turns lime.
 function drawLabel(t, b, alpha, v, font, full, picked) {
   const q = names.get(t.uid);
   if (!picked && !q) return;
-  if (q) alpha *= Math.min(1, (performance.now() - q.at) / FADE_IN_MS); // fades in as it pops up
+  if (q) alpha *= Math.min(1, (performance.now() - q.at) / FADE_IN_MS);
   const cx = v.x + (b[0] + b[2] / 2) * v.w, cy = v.y + (b[1] + b[3] / 2) * v.h;
   ctx.globalAlpha = alpha;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
   if (!picked && !full) {
     ctx.beginPath();
-    ctx.arc(cx, cy, font * 0.3, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 4;
+    ctx.arc(cx, cy, 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-    return;
+  } else {
+    const name = picked ? picked.name : cap(q.name), price = picked ? picked.price || "" : estimate(q);
+    ctx.font = "500 " + font + "px " + FONT;
+    const gap = font * 0.5, nw = ctx.measureText(name).width, pw = price ? ctx.measureText(price).width : 0;
+    const w = font * 0.85 + nw + (price ? gap + pw : 0) + font, h = font * 2;
+    const x = Math.max(v.x, Math.min(cx - w / 2, v.x + v.w - w)), y = Math.max(v.y, Math.min(cy - h / 2, v.y + v.h - h));
+    roundRect(x, y, w, h, h / 2);
+    ctx.fillStyle = picked ? "#c8ff3d" : "rgba(22, 22, 26, 0.78)";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    if (!picked) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+      ctx.stroke();
+    }
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = picked ? "#0a0a0c" : "#fff";
+    ctx.fillText(name, x + font * 0.85, y + h / 2);
+    if (price) {
+      ctx.fillStyle = picked ? "#0a0a0c" : "#a1a1aa";
+      ctx.fillText(price, x + font * 0.85 + nw + gap, y + h / 2);
+    }
   }
-  const text = picked || cap(q.name) + "  ·  " + priceRange(q);
-  ctx.font = "600 " + font + "px " + FONT;
-  const pad = font * 0.6, tw = ctx.measureText(text).width + pad * 2, th = font * 1.8;
-  const lx = Math.max(v.x, Math.min(cx - tw / 2, v.x + v.w - tw));
-  const ly = Math.max(v.y, Math.min(cy - th / 2, v.y + v.h - th));
-  frosted(lx, ly, tw, th, th * 0.3, v);
-  ctx.lineWidth = picked ? 1.5 : 1;
-  ctx.strokeStyle = picked ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 255, 255, 0.25)";
-  ctx.stroke();
-  ctx.fillStyle = "#fff";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, lx + pad, ly + th / 2 + font * 0.05);
+  ctx.shadowColor = "transparent";
   ctx.globalAlpha = 1;
 }
 
-// A rounded rectangle of blurred, darkened video: the pill's background. Leaves the path set for a stroke.
-function frosted(x, y, w, h, r, v) {
-  const sx = video.videoWidth / v.w, sy = video.videoHeight / v.h, m = 12; // margin: no clear edge from the blur
-  ctx.save();
-  roundRect(x, y, w, h, r);
-  ctx.clip();
-  ctx.filter = "blur(6px)";
-  ctx.drawImage(video, (x - m - v.x) * sx, (y - m - v.y) * sy, (w + 2 * m) * sx, (h + 2 * m) * sy,
-                x - m, y - m, w + 2 * m, h + 2 * m);
-  ctx.filter = "none";
-  ctx.fillStyle = "rgba(10, 10, 12, 0.45)";
-  ctx.fillRect(x, y, w, h);
-  ctx.restore();
-  roundRect(x, y, w, h, r);
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)));
 }
 
-let shownText = "", shownState = "";
+let shownText = "";
 
-function updateBadge(now) {
-  let state = tracking === "offline" ? "offline" : "off", text;
-  if (tracking === "connecting") text = "Connecting…";
-  else if (tracking === "stopped") text = "Stopped";
-  else if (tracking === "offline") text = "Tracking offline · retrying";
-  else if (updatedAt === null) text = "Finding items…";
-  else {
-    const s = Math.max(0, Math.floor((now - updatedAt) / 1000));
-    state = s > STALE_S ? "stale" : "ok";
-    text = count + (count === 1 ? " item" : " items") + " · updated " + (s < 1 ? "just now" : s + "s ago");
-  }
-  if (text !== shownText) badgeText.textContent = shownText = text;
-  if (state !== shownState) badge.dataset.state = shownState = state;
+function updateStatus() {
+  const live = tracking === "ok" || tracking === "starting";
+  const text = tracking === "connecting" ? "Connecting…" : tracking === "stopped" ? "Waiting for the phone"
+    : tracking === "offline" ? "Tracking offline" : updatedAt === null ? "Live · Finding items…"
+    : "Live · " + count + (count === 1 ? " item" : " items");
+  if (text !== shownText) statusText.textContent = shownText = text;
+  statusEl.classList.toggle("live", live);
 }
 
 function draw() {
@@ -414,7 +354,7 @@ function draw() {
   const v = videoRect();
   waiting.hidden = !!v;
   if (v) {
-    const font = Math.round(Math.max(9, Math.min(v.h * 0.013, 13)));
+    const font = Math.round(Math.max(11, Math.min(v.h * 0.016, 13)));
     for (const [key, t] of tracks) if (t.gone !== null && alphaAt(t, now) <= 0) tracks.delete(key);
     const picked = look ? tracks.get(look.uid) : undefined;
     const labeled = [...tracks.values()].filter((t) => t !== picked && names.has(t.uid) && t.gone === null)
@@ -423,12 +363,9 @@ function draw() {
     for (const t of tracks.values()) {
       if (t !== picked) drawLabel(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, top.has(t));
     }
-    if (picked) { // on top, labelled with what it is and its price
-      const label = look.name + (look.price ? "  ·  " + look.price : "");
-      drawLabel(picked, boxAt(picked, now), alphaAt(picked, now), v, font, true, label);
-    }
+    if (picked) drawLabel(picked, boxAt(picked, now), alphaAt(picked, now), v, font, true, look);
   }
-  updateBadge(now);
+  updateStatus();
   requestAnimationFrame(draw);
 }
 
