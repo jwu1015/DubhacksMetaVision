@@ -111,6 +111,25 @@ final class ModelsTests: XCTestCase {
         XCTAssertTrue(done.ok)
     }
 
+    /// The voice agent's select_object tool asks the app to open an item (backend/storefront/voice/assistant.py).
+    func testVoiceSelectItem() throws {
+        let action = try JSONDecoder().decode(VoiceAction.self,
+                                              from: Data(#"{"name": "select_item", "uid": "2.17"}"#.utf8))
+        XCTAssertEqual(action.name, .selectItem)
+        XCTAssertEqual(action.uid, "2.17")
+    }
+
+    /// picked_at tells the latest pick; backends without it still decode.
+    func testLookPickedAt() throws {
+        let json = """
+        {"type": "look", "uid": "2.17", "look_id": "l_1", "stage": "started", "label": "lamp",
+         "box": [0.31, 0.22, 0.58, 0.71], "selected": true, "picked_at": 1792300000123, "crop_url": null,
+         "item": null, "search": null, "message": null}
+        """
+        guard case let .look(look) = try update(json) else { return XCTFail("not a look") }
+        XCTAssertEqual(look.pickedAt, 1_792_300_000_123)
+    }
+
     func testTokenRequestCarriesTheCategory() throws {
         let body = try JSONEncoder().encode(TokenRequest(participantIdentity: "phone-1a2b", category: "electronics"))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])

@@ -99,30 +99,61 @@ struct LiveView: View {
 
     // MARK: - Markers on the feed
 
+    /// How many objects get their full label; the others get a dot.
+    private static let maxLabels = 4
+
     @ViewBuilder
     private func markers(in size: CGSize) -> some View {
         if app.isCameraPaused {
             EmptyView()
         } else {
             // Objects that left the view in the last 15 s are still listed (for voice); only the ones in
-            // view get a hotspot.
-            ForEach(app.objects.filter(\.inView)) { object in
-                marker(for: object, in: size)
+            // view get a marker.
+            let inView = app.objects.filter(\.inView)
+            let labeled = labeledUIDs(among: inView)
+            ForEach(inView) { object in
+                marker(for: object, showsLabel: labeled.contains(object.uid), in: size)
             }
         }
     }
 
-    /// The object's quick label at the center of its box, once the backend has named it.
+    /// The named objects that keep their full label: the top 4 by 0.2 × likelihood + 0.8 × box size,
+    /// plus the selected one so its label never turns into a dot.
+    private func labeledUIDs(among objects: [LiveObject]) -> Set<String> {
+        func rank(_ object: LiveObject) -> Double {
+            let box = object.bbox
+            return 0.2 * object.score + 0.8 * max(box.w, 0) * max(box.h, 0)
+        }
+        var uids = Set(objects.filter { app.labels[$0.uid] != nil }
+            .sorted { rank($0) > rank($1) }
+            .prefix(Self.maxLabels)
+            .map(\.uid))
+        if isSelecting, let selected = app.selectedUID, app.labels[selected] != nil {
+            uids.insert(selected)
+        }
+        return uids
+    }
+
+    /// At the center of the object's box: its quick label once the backend has named it and it ranks
+    /// in the top 4, otherwise a small dot.
     @ViewBuilder
-    private func marker(for object: LiveObject, in size: CGSize) -> some View {
-        if let label = app.labels[object.uid] {
-            let rect = feedRect(object.bbox, in: size)
-            let isSelected = object.uid == app.selectedUID && isSelecting
+    private func marker(for object: LiveObject, showsLabel: Bool, in size: CGSize) -> some View {
+        let rect = feedRect(object.bbox, in: size)
+        let isSelected = object.uid == app.selectedUID && isSelecting
+        if showsLabel, let label = app.labels[object.uid] {
             ClampedPosition(center: CGPoint(x: rect.midX, y: rect.midY)) {
                 Hotspot(item: label.name.sentenceCased, priceEstimate: label.priceEstimate, isSelected: isSelected)
                     .opacity(hotspotOpacity)
                     // A tap on the selected object itself keeps it selected.
                     .onTapGesture { if !isSelected { app.select(object) } }
+                    .accessibilityAction { app.select(object) }
+            }
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
+        } else {
+            ClampedPosition(center: CGPoint(x: rect.midX, y: rect.midY)) {
+                HotspotDot(name: app.labels[object.uid]?.name.sentenceCased ?? object.prompt)
+                    .opacity(hotspotOpacity)
+                    .onTapGesture { app.select(object) }
                     .accessibilityAction { app.select(object) }
             }
             .transition(.scale(scale: 0.6).combined(with: .opacity))

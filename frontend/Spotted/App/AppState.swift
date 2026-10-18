@@ -50,12 +50,18 @@ final class AppState {
             updateVideoSource()
         }
     }
+    /// Glasses mode audio is set up (GlassesAudio), before the glasses stream: voice can run.
+    private(set) var isGlassesAudioReady = false
+    private var audioTask: Task<Void, Never>?
     /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
     private(set) var glasses: GlassesManager?
     /// Every Look the user asked for: Spotted Today and the room recap.
     var captures: [Capture] = []
     var isShowingRoomRecap = false
     private let lookActivity = LookActivityController()
+    /// Objects whose Look came in selected, and the latest picked_at: to tell a new pick (isNewPick).
+    private var pickedUIDs = Set<String>()
+    private var lastPickedAt: Int64 = 0
 
     // Sheets
     var isListening = false
@@ -250,7 +256,6 @@ final class AppState {
     private var isConnected = true
     /// The backend's last tracking status: its state, category and SAM's prompts.
     private var status: StatusMessage?
-    private let speaker = Speaker()
 
     init() {
         let mock = MockSession()
@@ -332,14 +337,30 @@ final class AppState {
 
     /// The glasses in glasses mode, unless the camera is paused; otherwise the phone camera. Glasses that
     /// drop out stay the source: their session waits for them and reconnects (see GlassesManager).
+    /// In glasses mode, audio (GlassesAudio) is set up first and the glasses stream starts only after it.
     private func updateVideoSource() {
         guard let live else { return }
-        if captureMode == .glasses, let glasses, !isCameraPaused {
+        audioTask?.cancel()
+        guard captureMode == .glasses else {
+            GlassesAudio.stop()
+            isGlassesAudioReady = false
+            glasses?.stopCamera()
+            live.use(.phone)
+            return
+        }
+        let streamsGlasses = glasses != nil && !isCameraPaused
+        if streamsGlasses {
             live.use(.glasses)
-            glasses.startCamera(into: live.glassesCapturer)
         } else {
             glasses?.stopCamera()
             live.use(.phone)
+        }
+        // Even while paused, so resuming never opens HFP next to a running stream.
+        audioTask = Task { [weak self] in
+            let ready = (try? await GlassesAudio.start()) != nil
+            guard let self, !Task.isCancelled else { return }
+            isGlassesAudioReady = ready
+            if streamsGlasses { glasses?.startCamera(into: live.glassesCapturer) }
         }
     }
 
@@ -352,7 +373,16 @@ final class AppState {
         case let .label(label):
             labels[label.uid] = label
         case let .look(look):
-            if look.uid == selectedUID { show(look) }
+            let isNewPick = isNewPick(look)
+            if look.uid == selectedUID {
+                show(look)
+            } else if isNewPick {
+                // Picked by the voice agent (or for it, by the backend): show it as if tapped.
+                NSLog("[Live] following a pick: %@ (%@)", look.uid, look.stage.rawValue)
+                bringLiveViewToFront()
+                selectedUID = look.uid
+                show(look)
+            }
         case let .status(status):
             self.status = status
         case .other:
@@ -360,35 +390,44 @@ final class AppState {
         }
     }
 
-    /// Spoken feedback, through the phone camera's mode only. With the glasses as the source the audio
-    /// would play on them over the Bluetooth link their camera streams on, which can drop the stream.
-    private func say(_ text: String) {
-        guard captureMode == .phone else { return }
-        speaker.say(text)
+    /// A Look someone just picked: newer than the last pick by picked_at, or, from a backend without it,
+    /// the first time this object's Look comes in selected.
+    private func isNewPick(_ look: Look) -> Bool {
+        guard look.selected else { return false }
+        defer {
+            pickedUIDs.insert(look.uid)
+            if let at = look.pickedAt { lastPickedAt = max(lastPickedAt, at) }
+        }
+        if let at = look.pickedAt { return at > lastPickedAt }
+        return !pickedUIDs.contains(look.uid)
+    }
+
+    /// Closes what covers the Live view (not the pay sheet), so a pick's label and card show.
+    private func bringLiveViewToFront() {
+        isListening = false
+        isShowingDetail = false
+        isShowingRoomRecap = false
+        tab = .live
     }
 
     private func clearObjects() {
         objects = []
         labels = [:]
+        pickedUIDs = []
     }
 
     /// The selected object's Look, at its latest step.
     private func show(_ look: Look) {
-        let previous = currentLook?.lookID == look.lookID ? currentLook : nil
         // The select's answer can arrive after a later step of the same Look.
-        if let previous, previous.stage == .results, look.stage != .results { return }
+        if currentLook?.lookID == look.lookID, currentLook?.stage == .results, look.stage != .results { return }
         switch look.stage {
         case .started, .described:
             scan = .detected(look)
-            if previous == nil { say(look.quickPhrase) }
         case .results:
             guard let search = look.search else { return }
             scan = .matched(look, search)
-            if previous?.stage != .results { say(search.spokenSummary) }
         case .failed:
-            let line = look.message ?? "Couldn't tell. Try again closer."
-            scan = .failed(line)
-            say(line)
+            scan = .failed(look.message ?? "Couldn't tell. Try again closer.")
         case .unknown:
             break
         }
@@ -400,12 +439,11 @@ final class AppState {
 
     /// Connect only while voice is in use: the app is in front and the Live view, the assistant
     /// sheet, results or the pay sheet is up. The mic is transcribed the whole time it's connected.
-    /// Never with the glasses as the source: their mic would open a Bluetooth audio link next to the
-    /// camera stream, which can drop it.
+    /// In glasses mode only once GlassesAudio is set up: HFP opened after the glasses stream starts can drop it.
     func updateVoice(appIsActive: Bool) {
         guard let voice else { return }
         let inUse = tab == .live || isListening || isShowingDetail || isShowingCheckout || isShowingRoomRecap
-        appIsActive && inUse && captureMode == .phone ? voice.connect() : voice.disconnect()
+        appIsActive && inUse && (captureMode == .phone || isGlassesAudioReady) ? voice.connect() : voice.disconnect()
     }
 
     /// One action the assistant asks for through the "action" RPC. It waits at most 15 s for the reply.
@@ -443,6 +481,18 @@ final class AppState {
             isShowingDetail = false
             tab = .cart
             isShowingCheckout = true
+            return VoiceActionReply(ok: true)
+        case .selectItem:
+            guard let uid = action.uid, let object = objects.first(where: { $0.uid == uid }) else {
+                return VoiceActionReply(ok: false, detail: "That item isn't tracked anymore.")
+            }
+            bringLiveViewToFront()
+            // Already open: keep its card as it is. A failed one is tried again.
+            let isOpen = switch scan {
+            case .looking, .detected, .matched: selectedUID == uid
+            case .idle, .failed: false
+            }
+            if !isOpen { select(object) }
             return VoiceActionReply(ok: true)
         case .unknown:
             return VoiceActionReply(ok: false, detail: "Not in the app yet.")

@@ -37,8 +37,7 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 | Glasses | **Meta Wearables Device Access Toolkit (DAT)** | Swift Package: `https://github.com/facebook/meta-wearables-dat-ios`. Start from the sample app in `/samples`. |
 | Networking (live) | **LiveKit** (`client-sdk-swift`) | One room per session with the backend in it: the camera goes up as one video track, objects, labels and Looks come back on topic `updates`, and taps go out as RPCs. |
 | Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `POST /session/token` on the FastAPI backend (ngrok HTTPS). Types: `Models.swift`, mirroring `backend/storefront/models.py`. |
-| Speech in | Apple `Speech` framework | Glasses mic arrives over Bluetooth audio. |
-| Speech out | `AVSpeechSynthesizer` | Speaks the tapped Look's quick phrase and `spokenSummary` through the glasses' speakers. |
+| Voice | The voice agent in the LiveKit room | The phone's mic goes up as an audio track and the agent answers over the room. In glasses mode (`GlassesAudio`) the glasses' mic and speakers carry it over HFP, set up before the glasses stream starts (Meta's documented order); if HFP doesn't come up, the phone's mic and speaker. No speech on the device. |
 | Agent | **Claude** (Anthropic API, tool use), called **from the backend** via `POST /agent` (streamed) | Understands requests and acts through tools. The phone executes app-side actions and confirms anything with money. |
 | Checkout | **Stripe Checkout (test mode)** in `SFSafariViewController` | The backend returns a checkout URL. Face ID (`LocalAuthentication`) gates opening it. |
 | Dev machine | macOS + Xcode | |
@@ -108,7 +107,7 @@ Phone ── RPC select {uid} ──► vision: answers that object's Look; its 
 
 | Runs on | Steps |
 |---|---|
-| **Phone** (this repo) | Capture, preview, UI, speech out, cart, opening the checkout URL |
+| **Phone** (this repo) | Capture, preview, UI, cart, opening the checkout URL |
 | **Backend** (FastAPI, `backend/storefront`) | Session tokens, tracking, quick labels, Looks |
 | **LiveKit Cloud** | The room: video, messages, RPCs |
 | **Anthropic API** | Claude Haiku: quick labels, descriptions, spoken summaries |
@@ -120,8 +119,7 @@ Phone ── RPC select {uid} ──► vision: answers that object's Look; its 
 1. **Join:** `POST /session/token`, then join the room as `phone-…` and publish the camera (phone or glasses) as one video track. Send `mode` right after joining, and `pause` if paused.
 2. **Draw:** each `objects` message moves the labels (in-view objects only); a `label` message adds one, at the center of its object's box. The app keeps nothing else: after a reconnect, the backend sends its current state again.
 3. **Tap:** RPC `select {uid}`. Its answer is that object's Look as it stands: `started` / `described` → searching card (01b), `results` → product card (01), `failed` → couldn't tell (01c). Later `look` messages for that uid move the card along; Looks for other objects are ignored.
-4. **Speak:** the Look's quick phrase when it appears, then `spokenSummary` with the results.
-5. **Actions:** Save / Add to cart (client state). **Check out:** Face ID, then the checkout URL in `SFSafariViewController`.
+4. **Actions:** Save / Add to cart (client state). **Check out:** Face ID, then the checkout URL in `SFSafariViewController`.
 
 ---
 
@@ -160,6 +158,7 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
   - **App tools**, returned to the phone as `action` events and executed locally:
     - `save_item`, `add_to_cart` (→ `POST /cart`), `remove_from_cart` (→ `DELETE /cart/{index}`), `undo_last`
     - `show_results`, `open_screen`, `list_saved`, `start_checkout`
+    - `select_item {uid}`: the agent picked an item by voice. The app closes any sheet and selects it as a tap does, so its label and card show.
 
     The phone sends each action's result back so Claude can continue.
 - **Streaming:** the backend streams events so the glasses can speak Claude's first short line right away (target: under 1.5 s to first word) while detail fills in on the phone.
@@ -187,7 +186,6 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
 - `AgentTools`: executes app tools against `AppState` and returns results.
 - `AgentSheet` (02): shows the transcript, Claude's reply, **action cards** ("Added · Walnut Lounge Chair · Undo") and suggested follow-ups.
 - `ConfirmGate`: any `confirm` event (checkout, removals) shows a confirm card, with Face ID for money.
-- `Speaker`: speaks `speech` events in order and is interruptible by the user ("barge-in").
 
 ---
 
@@ -202,7 +200,7 @@ Spotted/
 ├─ Mock/       MockData, MockSession (plays the server's messages without a backend)
 ├─ Network/    APIClient (POST /session/token), Models (mirrors backend/storefront/models.py), AppConfig
 ├─ Glasses/    GlassesManager (DAT registration, glasses camera stream)
-├─ Voice/      VoiceAssistant (the agent in the shared room: transcripts, mic, "action" RPC), Speaker
+├─ Voice/      VoiceAssistant (the agent in the shared room: transcripts, mic, "action" RPC), GlassesAudio
 ├─ Design/     Tokens, Glass
 ├─ Components/ Hotspot, DetectionBrackets, ProductCard, GlassTabBar, …
 └─ Screens/    LiveView, AgentSheet, ProductDetail, SavedView, CartView, CheckoutSheet, glasses screens
@@ -210,7 +208,7 @@ Spotted/
 
 **Data flow:**
 - **Continuous:** `VideoFeed` → `LiveSession` (one video track up). Topic `updates` → `LiveSession` → `AppState.handle` → `objects` and `labels` → hotspots redraw.
-- **On tap:** `AppState.select` → `LiveSession.select` (RPC) → the Look's latest step → `scan`. Later `look` messages for that uid update it, and `Speaker` voices each phrase.
+- **On tap:** `AppState.select` → `LiveSession.select` (RPC) → the Look's latest step → `scan`. Later `look` messages for that uid update it.
 - **Without a backend:** `MockSession` plays the same messages into `AppState.handle`.
 - **Voice:** `VoiceAssistant` asks the backend for the agent (`voice {on}`) and publishes the mic; the agent's `action` RPC runs through `AppState`.
 
@@ -499,7 +497,7 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 ### Cart (server-side, coming with the search/cart PR)
 - `POST /cart` with `AddToCartRequest(product:)`: send a `Product` exactly as `/search` returned it.
 - `GET /cart` and `DELETE /cart/{index}`.
-- Each returns `Cart { items, total, spokenSummary }`. Speak `spokenSummary` after adds and removes.
+- Each returns `Cart { items, total, spokenSummary }`.
 - Until the PR lands, keep the cart in `AppState` and switch to the server cart when the endpoints are live.
 
 ### UI rules
@@ -507,7 +505,7 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
   - Each in-view `objects[]` entry with a `label` shows that label (01a) at the center of its `box`, keyed by `uid`. No box is drawn.
   - While the room is reconnecting or `status.tracking` is `offline`, show "Reconnecting…" in the status pill.
 - **Selected:** tapping a label makes that object **selected** (the label turns lime) and calls `select`.
-- **Couldn't tell:** a `failed` Look → speak its `message`, show **Couldn't tell** (01c).
+- **Couldn't tell:** a `failed` Look → show its `message` in **Couldn't tell** (01c).
 - **Similarity:** show "Exact match" only when `product.isExactMatch` (`matchScore ≥ 85`). While `matchScore` is `nil` (today), show **"Similar"**.
 - **Price verdict chip:** text is `bestMatchVerdict.label`. Color: Low = success, Fair = secondary, High = warning. Always text plus color.
 - **Empty states:** `bestMatch == nil` → "No exact match for sale"; empty `dupes` or `used` → "No dupes found" / "No used listings".
@@ -541,8 +539,8 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 - [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/detect`, `/search`, `/checkout`) against the real backend
 - [ ] 4a. WebRTC: add `stasel/WebRTC`, publish a test track (phone camera) to the backend page via `POST /offer`, and confirm it plays on the laptop
 - [ ] 4b. Swap in `GlassesVideoCapturer` (DAT frames → track); handle `detections` → live hotspots
-- [ ] 4c. Select a hotspot → best full-res frame → `/detect` → speak `quickPhrase` → card in searching state (01b)
-- [ ] 5. `/search/{captureID}` → fill card: `bestMatch`, verdict chip, `verdictText`; speak `spokenSummary`; handle nil/empty
+- [ ] 4c. Select a hotspot → best full-res frame → `/detect` → card in searching state (01b)
+- [ ] 5. `/search/{captureID}` → fill card: `bestMatch`, verdict chip, `verdictText`; handle nil/empty
 - [ ] 6. Hotspot (01a) → selection → brackets
 - [ ] 7. Product Detail (03): Best match / Dupes / Used
 - [ ] 8. Saved (04) and Cart (05)

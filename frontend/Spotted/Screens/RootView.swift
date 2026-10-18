@@ -80,6 +80,6 @@ struct RootView: View {
 
     private var voiceInUse: [Bool] {
         [scenePhase == .active, app.tab == .live, app.isListening, app.isShowingDetail, app.isShowingCheckout,
-         app.isShowingRoomRecap, app.captureMode == .phone]
+         app.isShowingRoomRecap, app.captureMode == .phone, app.isGlassesAudioReady, app.voice != nil]
     }
 }

@@ -35,16 +35,21 @@ final class VoiceAssistant {
 
     private let session: LiveSession
     private var connectTask: Task<Void, Never>?
+    private var connectAttempt: UUID?
 
     init(session: LiveSession) {
         self.session = session
+        session.onJoin = { [weak self] in self?.rejoined() }
         Task { [weak self] in
             do {
                 try await session.room.registerRpcMethod("action") { [weak self] data in
+                    NSLog("[Voice] action from %@: %@", data.callerIdentity.stringValue, data.payload)
                     let action = try JSONDecoder().decode(VoiceAction.self, from: Data(data.payload.utf8))
                     let reply = await self?.run(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
+                    NSLog("[Voice] action %@ -> ok: %@ %@", action.name.rawValue, reply.ok ? "true" : "false", reply.detail ?? "")
                     return String(decoding: try JSONEncoder().encode(reply), as: UTF8.self)
                 }
+                NSLog("[Voice] action handler registered")
                 try await session.room.registerTextStreamHandler(for: "lk.transcription") { [weak self] reader, speaker in
                     try await self?.receive(reader, from: speaker)
                 }
@@ -56,26 +61,48 @@ final class VoiceAssistant {
 
     func connect() {
         guard status != .connected, connectTask == nil else { return }
+        lines = []
+        start()
+    }
+
+    /// Asks for the agent in the room and publishes the mic. Only the latest attempt updates the state.
+    private func start() {
+        connectTask?.cancel()
         status = .connecting
+        let attempt = UUID()
+        connectAttempt = attempt
         connectTask = Task { [weak self] in
             guard let self else { return }
-            defer { connectTask = nil }
+            defer { if connectAttempt == attempt { connectTask = nil } }
+            guard await GlassesAudio.requestMicPermission() else {
+                if connectAttempt == attempt { status = .failed("Allow the microphone for Spotted in Settings.") }
+                return
+            }
             do {
                 try await session.setVoice(true)
                 try await session.room.localParticipant.setMicrophone(enabled: true)
-                guard !Task.isCancelled else { return }
-                lines = []
+                guard !Task.isCancelled, connectAttempt == attempt else { return }
                 status = .connected
+                NSLog("[Voice] connected: agent asked for, mic on")
             } catch {
-                print("[Voice] connect failed: \(error)")
-                status = Task.isCancelled ? .off : .failed("Couldn't reach the assistant.")
+                guard !Task.isCancelled, connectAttempt == attempt else { return }
+                NSLog("[Voice] connect failed: %@", String(describing: error))
+                status = .failed("Couldn't reach the assistant.")
             }
         }
+    }
+
+    /// Each join is a new room: no agent in it and no mic published. If voice is wanted, bring both back.
+    /// That also retries an attempt made before the first join finished, which failed with no room.
+    private func rejoined() {
+        guard status != .off else { return }
+        start()
     }
 
     func disconnect() {
         connectTask?.cancel()
         connectTask = nil
+        connectAttempt = nil
         guard status != .off else { return }
         status = .off
         Task { [session] in
