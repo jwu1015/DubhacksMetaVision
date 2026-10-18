@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager, contextmanager
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from livekit import api as livekit_api
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 import cart
@@ -32,7 +33,8 @@ import stream
 import webrtc
 from models import (
     BBox, Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
-    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
+    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation, VoiceTokenRequest,
+    VoiceTokenResponse,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -40,6 +42,7 @@ log = logging.getLogger("gtl")
 
 FIXTURE_ID = "c_fixture"
 NO_ITEM_PHRASE = "I couldn't spot a product there. Try again closer."
+MAX_HINT_TEXT = 100  # characters of hint_text kept: a SAM prompt and a line for Claude, not a paragraph
 
 # fixture image -> name it is served under, matching the URLs in the fixture JSON
 FIXTURE_IMAGES = {
@@ -166,11 +169,60 @@ def parse_hint(hint_box: str | None, hint_label: str | None):
     return segment.Found(box, None, (hint_label or "").strip())
 
 
+def parse_point(hint_point: str | None) -> tuple[float, float] | None:
+    """The point the app's user tapped: JSON normalized to the photo, {"x", "y"} or [x, y]."""
+    if not hint_point:
+        return None
+    try:
+        raw = json.loads(hint_point)
+        x, y = (float(v) for v in (raw if isinstance(raw, list) else (raw["x"], raw["y"])))
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(400, 'hint_point must be JSON like {"x": 0.45, "y": 0.6} or [x, y], normalized 0-1')
+    if not (0 <= x <= 1 and 0 <= y <= 1):
+        raise HTTPException(400, "hint_point must be inside the photo: x and y between 0 and 1")
+    return x, y
+
+
+def parse_text(hint_text: str | None) -> str | None:
+    """What the user asked about, from their voice command (e.g. "green floor lamp"): SAM's prompt and a
+    line for Claude. Kept to one short line."""
+    return " ".join((hint_text or "").split())[:MAX_HINT_TEXT] or None
+
+
+def parse_track(track_id: str) -> int:
+    """A tracked object's id as the data channel sends it: "t4" -> 4."""
+    try:
+        return int(track_id.strip().removeprefix("t"))
+    except ValueError:
+        raise HTTPException(400, 'track_id must be a tracked object\'s id like "t4"')
+
+
+async def detect_form(image: UploadFile | None, track_id: str | None, hint_box: str | None,
+                      hint_label: str | None, hint_point: str | None, hint_text: str | None) -> DetectResponse:
+    """/detect and /identify: a photo (image, with optional hints), or an object the live stream is
+    tracking (track_id, no photo), looked at in the frame its box describes."""
+    data = await image.read() if image else b""
+    if bool(data) == bool(track_id):
+        raise HTTPException(400, 'send exactly one of image (a JPEG) or track_id (e.g. "t4")')
+    if track_id:
+        resp = await look(parse_track(track_id))
+        if resp is None:
+            raise HTTPException(404, "track expired")
+        return resp
+    text = parse_text(hint_text)
+    return await run_detect(data, hint=parse_hint(hint_box, hint_label or text), point=parse_point(hint_point),
+                            text=text)
+
+
 # ---------- pipeline ----------
 
-async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> DetectResponse:
+async def run_detect(data: bytes, hint=None, track_id: int | None = None, point: tuple[float, float] | None = None,
+                     text: str | None = None) -> DetectResponse:
     """hint: a segment.Found for the object the user picked (a tapped hotspot, or a tracked object);
-    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any."""
+    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any.
+    point: where the user tapped (normalized), when there's no hint: SAM's object there.
+    text: what the user asked about. Claude always gets it; SAM looks for it unless hint is given.
+    Precedence: hint > point > text."""
     t0 = time.perf_counter()
     img = load_image(data)
     if config.USE_FIXTURES:
@@ -205,30 +257,48 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
                     else "Got it. Finding prices.")
         resp = done(item, segmentation, path)
         search_tasks[capture_id] = asyncio.create_task(
-            describe_then_search(captures[capture_id], claude, on_crop=path == "picked"))
+            describe_then_search(captures[capture_id], claude, on_crop=path.startswith("picked"), hint=text))
         return resp
+
+    def describe_crop(segmentation: Segmentation) -> asyncio.Task:
+        return asyncio.create_task(vision.detect((config.ROOT / segmentation.cutout_path).read_bytes(), hint=text))
 
     timing: dict[str, int] = {}
     vision, segment = stage("vision"), stage("segment")
+    if point and not hint and vision and segment:
+        # The user tapped a point: SAM's object there (looking for what they asked about, if they said), else
+        # a crop around the point. Either way, picked: Claude describes just the crop.
+        with timed(timing, "sam"):
+            found = await segment.sam_objects(img, text or segment.SAM_CATEGORIES or None,
+                                              timeout=segment.SAM_FIRST_TIMEOUT)
+        hint = segment.point_object(found or [], *point)
+        if hint is None:
+            with timed(timing, "crop"):
+                segmentation = segment.point_crop(img, *point, capture_id, t0)
+            target = segment.Found(segmentation.bbox, None, text or "")
+            return answer_early(target, segmentation, describe_crop(segmentation), "picked-point-crop")
+        segmentation = segment.sam_crop(img, hint, capture_id, t0)
+        return answer_early(hint, segmentation, describe_crop(segmentation), "picked-point")
     if hint and vision and segment:
         # The user picked the object: no need to ask SAM, and Claude describes just its crop.
         segmentation = segment.sam_crop(img, hint, capture_id, t0)
-        crop = (config.ROOT / segmentation.cutout_path).read_bytes()
-        return answer_early(hint, segmentation, asyncio.create_task(vision.detect(crop)), "picked")
+        return answer_early(hint, segmentation, describe_crop(segmentation), "picked")
 
     # Claude starts now either way: SAM first needs its description, Claude first its whole answer.
-    claude = asyncio.create_task(vision.detect(buf.getvalue())) if vision else None
+    claude = asyncio.create_task(vision.detect(buf.getvalue(), hint=text)) if vision else None
 
     sam_failed = False
     if claude and segment and config.MODEL_SERVICE_URL:
         # SAM first: every object in view from SAM_CATEGORIES; the user is looking at the one at the center of
-        # the view.
+        # the view. With text, SAM looks for what the user asked about instead: the one at the center, else
+        # the best match.
         with timed(timing, "sam"):
-            found = await segment.sam_objects(img, segment.SAM_CATEGORIES or None,
+            found = await segment.sam_objects(img, text or segment.SAM_CATEGORIES or None,
                                               timeout=segment.SAM_FIRST_TIMEOUT)
-        target = segment.center_object(found or [])
+        target = segment.text_object(found or []) if text else segment.center_object(found or [])
         if target:
-            return answer_early(target, segment.sam_crop(img, target, capture_id, t0), claude, "sam-first")
+            return answer_early(target, segment.sam_crop(img, target, capture_id, t0), claude,
+                                "sam-text" if text else "sam-first")
         sam_failed = found is None  # down or too slow: don't ask it again below
 
     # Claude first: no segmentation server, or nothing buyable at the center of the view.
@@ -248,22 +318,13 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
     return resp
 
 
-def start_search(cap: Capture) -> asyncio.Task | None:
-    """Start the store search now, if the search stage exists. It needs only the crop and a label:
-    Lens on the crop, then Shopping and eBay from Lens's titles."""
-    search = stage("search")
-    if search is None:
-        return None
-    return asyncio.create_task(search.search_all(cap.segmentation.cutout_url, cap.item, capture_id=cap.capture_id))
-
-
-async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False) -> SearchResponse:
-    """The object is known (SAM first, or the user picked it): the store search starts right away on
-    its crop and label, while Claude describes it for ranking. on_crop: Claude was asked about the crop
-    itself; otherwise about the whole photo, and then about the crop if it looked at a different
-    object. Claude failing leaves the label."""
+async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False,
+                               hint: str | None = None) -> SearchResponse:
+    """The object is known (SAM first, or the user picked it): Claude describes it, then the store
+    search runs on Claude's queries (a label like "lamp" alone finds lamps, not this one). on_crop:
+    Claude was asked about the crop itself; otherwise about the whole photo, and then about the crop if
+    it looked at a different object (with hint, what the user asked about). Claude failing leaves the label."""
     t0 = time.perf_counter()
-    products = start_search(cap)
     vision, segment = stage("vision"), stage("segment")
     sam_item = cap.item
     try:
@@ -271,7 +332,7 @@ async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool
         if not on_crop and (item.category is None or item.bbox is None
                             or segment.iou(item.bbox, sam_item.bbox) <= segment.SAM_IOU):
             log.info("describe %s: Claude looked elsewhere; asking about SAM's crop", cap.capture_id)
-            item = await vision.detect((config.ROOT / cap.segmentation.cutout_path).read_bytes())
+            item = await vision.detect((config.ROOT / cap.segmentation.cutout_path).read_bytes(), hint=hint)
         if item.category:
             cap.item = item.model_copy(update={"bbox": sam_item.bbox, "quick_phrase": sam_item.quick_phrase})
             announce(cap, "described", item=cap.item.model_dump(mode="json"))
@@ -279,7 +340,7 @@ async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool
         log.warning("describe %s: Claude failed (%r); searching with SAM's label", cap.capture_id, e)
     log.info("describe %s: %dms category=%r queries=%s", cap.capture_id, ms_since(t0),
              cap.item.category, cap.item.search_queries)
-    return await compute_search(cap, products)
+    return await compute_search(cap)
 
 
 async def run_search(capture_id: str) -> SearchResponse:
@@ -305,12 +366,11 @@ async def run_search(capture_id: str) -> SearchResponse:
     return await compute_search(cap)
 
 
-async def compute_search(cap: Capture, products_task: asyncio.Task | None = None) -> SearchResponse:
+async def compute_search(cap: Capture) -> SearchResponse:
     """search -> rerank -> pricing + rank for one capture, with the finished item attached and the
-    result announced to the projector. products_task: a search already started (timing_ms["search"]
-    is then only the time left to wait for it)."""
+    result announced to the projector."""
     try:
-        resp = await search_pipeline(cap, products_task)
+        resp = await search_pipeline(cap)
     except Exception:
         announce(cap, "failed", message="Couldn't get prices for that one.")
         raise
@@ -319,7 +379,7 @@ async def compute_search(cap: Capture, products_task: asyncio.Task | None = None
     return resp
 
 
-async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> SearchResponse:
+async def search_pipeline(cap: Capture) -> SearchResponse:
     t0 = time.perf_counter()
     capture_id = cap.capture_id
     timing: dict[str, int] = {}
@@ -327,9 +387,7 @@ async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> S
 
     search = stage("search")
     with timed(timing, "search"):
-        if products_task is not None:
-            products = await products_task
-        elif search:
+        if search:
             products = await search.search_all(cutout_url, cap.item, capture_id=capture_id)
         else:
             products = [Product.model_validate(p) for p in fixture("products_raw_lamp.json")]
@@ -356,17 +414,18 @@ async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> S
 
 
 async def look(track_id: int) -> DetectResponse | None:
-    """The user picked a tracked object (the phone's "select" message, or POST /look/{id}). The crop
-    comes from the frame its box describes, so SAM isn't asked again; the projector follows along
-    through the "look" events. None if the stream isn't tracking that object."""
-    frame, result = stream.live.tracked_frame(), stream.live.latest_objects()
-    obj = next((o for o in result.objects if o.id == track_id), None) if result else None
-    if frame is None or obj is None:
-        log.info("look: the stream isn't tracking object %d", track_id)
+    """The user picked a tracked object (the phone's "select" message, POST /look/{id}, or the voice
+    assistant). The crop comes from that track's best frame in scene memory (sharpest, biggest, most
+    centered), in view or not, with the box it had there, so SAM isn't asked again; the projector follows
+    along through the "look" events. None if scene memory doesn't hold that track (any more)."""
+    best = stream.live.scene.best(track_id)
+    if best is None:
+        log.info("look: scene memory has no object %d", track_id)
         return None
+    frame, track = best
     buf = io.BytesIO()
     frame.convert("RGB").save(buf, format="JPEG", quality=90)
-    hint = stage("segment").Found(obj.box, obj.score, obj.label)
+    hint = stage("segment").Found(track.frame_box, track.score, track.label)
     return await run_detect(buf.getvalue(), hint=hint, track_id=track_id)
 
 
@@ -428,10 +487,14 @@ app.include_router(cart.router)
 
 
 @app.post("/detect", response_model=DetectResponse)
-async def detect_route(image: UploadFile = File(...), hint_box: str | None = Form(None),
-                       hint_label: str | None = Form(None)):
-    """hint_box, hint_label (optional): the object the user tapped; used instead of SAM's guess."""
-    return await run_detect(await image.read(), hint=parse_hint(hint_box, hint_label))
+async def detect_route(image: UploadFile | None = File(None), track_id: str | None = Form(None),
+                       hint_box: str | None = Form(None), hint_label: str | None = Form(None),
+                       hint_point: str | None = Form(None), hint_text: str | None = Form(None)):
+    """Exactly one of image (a JPEG) or track_id ("t4": a tracked object, in its best frame; 404 "track
+    expired" once it's gone). With an image, optional hints, in order of precedence:
+    hint_box + hint_label, the object the user tapped (used instead of SAM's guess); hint_point, the point
+    they tapped; hint_text, what they asked about (also passed to Claude)."""
+    return await detect_form(image, track_id, hint_box, hint_label, hint_point, hint_text)
 
 
 @app.post("/search/{capture_id}", response_model=SearchResponse)
@@ -440,9 +503,11 @@ async def search_route(capture_id: str):
 
 
 @app.post("/identify", response_model=IdentifyResponse)
-async def identify_route(image: UploadFile = File(...), hint_box: str | None = Form(None),
-                         hint_label: str | None = Form(None)):
-    det = await run_detect(await image.read(), hint=parse_hint(hint_box, hint_label))
+async def identify_route(image: UploadFile | None = File(None), track_id: str | None = Form(None),
+                         hint_box: str | None = Form(None), hint_label: str | None = Form(None),
+                         hint_point: str | None = Form(None), hint_text: str | None = Form(None)):
+    """/detect and /search in one call; the same inputs as /detect."""
+    det = await detect_form(image, track_id, hint_box, hint_label, hint_point, hint_text)
     srch = await run_search(det.capture_id) if det.item.category else None
     return IdentifyResponse(detect=det, search=srch)
 
@@ -456,10 +521,31 @@ async def look_route(track_id: int):
     return resp
 
 
+@app.post("/voice/token", response_model=VoiceTokenResponse, status_code=201)
+async def voice_token_route(req: VoiceTokenRequest | None = None):
+    """The phone's ticket to the voice assistant (voice.py), in LiveKit's standard token-endpoint format,
+    so the app can use its SDK's endpoint token source. Every call opens a new room: LiveKit dispatches
+    the agent when a room is created."""
+    if not (config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET):
+        raise HTTPException(503, "voice isn't set up: LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are unset")
+    req = req or VoiceTokenRequest()
+    room = "spotted-" + uuid.uuid4().hex[:8]
+    token = (livekit_api.AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
+             .with_identity(req.participant_identity or "phone-" + uuid.uuid4().hex[:6])
+             .with_name(req.participant_name or "Spotted user")
+             .with_grants(livekit_api.VideoGrants(room_join=True, room=room))
+             .with_room_config(livekit_api.RoomConfiguration(
+                 agents=[livekit_api.RoomAgentDispatch(agent_name=config.VOICE_AGENT)])))
+    log.info("voice: token for room %s", room)
+    return VoiceTokenResponse(server_url=config.LIVEKIT_URL, participant_token=token.to_jwt())
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health_route():
     return HealthResponse(ok=True, model_service=await model_service_ok(),
-                          fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE)
+                          fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE,
+                          webrtc_sessions=1 if webrtc.phones.current else 0, scene_memory=stream.live.running,
+                          voice=bool(config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET))
 
 
 # The live stream (stream.py): the projector page at /stream/viewer, its video and its events.
