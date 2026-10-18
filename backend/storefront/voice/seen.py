@@ -3,17 +3,35 @@
 import asyncio
 import json
 import logging
+import math
 import time
 
 from livekit import rtc
 
 from storefront.rtc.tokens import UPDATES, VISION
-from storefront.voice.resolve import Resolved, distance, in_view, resolve
+from storefront.voice.resolve import Resolved, distance, in_view, middle, resolve
 
 log = logging.getLogger("storefront.voice")
 
 NEAR = 0.15    # in front of the camera: an object whose box comes this close to the center of the view
 PICK_S = 60.0  # a tap in the app is what "this" means for this long, while its object is still tracked
+AIM_R = 0.5    # a box whose middle is this far from the center of the view isn't aimed at at all
+HOLD_S = 1.0   # aiming counts over about this long: what they keep pointing at beats what passes by
+MIN_AREA = 0.003  # boxes under this share of the view (about 37x37 px of the phone's 504x896) come last
+AMBIGUOUS = 0.08  # two objects in front that score this close: the agent asks which one they mean
+
+
+def aim(o: dict) -> float:
+    """How squarely the camera points at an object: 1 when its box's middle is the center of the view, down to
+    0 at AIM_R away. A box covering the center doesn't make it aimed at: that's often something in front of or
+    behind what they mean."""
+    x, y = middle(o)
+    return max(0.0, 1.0 - math.hypot(x - 0.5, y - 0.5) / AIM_R)
+
+
+def area(o: dict) -> float:
+    x1, y1, x2, y2 = o["box"]
+    return (x2 - x1) * (y2 - y1)
 
 
 class Seen:
@@ -33,6 +51,8 @@ class Seen:
         self.picked: str | None = None       # the uid the user last tapped in the app, since the agent joined
         self.picked_at = 0.0                 # when, by self.clock
         self.agent_picked: set[str] = set()  # uids the assistant picked itself, to start their Looks: not taps
+        self.held: dict[str, float] = {}     # uid -> its aim, averaged over about the last HOLD_S seconds
+        self.held_at: float | None = None    # when the held aims were last brought up to date, by self.clock
         self.ranked: list[str] = []          # the uids the last resolve found, best first
         self.tried: list[str] = []           # those looked at since, the latest last
         self.asked: list[str] = []           # the two its question was about, until it's answered
@@ -42,6 +62,7 @@ class Seen:
         self.objects, self.labels, self.looks, self.described = [], {}, {}, {}
         self.ranked, self.tried, self.asked = [], [], []
         self.picked, self.agent_picked = None, set()
+        self.held, self.held_at = {}, None
         if self.look:
             self.look = {**self.look, "uid": None}
 
@@ -55,6 +76,7 @@ class Seen:
                 self.forget()
             self.session = m.get("session")
             self.objects = m["objects"]
+            self.hold()
         elif kind == "status":
             self.prompts = m["prompts"]
             if m["tracking"] == "stopped":
@@ -73,14 +95,35 @@ class Seen:
                 if before is not None and not before.get("selected") and uid not in self.agent_picked:
                     self.picked, self.picked_at = uid, self.clock()
 
+    def hold(self):
+        """Fold the latest objects into each one's held aim: its aim, averaged over about the last HOLD_S."""
+        now = self.clock()
+        k = 1 - math.exp(-(now - self.held_at) / HOLD_S) if self.held_at is not None else 0.0
+        self.held_at = now
+        aims = {o["uid"]: aim(o) if in_view(o) else 0.0 for o in self.objects}
+        for uid in self.held.keys() | aims.keys():
+            h = self.held.get(uid, 0.0)
+            self.held[uid] = h + (aims.get(uid, 0.0) - h) * k
+
+    def score(self, o: dict) -> float:
+        """How surely the user means this object in front: how squarely the camera points at it now, mostly, and
+        over the last second or so, then a little SAM's confidence. Not its size."""
+        return 0.6 * aim(o) + 0.4 * self.held.get(o["uid"], 0.0) + 0.1 * o.get("score", 0.0)
+
+    def in_front(self) -> list[dict]:
+        """The objects in front of the camera, those in view whose box covers the center of the view or comes
+        within NEAR of it, best first: by score, boxes under MIN_AREA last."""
+        near = [o for o in self.objects if in_view(o) and distance(o) <= NEAR]
+        return sorted(near, key=lambda o: (area(o) < MIN_AREA, -self.score(o)))
+
     def current(self) -> dict | None:
-        """The object in front of the camera: of those in view whose box covers the center of the view or comes
-        within NEAR of it, the nearest (the smallest when several cover it: a mug in front of a sofa). None when
-        none is."""
-        def key(o: dict) -> tuple[float, float]:
-            x1, y1, x2, y2 = o["box"]
-            return distance(o), (x2 - x1) * (y2 - y1)
-        return min((o for o in self.objects if in_view(o) and distance(o) <= NEAR), key=key, default=None)
+        """The object in front of the camera (the best of in_front), or None."""
+        return next(iter(self.in_front()), None)
+
+    def rival(self, o: dict) -> dict | None:
+        """Another object in front the user may just as well mean: one scoring within AMBIGUOUS of o."""
+        return next((r for r in self.in_front() if r["uid"] != o["uid"] and area(r) >= MIN_AREA
+                     and self.score(o) - self.score(r) < AMBIGUOUS), None)
 
     def focus(self) -> tuple[dict | None, str]:
         """What "this" is: the object the user tapped in the app in the last PICK_S seconds, while it's still

@@ -28,6 +28,8 @@ the things in front of their camera.
 - Speak only when they speak to you, in one or two short sentences.
 - Before you say anything about an item (what it is, its brand, its price, where to buy it, whether it's a good
   deal), call get_current_object: it says which item they mean, and its prices.
+- If it also gives "or_maybe", that item is just as much in front of them: unless their words already say which
+  one ("the speaker"), ask which one they mean, in a few words, before answering.
 - Name the item as specifically as you can: the tool's "brand" and "name", made more precise by what you can read
   or recognize on it in the camera, such as a brand or product name printed on it, its logo or its packaging
   ("Busch Light can", not "grey can"). Reading the label isn't guessing, and a generic name from the tool doesn't
@@ -127,6 +129,8 @@ class Assistant(Agent):
         front = self.seen.current() if why == "picked" else None
         if front is not None and front["uid"] != uid:
             data["in_front"] = self.call(front["uid"])  # what the camera is on now, if they mean that instead
+        if why == "in_front" and (rival := self.seen.rival(o)) is not None:
+            data["or_maybe"] = self.call(rival["uid"])  # as squarely in front: they may mean that one
         if data.get("store_prices") == "checking":
             self.wait_for_prices(uid)
         log.info("voice: talking about %s, %r (%s): %s", uid, data["name"], why, data.get("store_prices", "prices in"))
