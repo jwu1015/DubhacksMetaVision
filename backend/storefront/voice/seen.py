@@ -7,7 +7,7 @@ import logging
 from livekit import rtc
 
 from storefront.rtc.tokens import UPDATES, VISION
-from storefront.voice.resolve import Resolved, resolve
+from storefront.voice.resolve import Resolved, distance, in_view, resolve
 
 log = logging.getLogger("storefront.voice")
 
@@ -20,6 +20,8 @@ class Seen:
     def __init__(self):
         self.objects: list[dict] = []        # the "objects" message's objects, in view first
         self.prompts: list[str] = []         # what SAM tracks this session
+        self.labels: dict[str, dict] = {}    # uid -> its quick label: {"name", "price_low", "price_high"}
+        self.looks: dict[str, dict] = {}     # uid -> its Look's latest "look" message
         self.described: dict[str, str] = {}  # uid -> Claude's name and description, from its Look
         self.look: dict | None = None        # the latest "look" message of the object the user picked
         self.ranked: list[str] = []          # the uids the last resolve found, best first
@@ -28,7 +30,8 @@ class Seen:
 
     def forget(self):
         """Tracking restarted (a mode switch, a pause, a new category): the old uids mean nothing now."""
-        self.objects, self.described, self.ranked, self.tried, self.asked = [], {}, [], [], []
+        self.objects, self.labels, self.looks, self.described = [], {}, {}, {}
+        self.ranked, self.tried, self.asked = [], [], []
         if self.look:
             self.look = {**self.look, "uid": None}
 
@@ -43,12 +46,23 @@ class Seen:
             self.prompts = m["prompts"]
             if m["tracking"] == "stopped":
                 self.forget()
+        elif kind == "label":
+            self.labels[m["uid"]] = {k: m[k] for k in ("name", "price_low", "price_high")}
         elif kind == "look":
+            self.looks[m["uid"]] = m
             if m.get("item"):
                 self.described[m["uid"]] = " ".join(filter(None, (m["item"].get("category"),
                                                                   m["item"].get("description"))))
             if m.get("selected"):
                 self.look = m
+
+    def current(self) -> dict | None:
+        """The object the camera is on: of those in view, the one at the center of the view (the smallest when
+        several cover it: a mug in front of a sofa), else the one nearest to it. None when nothing is in view."""
+        def key(o: dict) -> tuple[float, float]:
+            x1, y1, x2, y2 = o["box"]
+            return distance(o), (x2 - x1) * (y2 - y1)
+        return min((o for o in self.objects if in_view(o)), key=key, default=None)
 
     def resolve(self, target: str, exclude=()) -> Resolved:
         return resolve(self.objects, target, exclude, self.asked, self.described, self.prompts)
