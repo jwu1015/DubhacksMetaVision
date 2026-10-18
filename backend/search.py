@@ -1,9 +1,11 @@
-"""W4: where to buy it. Google Shopping and Amazon through SerpAPI, searched with Claude's queries.
+"""W4: where to buy it. Google Shopping and Amazon through OpenWeb Ninja (or SerpAPI), searched with Claude's queries.
 
     python search.py <public_image_url> fixtures/item_lamp.json [--out products.json]
 
 Per item: Shopping for the item's first 2 search queries (Claude writes them in vision.py, most specific
-first; the SAM label when Claude didn't describe the item) and Amazon for the first, all at once. Then
+first; the SAM label when Claude didn't describe the item) and Amazon for the first, all at once. Amazon also
+searches the most generic query at the same time; those similar-looking items are the fallback when the others
+find nothing within the 5s limit. Then
 match.py has Claude rate how likely each result's photo is the same product (match_score). Once rank has
 chosen, with_store_link() swaps a found best match's Google Shopping page for its direct store link (one more
 search). search_room does up to 5 items at once.
@@ -28,6 +30,7 @@ import os
 import re
 import time
 from collections import Counter
+from contextlib import suppress
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -41,6 +44,13 @@ log = logging.getLogger("gtl.search")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SERPAPI_URL = "https://serpapi.com/search.json"
+# Who runs the Google Shopping and Amazon searches: "openwebninja" (Real-Time Product Search, Real-Time Amazon Data)
+# or "serpapi". OpenWeb Ninja is the default when its key is set: in a fresh test its Shopping searches came back
+# within 5s 5 times out of 8 against SerpAPI's 0, with the same matches, at about $0.003 a request.
+_DEFAULT_PROVIDER = "openwebninja" if os.getenv("OPENWEB_NINJA_API_KEY") else "serpapi"
+SHOPPING_PROVIDER = os.getenv("SHOPPING_PROVIDER", _DEFAULT_PROVIDER).strip().lower()
+AMAZON_PROVIDER = os.getenv("AMAZON_PROVIDER", _DEFAULT_PROVIDER).strip().lower()
+OWN_URL = "https://api.openwebninja.com"
 # Per-source limits. 5s caps how long one slow search can hold up an item: fresh calls took 0.7-2.6s
 # (Shopping, Amazon), but about 1 in 12 hung for the whole limit. (Lens took 17-64s; it isn't called.)
 TIMEOUT_S = {"lens": 15.0, "shopping": 5.0, "ebay": 5.0, "amazon": 5.0}
@@ -180,6 +190,39 @@ def parse_ebay(raw: dict) -> tuple[list[Product], int]:
 # ---------- SerpAPI ----------
 
 
+def parse_own_shopping(raw: dict, rank_offset: int = 0) -> tuple[list[Product], int]:
+    """OpenWeb Ninja's realtime-product-search/search (fields checked against tests/data/own_product_search.json)."""
+    out, dropped = [], 0
+    for i, r in enumerate((raw.get("data") or {}).get("products") or []):
+        url, title = r.get("product_page_url"), r.get("product_title")
+        if not (url and title):
+            continue
+        price = parse_price(None, r.get("price"))  # a string like "$49.95"
+        if price is None:
+            dropped += 1
+            continue
+        photos = r.get("product_photos") or []
+        out.append(Product(title=title, store=r.get("store_name") or "", price=price, url=url,
+                           image_url=photos[0] if photos else None, source="shopping", source_rank=rank_offset + i))
+    return out, dropped
+
+
+def parse_own_amazon(raw: dict) -> tuple[list[Product], int]:
+    """OpenWeb Ninja's realtime-amazon-data/search (fields checked against tests/data/own_amazon_search.json)."""
+    out, dropped = [], 0
+    for rank, r in enumerate((raw.get("data") or {}).get("products") or []):
+        url, title = r.get("product_url"), r.get("product_title")
+        if not (url and title):
+            continue
+        price = parse_price(None, r.get("product_price"))  # a string like "$49.95"
+        if price is None:
+            dropped += 1
+            continue
+        out.append(Product(title=title, store="Amazon", price=price, url=url, image_url=r.get("product_photo"),
+                           source="amazon", tier="used" if USED.search(title) else "new", source_rank=rank))
+    return out, dropped
+
+
 def parse_amazon(raw: dict) -> tuple[list[Product], int]:
     out, dropped = [], 0
     for rank, r in enumerate(raw.get("organic_results") or []):
@@ -245,14 +288,52 @@ async def lens_raw(cutout_url: str, capture_id: str | None = None) -> dict:
                       capture_id, "lens")
 
 
-# Google Shopping results carry no store link, only a token for the product's page of sellers. Kept by result
-# URL, so the found product's direct link can be fetched later (one more search, found items only).
+# Google Shopping results carry no store link, only a token for the product's page of sellers (SerpAPI) or its
+# product id (OpenWeb Ninja). Kept by result URL, so the found product's direct link can be fetched later (one more
+# request, found items only).
 PAGE_TOKENS: dict[str, str] = {}
+OWN_PRODUCT_IDS: dict[str, str] = {}
 STORE_LINK_TIMEOUT_S = 5.0
+
+
+async def own_get(path: str, params: dict, capture_id: str | None = None, name: str | None = None) -> dict:
+    """One OpenWeb Ninja call -> JSON, also written to logs/<capture_id>/<name>.json. Raises on errors."""
+    t0 = time.perf_counter()
+    r = await net.client().get(f"{OWN_URL}/{path}", params=params, timeout=max(TIMEOUT_S.values()),
+                               headers={"x-api-key": os.getenv("OPENWEB_NINJA_API_KEY", "")})
+    data = r.json()
+    log.info("search %s: OpenWeb Ninja %s %.1fs", name, path, time.perf_counter() - t0)
+    if r.status_code != 200 or data.get("status") == "ERROR":
+        raise SerpError(f"OpenWeb Ninja HTTP {r.status_code}: {(data.get('error') or {}).get('message')}")
+    if capture_id and name:
+        folder = config.LOGS / capture_id
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.json").write_text(json.dumps(data, indent=2))
+    return data
+
+
+async def own_shopping_search(query: str, capture_id: str | None = None,
+                              name: str = "shopping_0") -> tuple[list[Product], int]:
+    raw = await own_get("realtime-product-search/search", {"q": query, "country": "us", "language": "en"},
+                        capture_id, name)
+    if len(OWN_PRODUCT_IDS) > 5000:
+        OWN_PRODUCT_IDS.clear()
+    for r in (raw.get("data") or {}).get("products") or []:
+        if r.get("product_page_url") and r.get("product_id"):
+            OWN_PRODUCT_IDS[r["product_page_url"]] = r["product_id"]
+    return parse_own_shopping(raw)
 
 
 async def shopping_search(query: str, capture_id: str | None = None,
                           name: str = "shopping_0") -> tuple[list[Product], int]:
+    """Google Shopping through SHOPPING_PROVIDER."""
+    if SHOPPING_PROVIDER == "openwebninja":
+        return await own_shopping_search(query, capture_id, name)
+    return await serpapi_shopping_search(query, capture_id, name)
+
+
+async def serpapi_shopping_search(query: str, capture_id: str | None = None,
+                                  name: str = "shopping_0") -> tuple[list[Product], int]:
     raw = await serp({"engine": "google_shopping", "q": query, "gl": "us", "hl": "en"}, capture_id, name)
     if len(PAGE_TOKENS) > 5000:  # a long-running server: forget old searches
         PAGE_TOKENS.clear()
@@ -265,11 +346,18 @@ async def shopping_search(query: str, capture_id: str | None = None,
 
 async def store_link(p: Product) -> str | None:
     """A Shopping result's direct link at its store, from Google's page of sellers; None if there isn't one."""
-    token = PAGE_TOKENS.get(p.url) if p.source == "shopping" else None
-    if not token:
+    if p.source != "shopping":
         return None
-    raw = await serp({"engine": "google_immersive_product", "page_token": token})
-    stores = [s for s in (raw.get("product_results") or {}).get("stores") or [] if s.get("link")]
+    if product_id := OWN_PRODUCT_IDS.get(p.url):  # an OpenWeb Ninja result: its offers carry the store links
+        raw = await own_get("realtime-product-search/product-offers-v2",
+                            {"product_id": product_id, "country": "us", "language": "en"})
+        stores = [{"name": o.get("store_name"), "link": o.get("offer_page_url")}
+                  for o in (raw.get("data") or {}).get("offers") or [] if o.get("offer_page_url")]
+    elif token := PAGE_TOKENS.get(p.url):
+        raw = await serp({"engine": "google_immersive_product", "page_token": token})
+        stores = [s for s in (raw.get("product_results") or {}).get("stores") or [] if s.get("link")]
+    else:
+        return None
     same = next((s for s in stores if (s.get("name") or "").lower() == p.store.lower()), None)
     return (same or (stores[0] if stores else {})).get("link")
 
@@ -279,8 +367,21 @@ async def ebay_search(query: str, capture_id: str | None = None) -> tuple[list[P
     return parse_ebay(raw)
 
 
-async def amazon_search(query: str, capture_id: str | None = None) -> tuple[list[Product], int]:
-    raw = await serp({"engine": "amazon", "k": query, "amazon_domain": "amazon.com"}, capture_id, "amazon")
+async def amazon_search(query: str, capture_id: str | None = None, name: str = "amazon") -> tuple[list[Product], int]:
+    """Amazon through AMAZON_PROVIDER."""
+    if AMAZON_PROVIDER == "openwebninja":
+        return await own_amazon_search(query, capture_id, name)
+    return await serpapi_amazon_search(query, capture_id, name)
+
+
+async def own_amazon_search(query: str, capture_id: str | None = None, name: str = "amazon") -> tuple[list[Product], int]:
+    raw = await own_get("realtime-amazon-data/search", {"query": query, "country": "US"}, capture_id, name)
+    return parse_own_amazon(raw)
+
+
+async def serpapi_amazon_search(query: str, capture_id: str | None = None,
+                                name: str = "amazon") -> tuple[list[Product], int]:
+    raw = await serp({"engine": "amazon", "k": query, "amazon_domain": "amazon.com"}, capture_id, name)
     return parse_amazon(raw)
 
 
@@ -316,12 +417,19 @@ async def _run(name: str, job, stats: dict) -> list[Product]:
 # ---------- search_all / search_room ----------
 
 MAX_ROOM_ITEMS = 5
-ROOM_CONCURRENCY = 3  # items searched at once; each is about 3 SerpAPI calls and one Claude call
+ROOM_CONCURRENCY = 3  # items searched at once; each is about 4 SerpAPI calls and one Claude call
 
 
 def queries_for(item: Item) -> list[str]:
     """Claude's search queries, most specific first; the SAM label (category) when there are none."""
     return [q.strip() for q in item.search_queries if q.strip()] or ([item.category] if item.category else [])
+
+
+def similar_query(item: Item, queries: list[str]) -> str | None:
+    """The most generic query, for similar-looking items: Claude's last (it writes them most specific first),
+    else the category. None when that's the first query again."""
+    q = queries[-1] if len(queries) >= 3 else (item.category or "")
+    return q if q and queries and q.lower() != queries[0].lower() else None
 
 
 async def search_all_with_stats(cutout_url: str, item: Item,
@@ -332,16 +440,33 @@ async def search_all_with_stats(cutout_url: str, item: Item,
         jobs[f"shopping_{i}"] = shopping_search(q, capture_id, f"shopping_{i}")
     if queries:
         jobs["amazon"] = amazon_search(queries[0], capture_id)  # the first query is the most specific
+    if similar := similar_query(item, queries):
+        # Similar-looking items, searched at the same time: used only if the searches above find nothing
+        # within their limit, so the fallback costs no extra wait.
+        jobs["amazon_similar"] = amazon_search(similar, capture_id, "amazon_similar")
 
     stats: dict = dict.fromkeys(jobs)  # filled by _run; keeps job order for printing
-    results = dict(zip(jobs, await asyncio.gather(*(_run(n, j, stats) for n, j in jobs.items()))))
+    tasks = {name: asyncio.create_task(_run(name, job, stats)) for name, job in jobs.items()}
+    similar = tasks.pop("amazon_similar", None)
+    results = dict(zip(tasks, await asyncio.gather(*tasks.values())))
 
     # Shopping query 1 continues query 0's numbering.
     offset = max((p.source_rank for p in results.get("shopping_0", [])), default=-1) + 1
     for p in results.get("shopping_1", []):
         p.source_rank += offset
 
-    products = dedupe([p for name in jobs for p in results[name]])
+    used = list(results)
+    if similar is not None:
+        if any(results.values()):  # the exact searches found something: don't wait for the similar ones
+            similar.cancel()
+            with suppress(asyncio.CancelledError):
+                await similar
+            if stats["amazon_similar"] is None:
+                stats["amazon_similar"] = {"status": "not needed", "priced": 0, "dropped_no_price": 0, "ms": 0}
+        elif results_similar := await similar:  # started at the same time, so this waits no longer than its limit
+            log.info("search %s: nothing from %s; using similar-looking items", capture_id, ", ".join(used))
+            results["amazon_similar"], used = results_similar, ["amazon_similar"]
+    products = dedupe([p for name in used for p in results[name]])
     products = await match.score(cutout_url, item, products)
     log.info("search %s: queries=%s, %d products after dedupe", capture_id, queries, len(products))
     return products, stats
@@ -349,6 +474,8 @@ async def search_all_with_stats(cutout_url: str, item: Item,
 
 async def search_all(cutout_url: str, item: Item, capture_id: str | None = None) -> list[Product]:
     """Shopping for the item's first 2 queries + Amazon for the first, at once, then a match score for each result.
+    Amazon also searches the most generic query alongside; those similar-looking items are used only if the
+    others find nothing.
 
     Normalized, priced, deduped. A failing or slow source contributes [] and never raises.
     """
