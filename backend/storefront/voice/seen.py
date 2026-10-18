@@ -94,6 +94,10 @@ class Seen:
             return o, "in_front"
         return None, "none"
 
+    def pick(self, uid: str):
+        """The user picked this object by voice: it's what "this" means now, as a tap makes it."""
+        self.picked, self.picked_at = uid, self.clock()
+
     def resolve(self, target: str, exclude=()) -> Resolved:
         return resolve(self.objects, target, exclude, self.asked, self.described, self.prompts)
 

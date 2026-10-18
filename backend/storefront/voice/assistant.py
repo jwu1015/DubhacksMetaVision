@@ -1,6 +1,6 @@
 """The voice assistant on Gemini Live. It hears the user and sees the phone's camera (agent.py starts it), but
-what "this" is it learns from the tracker (seen.py): the object the user tapped in the app in the last minute,
-while it's still tracked, else the one at the center of the camera. get_current_object answers about that object
+what "this" is it learns from the tracker (seen.py): the object the user tapped in the app or picked by voice
+(select_object) in the last minute, while it's still tracked, else the one at the center of the camera. get_current_object answers about that object
 from its quick label and the prices its Look found, and the action tools act on the object last talked about,
 so what the agent says, what it adds to the cart and what the app shows are about one thing."""
 import asyncio
@@ -30,8 +30,12 @@ the things in front of their camera.
   deal), call get_current_object and answer only from what it returns. Never name or describe an item from what
   you see in the camera yourself, and never guess a product, brand, store or price.
 - Call the item by the "name" the tool gives: it's what the app shows on screen.
-- "why" says how the tool chose it: "picked" (they tapped it in the app) or "in_front" (it's at the center of the
-  camera). If they seem to mean something else, ask them to tap it in the app or point the camera at it.
+- "why" says how the tool chose it: "picked" (they tapped it in the app, or picked it by voice) or "in_front" (it's
+  at the center of the camera). If they seem to mean something else, ask them to tap it in the app or point the
+  camera at it.
+- When they pick an item by voice ("show me the wallet", "pick the one on the left", "that black cup"), call
+  whats_here, choose the id whose name and place fit their words, and call select_object with it. If two fit,
+  ask which one; if none does, ask them to point the camera at it.
 - If "store_prices" is "checking", say what it is and its usual price range, and that you're checking stores.
   You'll be told when the prices come in.
 - To add to the cart, save, show results, undo or check out, call that tool. Say it's done only after the tool
@@ -99,6 +103,7 @@ class Assistant(Agent):
         self.discussed_why = "none"
         self._prices: asyncio.Task | None = None  # waits for the discussed object's prices, to tell the user
         self._prices_uid: str | None = None
+        self.unopened: set[str] = set()  # picked by voice, but the app couldn't open them
 
     # ---------- what "this" is ----------
 
@@ -135,6 +140,37 @@ class Assistant(Agent):
         look = self.seen.looks.get(uid) or {}
         o = next((o for o in self.seen.objects if o["uid"] == uid), None) or {"prompt": look.get("label") or "item"}
         return name_of(o, self.seen.labels.get(uid), look)
+
+    # ---------- picking by voice ----------
+
+    @function_tool()
+    async def whats_here(self, context: RunContext) -> str:
+        """The items the app is tracking, those in view first, each with its id (for select_object), its name as the
+        app shows it, and where it is in the view. Call it when they want to pick an item by voice, or ask what's
+        around."""
+        if not self.seen.objects:
+            return "Nothing is tracked right now."
+        return app_data({"items": [{"id": o["uid"], "name": self.call(o["uid"]),
+                                    "where": where(o) if in_view(o) else "out of view now"} for o in self.seen.objects]})
+
+    @function_tool()
+    async def select_object(self, context: RunContext, object_id: str) -> str:
+        """Pick the item they chose by voice, as a tap in the app does: the app opens it, and it's what "this" means
+        from now on. Answers like get_current_object, about that item.
+
+        Args:
+            object_id: the item's id, from whats_here
+        """
+        if not any(o["uid"] == object_id for o in self.seen.objects):
+            raise ToolError("That item isn't tracked anymore. Call whats_here again.")
+        self.seen.pick(object_id)
+        try:
+            await actions.phone_action("select_item", uid=object_id)  # the app opens it, as if tapped
+            self.unopened.discard(object_id)
+        except ToolError as e:  # an app that can't yet: the agent still talks about it and acts on it
+            self.unopened.add(object_id)
+            log.info("voice: the app didn't open %s (%s)", object_id, e)
+        return await self.get_current_object(context)
 
     # ---------- prices as they come in ----------
 
@@ -192,7 +228,10 @@ class Assistant(Agent):
         return uid, self.seen.looks.get(uid) or {}
 
     def tapped(self, uid: str) -> bool:
-        """The user picked it in the app (since the agent joined, or before), not the assistant."""
+        """The app shows it: the user picked it there (since the agent joined, or before) or by voice, not the
+        assistant, and not a pick by voice the app couldn't open."""
+        if uid in self.unopened:
+            return False
         look = self.seen.looks.get(uid) or {}
         return uid == self.seen.picked or (bool(look.get("selected")) and uid not in self.seen.agent_picked)
 
