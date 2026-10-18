@@ -133,6 +133,8 @@ private struct CaptureRow: View {
 
 #Preview("G5 · Spotted Today") {
     let app = AppState()
-    app.show(.spottedToday)
+    app.captureMode = .glasses
+    app.captures = MockData.captures
+    app.tab = .saved
     return RootView().environment(app)
 }

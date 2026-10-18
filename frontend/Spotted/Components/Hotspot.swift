@@ -1,53 +1,41 @@
 import SwiftUI
 
-/// Unselected detection marker. The item tag appears only when focused, which stands in for
-/// Figma's Hover state: press-and-hold on the phone, gaze dwell on the glasses, or VoiceOver focus.
+/// A tracked object's quick label, centered on the object once the backend names it. Tap it to see
+/// the object's prices; the selected one turns lime.
 struct Hotspot: View {
     /// "Lounge chair"
     let item: String
-    /// "~$30–50" once the backend has a rough price; replaces "Tap to view".
-    var priceEstimate: String?
-    var isFocused = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
+    /// "~$30–50"
+    let priceEstimate: String
+    var isSelected = false
 
     var body: some View {
-        Image(isFocused ? "hotspot-target-hover" : "hotspot-target")
-            .resizable()
-            .frame(width: 64, height: 64)
-            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-            .scaleEffect(isPulsing ? 1.08 : 1)
-            .overlay(alignment: .topLeading) {
-                if isFocused {
-                    tag
-                        .fixedSize()
-                        .offset(x: -56, y: -34)
-                        .transition(.opacity)
-                }
+        Group {
+            if isSelected {
+                pill.background(Color.accent, in: Capsule())
+            } else {
+                pill.glass(in: Capsule(), tint: 0.72)
             }
-            .animation(.easeOut(duration: 0.2), value: isFocused)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            }
-            .accessibilityElement()
-            .accessibilityLabel(priceEstimate.map { "\(item), about \($0.dropFirst())" } ?? item)
-            .accessibilityHint("Shows price and matches")
-            .accessibilityAddTraits(.isButton)
+        }
+        .fixedSize()
+        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+        .accessibilityElement()
+        .accessibilityLabel("\(item), about \(priceEstimate.dropFirst())")
+        .accessibilityHint("Shows price and matches")
+        .accessibilityAddTraits(.isButton)
     }
 
-    private var tag: some View {
+    private var pill: some View {
         HStack(spacing: 6) {
-            Text(item).foregroundStyle(.labelPrimary)
-            Text("· \(priceEstimate ?? "Tap to view")").foregroundStyle(.labelSecondary)
+            Text(item)
+                .foregroundStyle(isSelected ? Color.onAccent : Color.labelPrimary)
+            Text(priceEstimate)
+                .foregroundStyle(isSelected ? Color.onAccent : Color.labelSecondary)
         }
         .font(.spottedCaption)
+        .lineLimit(1)
         .padding(.leading, 10)
         .padding(.trailing, 12)
         .padding(.vertical, 6)
-        .glass(in: Capsule(), tint: 0.72)
     }
 }

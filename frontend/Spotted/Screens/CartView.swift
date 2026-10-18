@@ -231,6 +231,7 @@ struct VisaMark: View {
 
 #Preview("05 · Cart") {
     let app = AppState()
-    app.show(.cart)
+    app.cart = MockData.cart
+    app.tab = .cart
     return RootView().environment(app)
 }

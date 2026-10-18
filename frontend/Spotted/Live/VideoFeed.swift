@@ -1,34 +1,31 @@
 import AVFoundation
+import LiveKit
 import MWDATCamera
 import SwiftUI
-import WebRTC
 
-/// Pushes frames into the WebRTC video source: the phone's back camera on a device, the mock room in
+/// Pushes frames into the session's video track: the phone's back camera on a device, the mock room in
 /// the Simulator (which has no camera), or the Meta glasses (GlassesCapturer).
 /// Frames are sent upright in portrait, 9:16, with no rotation metadata.
 class FeedCapturer: NSObject, @unchecked Sendable {
-    static func make(for source: RTCVideoSource) -> FeedCapturer {
+    static func make(for buffer: BufferCapturer) -> FeedCapturer {
         #if targetEnvironment(simulator)
-        MockRoomCapturer(source: source)
+        MockRoomCapturer(buffer: buffer)
         #else
-        CameraCapturer(source: source)
+        CameraCapturer(buffer: buffer)
         #endif
     }
 
-    let source: RTCVideoSource
-    let rtcCapturer: RTCVideoCapturer
+    let buffer: BufferCapturer
 
-    init(source: RTCVideoSource) {
-        self.source = source
-        rtcCapturer = RTCVideoCapturer(delegate: source)
+    init(buffer: BufferCapturer) {
+        self.buffer = buffer
     }
 
     func start() {}
     func stop() {}
 
     func send(_ pixelBuffer: CVPixelBuffer, timeStampNs: Int64) {
-        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: timeStampNs)
-        source.capturer(rtcCapturer, didCapture: frame)
+        buffer.capture(pixelBuffer, timeStampNs: timeStampNs)
     }
 
     /// Draws an image into a new BGRA pixel buffer.
@@ -54,17 +51,23 @@ class FeedCapturer: NSObject, @unchecked Sendable {
 /// GlassesManager starts and stops the stream, so start() and stop() do nothing here.
 final class GlassesCapturer: FeedCapturer, @unchecked Sendable {
     /// Called on the SDK's queue for every frame.
-    func send(_ frame: VideoFrame) {
+    func send(_ frame: MWDATCamera.VideoFrame) {
         let sampleBuffer = frame.sampleBuffer
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let timeStampNs = time.isValid ? Int64(CMTimeGetSeconds(time) * 1_000_000_000)
                                        : Int64(CACurrentMediaTime() * 1_000_000_000)
-        // Raw frames carry a decoded pixel buffer; fall back to the SDK's image if one doesn't.
-        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+        // LiveKit drops frames in a pixel format WebRTC can't take (no preview, nothing streamed), so
+        // redraw those, and frames without a pixel buffer, from the SDK's image.
+        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer), Self.isSupported(pixelBuffer) {
             send(pixelBuffer, timeStampNs: timeStampNs)
         } else if let image = frame.makeUIImage()?.cgImage, let pixelBuffer = Self.pixelBuffer(from: image) {
             send(pixelBuffer, timeStampNs: timeStampNs)
         }
+    }
+
+    private static func isSupported(_ pixelBuffer: CVPixelBuffer) -> Bool {
+        let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        return VideoCapturer.supportedPixelFormats.contains { $0.uint32Value == format }
     }
 }
 
@@ -73,11 +76,16 @@ final class CameraCapturer: FeedCapturer, AVCaptureVideoDataOutputSampleBufferDe
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "spotted.camera")
     private var isConfigured = false
+    /// What start() and stop() last asked for, on `queue`. Camera access is granted asynchronously, so a
+    /// stop() can arrive before its start() takes effect; this keeps the camera off then.
+    private var isWanted = false
 
     override func start() {
+        queue.async { [self] in isWanted = true }
         AVCaptureDevice.requestAccess(for: .video) { [self] granted in
             guard granted else { return }
             queue.async { [self] in
+                guard isWanted else { return }
                 if !isConfigured { configure() }
                 if !session.isRunning { session.startRunning() }
             }
@@ -85,7 +93,10 @@ final class CameraCapturer: FeedCapturer, AVCaptureVideoDataOutputSampleBufferDe
     }
 
     override func stop() {
-        queue.async { [self] in session.stopRunning() }
+        queue.async { [self] in
+            isWanted = false
+            session.stopRunning()
+        }
     }
 
     private func configure() {

@@ -1,27 +1,21 @@
 import Foundation
 
-/// Mock responses that reproduce the Figma mockups. Swap for APIClient once the backend is reachable.
+/// The messages MockSession plays, matching the Figma mockups.
 /// Images prefixed with "asset:" load from Assets.xcassets; anything else is treated as a URL.
 enum MockData {
-    static let chair = Detection(trackID: "t3", box: [0.219, 0.340, 0.819, 0.589], label: "chair", score: 0.88)
-    static let lamp = Detection(trackID: "t4", box: [0.720, 0.400, 0.930, 0.572], label: "lamp", score: 0.74)
-    static let detections = [chair, lamp]
+    static let chair = LiveObject(uid: "1.3", box: [0.219, 0.340, 0.819, 0.589], prompt: "chair", score: 0.88,
+                                  inView: true, lastSeenTs: 0)
+    static let lamp = LiveObject(uid: "1.4", box: [0.720, 0.400, 0.930, 0.572], prompt: "lamp", score: 0.74,
+                                 inView: true, lastSeenTs: 0)
+    static let objects = ObjectsMessage(session: 1, ageMS: 0, objects: [chair, lamp])
+    static let status = StatusMessage(tracking: .ok, category: TrackingCategory.default.value,
+                                      prompts: ["chair", "lamp"])
+    static let labels = [
+        LabelMessage(uid: chair.uid, box: chair.box, name: "lounge chair", priceLow: 900, priceHigh: 1400),
+        LabelMessage(uid: lamp.uid, box: lamp.box, name: "arc floor lamp", priceLow: 150, priceHigh: 250),
+    ]
 
-    /// Shaped like a real /detect answer: SAM responds first, so description, style, brand and
-    /// search queries are empty. The cutout is a crop of the photo.
-    static let detect = DetectResponse(
-        captureID: "cap_7f3a",
-        imageURL: "asset:art-lounge-chair",
-        item: Item(category: "lounge chair", description: nil, style: nil, colors: [], materials: [],
-                   brandGuess: nil, confidence: 0, searchQueries: [], bbox: chair.bbox,
-                   quickPhrase: "Lounge chair. Finding prices."),
-        segmentation: Segmentation(method: .sam3, bbox: chair.bbox, maskScore: 0.91, cutoutPath: "",
-                                   cutoutURL: "asset:art-lounge-chair", maskPreviewURL: nil, latencyMS: 900),
-        quickPhrase: "Lounge chair. Finding prices.",
-        latencyMS: 1500
-    )
-
-    /// The finished item that results carry in SearchResponse.item: Claude's name and description.
+    /// Claude's item: the Look's "described" step, and SearchResponse.item.
     static let finishedItem = Item(
         category: "walnut lounge chair",
         description: "Mid-century lounge chair with a walnut shell and black leather cushions",
@@ -62,31 +56,10 @@ enum MockData {
                                    verdictText: "Article is within the typical $899–$1,349 range."),
         spokenSummary: "Article has it for $1,299. Fair price. Used from $640.",
         timingMS: [:],
-        sourcesOK: nil,
         item: finishedItem
     )
 
-    /// 03b: Google Shopping timed out.
-    static let searchShoppingTimeout = SearchResponse(
-        captureID: search.captureID, bestMatch: search.bestMatch, dupes: [], used: search.used,
-        priceInsight: search.priceInsight, spokenSummary: search.spokenSummary, timingMS: [:],
-        sourcesOK: [.amazon], item: finishedItem
-    )
-
     // MARK: Glasses mode (G1–G7)
-
-    /// G3: the lamp the user asked about by voice.
-    static let lampDetect = DetectResponse(
-        captureID: "cap_lamp",
-        imageURL: "asset:art-arc-lamp",
-        item: Item(category: "arc lamp", description: nil, style: nil, colors: [], materials: [],
-                   brandGuess: nil, confidence: 0, searchQueries: [], bbox: lamp.bbox,
-                   quickPhrase: "Lamp. Finding prices."),
-        segmentation: Segmentation(method: .sam3, bbox: lamp.bbox, maskScore: 0.88, cutoutPath: "",
-                                   cutoutURL: "asset:art-arc-lamp", maskPreviewURL: nil, latencyMS: 900),
-        quickPhrase: "Lamp. Finding prices.",
-        latencyMS: 1400
-    )
 
     static let lampSearch = SearchResponse(
         captureID: "cap_lamp",
@@ -104,15 +77,28 @@ enum MockData {
                                    verdictText: "West Elm is within the typical $150–$240 range."),
         spokenSummary: "West Elm has it for $189. Fair price.",
         timingMS: [:],
-        sourcesOK: nil,
         item: Item(category: "brass arc lamp", description: "Arc floor lamp with a brass shade",
                    style: "mid-century", colors: ["brass", "white"], materials: ["brass", "marble"],
                    brandGuess: "West Elm", confidence: 0.82, searchQueries: [], bbox: lamp.bbox,
                    quickPhrase: "Lamp. Finding prices.")
     )
 
-    /// G2: what the assistant understood from "Spotted, how much is that lamp?"
-    static let parsedRequest = ParsedRequest(action: "Price check", target: "lamp", context: "In view · centered")
+    /// Each object's Look, step by step, as MockSession plays it after a select.
+    static let looks: [String: [Look]] = [
+        chair.uid: [look(chair, "cap_7f3a", .started), chairDescribed, chairResults],
+        lamp.uid: [look(lamp, "cap_lamp", .started), look(lamp, "cap_lamp", .described, item: lampSearch.item),
+                   lampResults],
+    ]
+    static let chairDescribed = look(chair, "cap_7f3a", .described, item: finishedItem)
+    static let chairResults = look(chair, "cap_7f3a", .results, item: finishedItem, search: search)
+    static let lampResults = look(lamp, "cap_lamp", .results, item: lampSearch.item, search: lampSearch)
+
+    private static func look(_ object: LiveObject, _ id: String, _ stage: LookStage, item: Item? = nil,
+                             search: SearchResponse? = nil) -> Look {
+        Look(uid: object.uid, lookID: id, stage: stage, label: object.prompt, box: object.box, selected: true,
+             cropURL: object.uid == chair.uid ? "asset:art-lounge-chair" : "asset:art-arc-lamp", item: item,
+             search: search, message: nil)
+    }
 
     /// G5 and G7: today's captures.
     static let captures: [Capture] = {
@@ -137,16 +123,6 @@ enum MockData {
                                      matchReason: nil)),
         ]
     }()
-
-    /// 07 uses tighter boxes than the stream so both options clear the taller card.
-    static let candidates = [
-        Candidate(detection: Detection(trackID: "t3", box: [0.234, 0.350, 0.763, 0.566], label: "chair", score: 0.52),
-                  title: "Walnut Lounge Chair", price: 1299, store: "Article", image: "asset:art-lounge-chair",
-                  seen: "Seen 4 s ago · left"),
-        Candidate(detection: Detection(trackID: "t4", box: [0.799, 0.371, 0.982, 0.561], label: "lamp", score: 0.48),
-                  title: "Brass Arc Lamp", price: 189, store: "West Elm", image: "asset:art-arc-lamp",
-                  seen: "In view · centered"),
-    ]
 
     static let rooms = [
         Room(name: "Maya’s apartment", visited: "Today · 2:41 PM"),

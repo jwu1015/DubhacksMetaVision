@@ -18,6 +18,7 @@ struct Icon: View {
 /// (thumbnails and cutouts from the backend).
 struct ProductImage: View {
     let source: String
+    @State private var loaded: UIImage?
 
     var body: some View {
         Group {
@@ -25,15 +26,24 @@ struct ProductImage: View {
                 Image(String(source.dropFirst("asset:".count)))
                     .resizable()
                     .scaledToFit()
+            } else if let loaded {
+                Image(uiImage: loaded)
+                    .resizable()
+                    .scaledToFit()
             } else {
-                AsyncImage(url: URL(string: source)) { image in
-                    image.resizable().scaledToFit()
-                } placeholder: {
-                    Color.clear
-                }
+                Color.clear
             }
         }
         .accessibilityHidden(true)
+        // Not AsyncImage: crops come from the backend, behind Cloudflare Access, so they need its token.
+        .task(id: source) { await load() }
+    }
+
+    private func load() async {
+        loaded = nil
+        guard !source.hasPrefix("asset:"), let url = URL(string: source),
+              let (data, _) = try? await URLSession.shared.data(for: AppConfig.request(url)) else { return }
+        loaded = UIImage(data: data)
     }
 }
 

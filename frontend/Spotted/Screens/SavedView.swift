@@ -154,6 +154,7 @@ struct ScrollEdgeFade: View {
 
 #Preview("04 · Saved") {
     let app = AppState()
-    app.show(.saved)
+    app.saved = MockData.saved
+    app.tab = .saved
     return RootView().environment(app)
 }

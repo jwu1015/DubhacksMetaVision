@@ -2,12 +2,11 @@ import Foundation
 import LiveKit
 import Observation
 
-/// The Spotted voice assistant over LiveKit. The mic goes to the assistant, which speaks each Look
-/// itself ("Lamp. Finding prices.", then the price summary) and asks the app to act through the RPC
-/// method "action". Only the voice uses LiveKit; the video stays on our WebRTC.
+/// The voice assistant, in the session's LiveKit room. Voice on brings the agent into the room and
+/// publishes the mic; the agent asks the app to act through the RPC method "action".
 ///
-/// Connect only while voice is in use: the mic is transcribed the whole time the phone is in the room,
-/// and the free plan has about 50 minutes of speech.
+/// Turn it on only while voice is in use: the mic is transcribed the whole time it's published, and the
+/// free plan has about 50 minutes of speech.
 @MainActor
 @Observable
 final class VoiceAssistant {
@@ -34,44 +33,41 @@ final class VoiceAssistant {
     /// Runs one action from the assistant. Set by AppState.
     var perform: ((VoiceAction) async -> VoiceActionReply)?
 
-    private let api: APIClient
-    private let identity = "phone-\(UUID().uuidString.prefix(8).lowercased())"
-    private var room: LiveKit.Room?
+    private let session: LiveSession
     private var connectTask: Task<Void, Never>?
 
-    init(api: APIClient) {
-        self.api = api
-    }
-
-    func connect() {
-        guard room == nil, connectTask == nil else { return }
-        status = .connecting
-        connectTask = Task { [weak self] in
-            guard let self else { return }
-            defer { connectTask = nil }
-            let room = LiveKit.Room()
+    init(session: LiveSession) {
+        self.session = session
+        Task { [weak self] in
             do {
-                let token = try await api.voiceToken(identity: identity)
-                try await room.registerRpcMethod("action") { [weak self] data in
+                try await session.room.registerRpcMethod("action") { [weak self] data in
                     let action = try JSONDecoder().decode(VoiceAction.self, from: Data(data.payload.utf8))
                     let reply = await self?.run(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
                     return String(decoding: try JSONEncoder().encode(reply), as: UTF8.self)
                 }
-                try await room.registerTextStreamHandler(for: "lk.transcription") { [weak self] reader, speaker in
+                try await session.room.registerTextStreamHandler(for: "lk.transcription") { [weak self] reader, speaker in
                     try await self?.receive(reader, from: speaker)
                 }
-                try await room.connect(url: token.serverURL, token: token.participantToken,
-                                       connectOptions: ConnectOptions(enableMicrophone: true))
-                guard !Task.isCancelled else {
-                    await room.disconnect()
-                    return
-                }
-                self.room = room
+            } catch {
+                print("[Voice] couldn't set up: \(error)")
+            }
+        }
+    }
+
+    func connect() {
+        guard status != .connected, connectTask == nil else { return }
+        status = .connecting
+        connectTask = Task { [weak self] in
+            guard let self else { return }
+            defer { connectTask = nil }
+            do {
+                try await session.setVoice(true)
+                try await session.room.localParticipant.setMicrophone(enabled: true)
+                guard !Task.isCancelled else { return }
                 lines = []
                 status = .connected
             } catch {
                 print("[Voice] connect failed: \(error)")
-                await room.disconnect()
                 status = Task.isCancelled ? .off : .failed("Couldn't reach the assistant.")
             }
         }
@@ -80,20 +76,22 @@ final class VoiceAssistant {
     func disconnect() {
         connectTask?.cancel()
         connectTask = nil
-        let old = room
-        room = nil
+        guard status != .off else { return }
         status = .off
-        Task { await old?.disconnect() }
+        Task { [session] in
+            _ = try? await session.room.localParticipant.setMicrophone(enabled: false)
+            try? await session.setVoice(false)
+        }
     }
 
     /// A typed question, for when talking isn't possible.
     func send(_ text: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let room, !text.isEmpty else { return }
+        guard isConnected, !text.isEmpty else { return }
         lines.append(Line(id: UUID().uuidString, isUser: true, text: text, isFinal: true))
         Task {
             do {
-                _ = try await room.localParticipant.sendText(text, for: "lk.chat")
+                _ = try await session.room.localParticipant.sendText(text, for: "lk.chat")
             } catch {
                 print("[Voice] sendText failed: \(error)")
             }
@@ -109,7 +107,7 @@ final class VoiceAssistant {
     private func receive(_ reader: TextStreamReader, from speaker: Participant.Identity) async throws {
         let attributes = reader.info.attributes
         let id = attributes["lk.segment_id"] ?? reader.info.id
-        let isUser = speaker.stringValue == identity
+        let isUser = speaker == session.identity
         var text = ""
         for try await chunk in reader {
             text += chunk

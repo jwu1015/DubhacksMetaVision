@@ -1,24 +1,37 @@
 import Foundation
 
 enum AppConfig {
-    /// The backend's ngrok URL, from the untracked Config.xcconfig (via Info.plist). Debug builds can
-    /// also pass SPOTTED_API_BASE_URL in the scheme. Nil means no backend: the app runs on mock data.
+    /// The backend's URL, from Spotted.xcconfig or the untracked Config.xcconfig (via Info.plist). Debug
+    /// builds can override it with SPOTTED_API_BASE_URL; set it empty to run on mock data (the UI tests do).
+    /// Nil means no backend: the app runs on mock data.
     static let baseURL: URL? = {
         #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["SPOTTED_API_BASE_URL"],
-           !override.isEmpty, let url = URL(string: override) {
-            return url
+        if let override = ProcessInfo.processInfo.environment["SPOTTED_API_BASE_URL"] {
+            return URL(string: override)
         }
         #endif
-        guard let value = Bundle.main.object(forInfoDictionaryKey: "SpottedAPIBaseURL") as? String,
-              !value.isEmpty, !value.contains("$("), let url = URL(string: value) else { return nil }
-        return url
+        return setting("SpottedAPIBaseURL").flatMap(URL.init(string:))
     }()
 
-    /// A server path such as a Look's cutoutPath, as a full URL.
-    static func url(for path: String) -> URL? {
-        guard let baseURL else { return nil }
-        if let absolute = URL(string: path), absolute.scheme != nil { return absolute }
-        return baseURL.appending(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
+    /// The Cloudflare Access service token for the tunnel in front of the backend, from Config.xcconfig.
+    private static let accessClientID = setting("CFAccessClientID")
+    private static let accessClientSecret = setting("CFAccessClientSecret")
+
+    /// A request to `url`. Requests to the backend carry the Cloudflare Access service token; requests to
+    /// anyone else (store images) never do.
+    static func request(_ url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        if url.host() == baseURL?.host(), let accessClientID, let accessClientSecret {
+            request.setValue(accessClientID, forHTTPHeaderField: "CF-Access-Client-Id")
+            request.setValue(accessClientSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
+        return request
+    }
+
+    /// An Info.plist value set from the build settings. Nil when it's empty or its setting is undefined.
+    private static func setting(_ key: String) -> String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty, !value.contains("$(") else { return nil }
+        return value
     }
 }

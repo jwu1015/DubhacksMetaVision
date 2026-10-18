@@ -35,10 +35,10 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 | Language / UI | **Swift + SwiftUI** | Native is the right fit for Meta's SDK. No React Native bridge to debug. |
 | Target | iOS 17+ (designed for iOS 26 Liquid Glass) | Glasses SDK requires iOS 17+. A physical iPhone is required; there is no simulator support. |
 | Glasses | **Meta Wearables Device Access Toolkit (DAT)** | Swift Package: `https://github.com/facebook/meta-wearables-dat-ios`. Start from the sample app in `/samples`. |
-| Networking (stream) | **WebRTC** (`stasel/WebRTC` Swift package, prebuilt Google WebRTC) | **Continuous** video track from the glasses to the backend's **WebRTC page**; detections come back over a data channel for live hotspots. |
-| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `/detect`, `/search/{captureID}`, `/checkout`, `/cart`, `/health` on the FastAPI backend (ngrok HTTPS). Types: backend's `Models.swift`. |
+| Networking (live) | **LiveKit** (`client-sdk-swift`) | One room per session with the backend in it: the camera goes up as one video track, objects, labels and Looks come back on topic `updates`, and taps go out as RPCs. |
+| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `POST /session/token` on the FastAPI backend (ngrok HTTPS). Types: `Models.swift`, mirroring `backend/storefront/models.py`. |
 | Speech in | Apple `Speech` framework | Glasses mic arrives over Bluetooth audio. |
-| Speech out | `AVSpeechSynthesizer` | Speaks the backend's `quickPhrase`, `spokenSummary` and `Cart.spokenSummary` through the glasses' speakers. |
+| Speech out | `AVSpeechSynthesizer` | Speaks the tapped Look's quick phrase and `spokenSummary` through the glasses' speakers. |
 | Agent | **Claude** (Anthropic API, tool use), called **from the backend** via `POST /agent` (streamed) | Understands requests and acts through tools. The phone executes app-side actions and confirms anything with money. |
 | Checkout | **Stripe Checkout (test mode)** in `SFSafariViewController` | The backend returns a checkout URL. Face ID (`LocalAuthentication`) gates opening it. |
 | Dev machine | macOS + Xcode | |
@@ -49,49 +49,31 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 
 ## Modes: glasses vs phone
 
-The app has **two modes and one pipeline**. In both, video goes over **WebRTC** to the backend, which reduces it to **information**: tracked objects with labels, boxes and the best frame per track. What changes is whether the video is **shown**, and how the user picks an item.
+The app has **two camera sources and one pipeline**. The user picks the source on the start screen; the glasses can only be picked while they're connected. Either way the camera goes up as one **LiveKit** video track, the Live view shows that source's frames with each object's quick label, and the backend tracks every object and runs a Look on each (see [Pipeline](#pipeline)).
 
-| | **Glasses mode** (glasses connected) | **Phone mode** (no glasses) |
+| | **Meta glasses** | **Phone camera** |
 |---|---|---|
-| Video source | Glasses camera → phone (DAT) → WebRTC | Phone camera (AVFoundation) → WebRTC |
-| Shown to the user? | **No.** Processed only; the phone renders no preview. | **Yes.** Live preview, full screen. |
-| Detections drive | **Scene memory**: what the user has been looking at | **Hotspots** on the live video (01a) |
-| How the user picks | **Voice**: "Spotted, how much is that lamp?" | **Tap** a hotspot (voice also works) |
-| Target resolved by | Claude parses the sentence → match against scene memory | The tapped `track_id` |
-| Results | **Spoken** in the glasses, plus a capture card, Live Activity and history on the phone | On screen, over the live view (01 / 01b) |
-| Disambiguation | Spoken ("Floor lamp or desk lamp?") | A/B card (07) |
+| Video source | Glasses camera → phone (DAT) → LiveKit | Phone camera (AVFoundation) → LiveKit |
+| Shown on the phone | The glasses' frames, full screen | The phone camera's frames, full screen |
+| How the user picks | **Tap** a quick label; **voice** once the agent is back | **Tap** a quick label (01a) |
+| Results | On screen (01 / 01b), spoken through the glasses, plus a Live Activity | On screen, over the live view (01 / 01b) |
 
-**Switching:** the app picks the mode from the glasses' connection state.
-- **Glasses connect** → glasses mode.
-- **Glasses disconnect** → phone mode, with a toast: "Glasses disconnected. Using your phone camera."
-- **One connection:** the WebRTC peer connection is kept, and the source is swapped with `RTCRtpSender.replaceTrack`, so there's no renegotiation.
+**Switching:**
+- **Start screen:** "Phone camera" or "Meta glasses" (inert, with "No glasses found", until glasses connect; a link opens the Meta AI app to connect them).
+- **Mid-stream:** Profile → "Stream from the glasses".
+- **Glasses drop out** while they're the source → they stay the source: the DAT session waits and reconnects (a new session starts 2 s after one stops), and the status pill says "Connecting to glasses…" or, after a touchpad tap paused the stream, "Tap your glasses to resume". Switch to the phone camera in Profile.
+- **One track:** both capturers feed the same LiveKit video track, so switching never republishes. The phone sends the `mode` RPC and the backend restarts tracking with new uids.
 
-### Glasses mode: voice resolved against scene memory
+### Glasses mode: voice (when the agent returns)
 
-The backend keeps a rolling **scene memory** of the last ~10–15 s. For each `track_id`, it holds the label, box, time in view, how centered it was, last seen, and the **sharpest frame**.
+The backend keeps a scene memory of the last ~15 s, and the voice agent's groundwork (`backend/storefront/voice`) resolves "that lamp" or "the other one" against it. The agent's behavior is removed for now. When it returns, it joins the room on `voice {on}`, calls `select {uid}` on the backend like a tap, and asks the phone to act through the `action` RPC. Showing the agent's pick on the phone comes back with it.
 
-1. **Trigger:** the user starts a voice command (see [Voice trigger](#voice-trigger)), and an earcon confirms it.
-2. **Parse:** Claude (`/agent`) turns the sentence into an **action** (`price_check`, `save`, `add_to_cart`, `buy`, `more_info`) and a **target** ("lamp", "the green one", "that").
-3. **Resolve the target** against scene memory, with the backend picking a `track_id`:
-   - **Label match first,** then rank: in view and centered now > most recently seen > longest looked at.
-   - **"That" with no noun** = the most centered object right now.
-   - **Two close matches** → ask by voice: "Floor lamp or desk lamp?"
-4. **Detect:** `POST /detect` with `track_id` (no upload; the backend uses that track's best buffered frame). This works even if the user already looked away ("the chair I just walked past").
-   - Optional upgrade: if the target is still in view, also fire a 12 MP `capturePhoto` for sharper store matching.
-5. **Search:** `POST /search/{captureID}` as usual.
-6. **Respond:**
-   - The glasses speak `quickPhrase`, then `spokenSummary`, and the action is applied ("Saved.").
-   - The phone gets a **capture card**: the frame with the item highlighted, so the user can confirm it picked the right thing, plus results and actions.
-   - The Live Activity updates, and the item appears in the "Spotted today" feed.
-7. **Correction:** "No, the other one" re-resolves to the next-best track.
+**Room recap (optional):** when the user leaves a room, the phone shows "You looked at 4 things here", built from the captures. It's opt-in.
 
-**Room recap (optional):** when the user leaves a room, the phone shows "You looked at 4 things here", built from scene memory. It's opt-in.
-
-### Phone mode: tap the live video
-1. The live preview runs, and the phone camera publishes over WebRTC.
-2. `detections` on the data channel → **hotspots** (01a).
-3. Tapping a hotspot sends `select` on the data channel, then `POST /detect` with `track_id` (or the frame + `hint_box` as fallback) → brackets → searching card (01b) → results (01).
-4. Voice works too: "what's this?" targets the most centered object.
+### Tap the live video
+1. The app opens on a start screen: pick what to look for (Things to buy, Furniture, Electronics, Kitchen, Clothing, Decor) and the camera, then **Start streaming** joins the room and starts it. The category goes to the backend with `POST /session/token`; it picks SAM's labels within it from the first frame, and until `status.prompts` arrives the Live view shows "Finding electronics in view…".
+2. Each object's quick `label` (name and price estimate) pops up at the center of its box (01a). Objects without a label yet show nothing, and no box is drawn.
+3. Tapping a label calls `select`: the label turns lime → searching card (01b) → results (01).
 
 ### Voice trigger
 The glasses mode depends on this, so options are listed safest first:
@@ -107,109 +89,39 @@ The glasses mode depends on this, so options are listed safest first:
 
 ### Battery and heat
 - **Glasses mode:** no preview rendering. Drop to ~5 fps and a lower bitrate when the scene is static, and back up to 15 fps when the user starts a voice command.
-- **Pause:** the WebRTC video stops entirely when the camera is paused or the app is in the background (unless a capture is in flight).
+- **Pause:** the camera stops sending frames when paused, and the backend purges what it was tracking.
 
 ---
 
 ## Pipeline
 
-**One photo becomes a cutout, matched products and a spoken answer.**
+**The backend tracks every object in the video and prices it on its own; the phone draws what it hears and follows the object the user taps.**
 
 ```
-Meta glasses ──► Phone app ──────────────► FastAPI backend (laptop, exposed via ngrok)
-12 MP cam,       DAT SDK sends a JPEG
-mics, speakers
-                 ┌── POST /detect ─────────────────────────────────────────────────┐
-                 │  Claude vision (Anthropic API)  ║  SAM 3 /segment (Modal GPU)   │
-                 │  category, description, style,  ║  text prompts from a          │
-                 │  brand guess, rough box,        ║  home-goods list → pixel      │
-                 │  3 search queries, quick phrase ║  masks + scores               │
-                 │  (JSON validated, one retry)    ║  fallback: Roboflow SAM 3,    │
-                 │                                 ║  then box crop                │
-                 │            └──────► Python match + cutout ◄──────┘             │
-                 │            mask overlapping Claude's box → photo crop → URL      │
-                 │                         ▼                                       │
-                 │  DetectResponse → phone: quick phrase spoken in the glasses,    │
-                 │                         /search starts in the background        │
-                 └─────────────────────────────────────────────────────────────────┘
-                                           │ cutout URL
-                 ┌── POST /search/{id} ────▼───────────────────────────────────────┐
-                 │  Sources in parallel, ~4 s timeout each:                        │
-                 │  Google Lens (exact visual) · Google Shopping (new, top 2       │
-                 │  queries) · eBay (used / pre-owned)          — all via SerpAPI  │
-                 │                         ▼                                       │
-                 │  CLIP /embed (Modal GPU): cutout vs thumbnails, 0–100,          │
-                 │  drop < 40                                                      │
-                 │                         ▼                                       │
-                 │  pricing.py: typical range p25–p75, median → low / fair / high  │
-                 │                         ▼                                       │
-                 │  choose(): best match, dupes, used; Claude Haiku writes the     │
-                 │  spoken summary                                                 │
-                 │                         ▼                                       │
-                 │  SearchResponse → phone: results + spoken summary in glasses    │
-                 └─────────────────────────────────────────────────────────────────┘
-                                           │ user picks items
-                                           ▼
-                        Stripe Checkout (test mode) → checkout URL
+Phone ══ one video track (LiveKit, ~504×896 @ 15 fps, no simulcast) ══► LiveKit room ══► backend ("vision")
+                                                                   SAM 3 tracking → objects (uid, box)
+                                                       on screen 0.5 s → quick label (name, price range)
+                                                       on screen 0.5 s → Look: describe → search stores → rank
+Phone ◄══ topic "updates": objects · label · status (data packets) · look (text streams) ══┘
+Phone ── RPC select {uid} ──► vision: answers that object's Look; its later steps follow as "look" messages
 ```
 
 | Runs on | Steps |
 |---|---|
-| **Phone** (this repo) | Capture, preview, UI, speech in/out, cart, opening the checkout URL |
-| **Laptop** (FastAPI + ngrok) | Orchestration, match + cutout, `pricing.py`, `choose()` |
-| **Anthropic API** | Claude vision (`/detect`), Claude Haiku (spoken summary), **Claude shopping agent** (`/agent`) |
-| **Modal GPU** | SAM 3 segmentation, CLIP embeddings |
-| **External APIs** | SerpAPI (Google Lens, Google Shopping, eBay), Stripe |
+| **Phone** (this repo) | Capture, preview, UI, speech out, cart, opening the checkout URL |
+| **Backend** (FastAPI, `backend/storefront`) | Session tokens, tracking, quick labels, Looks |
+| **LiveKit Cloud** | The room: video, messages, RPCs |
+| **Anthropic API** | Claude Haiku: quick labels, descriptions, spoken summaries |
+| **GPU server** | SAM 3 tracking |
+| **External APIs** | Store search, Stripe |
 
-### Two layers: continuous stream + per-object pipeline
+### What the phone does
 
-> Applies to **both modes**. In glasses mode the phone publishes the glasses' video but renders no preview, and selection comes from voice plus scene memory instead of a tap (see [Modes](#modes-glasses-vs-phone)).
-
-```
-Glasses ══ continuous video (DAT, 504×896 @ 15 fps) ══► Phone
-   Phone ─ live preview (local, never leaves phone)
-   Phone ══ WebRTC video track (H.264, ~504×896 @ 15 fps) ══► Backend WebRTC page
-                                                                 │ samples frames → lightweight detections
-   Phone ◄═══════════ WebRTC data channel "detections" ═══════════┘
-                                                                 (boxes + labels → unselected hotspots, 01a)
-   On select (tap · gaze dwell ≥ 0.5 s · "what's this?"):
-   Phone ── best recent full-res frame ──► POST /detect ──► POST /search/{captureID}  (diagram above)
-```
-
-- **Stream layer (always on while Live):**
-  - The glasses stream continuously to the phone.
-  - The phone republishes the frames as a **WebRTC video track** to the backend's **WebRTC page**, using a custom `RTCVideoCapturer` that feeds each DAT `CMSampleBuffer` in as an `RTCVideoFrame`.
-  - The backend samples frames from the track and runs cheap detections (boxes, short labels, scores).
-  - It sends them back on a **data channel**; they drive the **hotspots** and keep them tracking objects as the user moves.
-  - Bonus: open the WebRTC page on the laptop to show judges the glasses' live view on the projector.
-- **Selection layer (per object):** once the user selects an object, the phone runs the full pipeline above on the **sharpest recent frame**. That's either a `capturePhoto` 12 MP still or the best buffered frame cropped around the hotspot's box.
-- **Throttling:**
-  - Lower the track's frame rate and bitrate (`RTCRtpSender` encoding parameters) while `/detect` and `/search` are running, so the backend's GPU budget goes to the selected object.
-  - Back off to 1 fps when nothing changes for several seconds.
-  - Stop entirely when the user pauses the camera (privacy).
-
-### What the phone does at each step
-
-1. **Stream:**
-   - The DAT session keeps the live preview running.
-   - The phone publishes the WebRTC video track to the backend's page and updates hotspots from each `detections` data-channel message.
-   - **Selecting** a hotspot, or saying "what's this?", grabs the best full-resolution frame.
-2. **`POST /detect`:** upload that frame and show "Looking…" immediately. Send the selected hotspot's box as a hint so Claude and SAM focus on the right object.
-3. **On `DetectResponse`:**
-   - Speak `quickPhrase` through the glasses ("Lamp. Finding prices."). If `foundSomething` is false, speak it and stop (01c).
-   - Place the brackets from `segmentation.bbox` (normalized x/y/w/h).
-   - Show the product card in a **searching** state with the cutout crop and `item.category`.
-4. **`POST /search/{captureID}`:** call right away (the server is already searching); ~30 s timeout.
-5. **On `SearchResponse`:**
-   - Fill the card with the best match, price and **price verdict** (low / fair / high).
-   - Fill the detail view: Best match / Dupes / Used.
-   - Speak `spokenSummary`.
-6. **Actions:** Save / Add to cart (client state). **Check out:** send the cart, receive a Stripe URL, confirm with Face ID, and open it in `SFSafariViewController`.
-
-**Latency budget:**
-- `/detect`: about 2–3 s (Claude and SAM in parallel). Cover it with the "Looking…" state and an earcon.
-- `/detect`: ~1.5 s measured. `/search`: ~4 s today, 8–10 s once real store search lands (use a 30 s timeout). The card shows skeleton rows with "Checking 3 stores…" until it fills.
-- The spoken quick phrase lands before search finishes, so the user is never waiting in silence.
+1. **Join:** `POST /session/token`, then join the room as `phone-…` and publish the camera (phone or glasses) as one video track. Send `mode` right after joining, and `pause` if paused.
+2. **Draw:** each `objects` message moves the labels (in-view objects only); a `label` message adds one, at the center of its object's box. The app keeps nothing else: after a reconnect, the backend sends its current state again.
+3. **Tap:** RPC `select {uid}`. Its answer is that object's Look as it stands: `started` / `described` → searching card (01b), `results` → product card (01), `failed` → couldn't tell (01c). Later `look` messages for that uid move the card along; Looks for other objects are ignored.
+4. **Speak:** the Look's quick phrase when it appears, then `spokenSummary` with the results.
+5. **Actions:** Save / Add to cart (client state). **Check out:** Face ID, then the checkout URL in `SFSafariViewController`.
 
 ---
 
@@ -283,57 +195,31 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
 
 ```
 Spotted/
-├─ App/
-│  ├─ SpottedApp.swift          // entry, theme environment
-│  └─ AppState.swift            // @Observable: detections, currentProduct, cart, saved, connection
-├─ Glasses/
-│  └─ GlassesManager.swift      // DAT registration, stream session, frame publisher (lift from Meta sample)
-├─ Network/
-│  ├─ WebRTCPublisher.swift     // RTCPeerConnection: signaling, video track, "detections" data channel
-│  ├─ GlassesVideoCapturer.swift// RTCVideoCapturer: DAT CMSampleBuffer → RTCCVPixelBuffer → RTCVideoFrame
-│  ├─ FrameBuffer.swift         // keeps the sharpest recent full-res frame for /detect
-│  ├─ APIClient.swift           // POST /detect (multipart JPEG), /search/{captureID}, /checkout, /cart, GET /health
-│  ├─ Config.swift              // BASE_URL = current ngrok https URL
-│  └─ Models.swift              // DetectResponse, SearchResponse, Listing, PriceVerdict (Codable)
-├─ Agent/
-│  ├─ AgentClient.swift         // POST /agent, streamed events (speech, text, action, confirm, done), session_id
-│  ├─ AgentTools.swift          // executes app tools: save_item, add_to_cart, remove_from_cart, undo_last,
-│  │                            //   show_results, open_screen, list_saved, start_checkout → tool_result
-│  ├─ AgentContext.swift        // builds the per-turn snapshot (scan, search, cart, saved, limit)
-│  └─ ConfirmGate.swift         // confirm cards + Face ID for anything involving money or removal
-├─ Voice/
-│  ├─ SpeechInput.swift         // SFSpeechRecognizer → transcript → AgentClient
-│  ├─ LocalCommands.swift       // on-device fast path: stop, never mind, cancel, undo
-│  └─ Speaker.swift             // AVSpeechSynthesizer + earcons, interruptible (barge-in)
-├─ Design/
-│  ├─ Tokens.swift              // colors per theme (Lime / Visa Night), type styles
-│  └─ Glass.swift               // Liquid Glass helpers / fallbacks
-├─ Components/
-│  ├─ Hotspot.swift             // unselected marker (default / focused)
-│  ├─ DetectionBrackets.swift   // selected marker
-│  ├─ ProductCard.swift
-│  ├─ GlassTabBar.swift  MicButton.swift  Chip.swift  GlassButton.swift
-└─ Screens/
-   ├─ LiveView.swift  AgentSheet.swift  ProductDetail.swift
-   ├─ SavedView.swift  CartView.swift  CheckoutSheet.swift
-   ├─ DisambiguationCard.swift  DisconnectedView.swift
+├─ App/        SpottedApp, AppState (live state, cart, saved, navigation, voice actions), AppModels,
+│              LookActivityController
+├─ Live/       LiveSession (the LiveKit room: video up, updates in, RPCs out)
+│              VideoFeed (phone camera, mock room or glasses → the one video track)
+├─ Mock/       MockData, MockSession (plays the server's messages without a backend)
+├─ Network/    APIClient (POST /session/token), Models (mirrors backend/storefront/models.py), AppConfig
+├─ Glasses/    GlassesManager (DAT registration, glasses camera stream)
+├─ Voice/      VoiceAssistant (the agent in the shared room: transcripts, mic, "action" RPC), Speaker
+├─ Design/     Tokens, Glass
+├─ Components/ Hotspot, DetectionBrackets, ProductCard, GlassTabBar, …
+└─ Screens/    LiveView, AgentSheet, ProductDetail, SavedView, CartView, CheckoutSheet, glasses screens
 ```
 
 **Data flow:**
-- **Continuous:** `GlassesManager` (frames) → `GlassesVideoCapturer` → `WebRTCPublisher` (video track up, data channel down) → `AppState.liveDetections` → hotspots redraw. A copy of each frame goes to `FrameBuffer`.
-- **On select:** best frame → `APIClient.detect` → `AppState.current = .detected` → `APIClient.search` → `AppState.current = .matched`. SwiftUI redraws the overlay and card automatically, and `Speaker` voices each phrase.
-- **Agent turn:** mic → `SpeechInput` → (`LocalCommands` fast path, or) `AgentClient` with `AgentContext` snapshot → streamed events:
-  - `speech` → `Speaker`
-  - `text` → `AgentSheet`
-  - `action` → `AgentTools` → `AppState` (result back to Claude)
-  - `confirm` → `ConfirmGate`
+- **Continuous:** `VideoFeed` → `LiveSession` (one video track up). Topic `updates` → `LiveSession` → `AppState.handle` → `objects` and `labels` → hotspots redraw.
+- **On tap:** `AppState.select` → `LiveSession.select` (RPC) → the Look's latest step → `scan`. Later `look` messages for that uid update it, and `Speaker` voices each phrase.
+- **Without a backend:** `MockSession` plays the same messages into `AppState.handle`.
+- **Voice:** `VoiceAssistant` asks the backend for the agent (`voice {on}`) and publishes the mic; the agent's `action` RPC runs through `AppState`.
 
 ```swift
 enum ScanState {
   case idle
-  case looking                                  // JPEG uploading / /detect running
-  case detected(DetectResponse)                 // quick phrase spoken, card in "searching"
-  case matched(DetectResponse, SearchResponse)  // full card + verdict
+  case looking                         // waiting for select's answer
+  case detected(Look)                  // the Look is running: card in "searching"
+  case matched(Look, SearchResponse)   // full card + verdict
   case failed(String)
 }
 ```
@@ -344,26 +230,24 @@ enum ScanState {
 
 Each screen exists in Figma in both themes: **📱 Screens** (Lime) and **📱 Screens · Visa Night**.
 
-The screens below (01–08) are **phone mode** (live video). Screens 03–06 (detail, saved, cart, checkout) are shared by both modes. The glasses-mode screens (G1–G6) are listed after them.
+The screens below (01–06) are the Live view and what follows it, for either camera. The glasses-mode screens (G2–G7) are listed after them.
 
 | # | Frame | What it shows |
 |---|---|---|
-| 01a | Object Detected (Unselected) | The camera feed with a pulsing **Hotspot** on the chair. Its tag appears on hover/focus, and a hint pill reads "Tap the chair or say 'What's this?'". No card yet. |
-| 01 | Live View | The chair is selected: lime brackets, a "Lounge Chair · Likely" tag, and a glass product card (Search / Save / Add to cart). The lamp shows as an unselected Hotspot. |
+| 01a | Object Detected (Unselected) | The camera feed with each object's quick label ("Lounge chair · ~$900–1400") at its center, and a hint pill: "Tap the chair or say 'What's this?'". No card yet. |
+| 01 | Live View | The chair is selected: its label turns lime, over a glass product card (Search / Save / Add to cart). The lamp keeps its glass label. |
 | 02 | Listening → **Agent sheet** | A voice sheet with waveform, live transcript, the line the glasses will say, and suggestion chips. With the agent, this becomes the conversation surface with Claude (see below). |
 | 03 | Product Detail | A hero image, a store comparison (lowest price tagged) and a floating glass checkout bar. |
 | 04 | Saved | Saved items grouped by room ("Maya's apartment"). Saved = coral + filled bookmark + "Saved". |
 | 05 | Cart | Line items, an **Agent limit** card (Visa), the summary, and Check out. |
 | 06 | Checkout | A pay sheet showing merchants, card, limit check, the spoken confirmation, and **Pay with Face ID** / passcode. |
-| 07 | Which One? | A low-confidence state: A/B options, prompted with "Say 'chair' or 'lamp', or tap." |
-| 08 | Glasses Disconnected | The feed paused, a banner, **Try again**, and **Use phone camera**. |
-| 01b | Searching | After `/detect`: brackets, cutout thumbnail, the spoken quick phrase, skeleton prices and "Checking 3 stores…". Only Save is active. |
-| 01c | Couldn't Tell | `/detect` failed: "Couldn't tell what that is", **Try again** / **Take a photo**. |
-| 01d | Stream Reconnecting | 01a with a "Reconnecting…" pill and dimmed hotspots (WebRTC dropped). |
+| 01b | Searching | While the Look runs: the lime label, crop thumbnail, the spoken quick phrase, skeleton prices and "Checking 3 stores…". Only Save is active. |
+| 01c | Couldn't Tell | The Look failed: "Couldn't tell what that is", **Try again** / **Take a photo**. |
+| 01d | Stream Reconnecting | 01a with a "Reconnecting…" pill and dimmed hotspots (the room dropped). |
 | 03b | Dupes & Used | The Used tab with eBay results, and "Google Shopping · Unavailable right now" with Retry. |
 | 06b | Stripe Handoff | A Safari sheet with a generic test-mode checkout form (`checkout.stripe.com`). |
 
-**Flow:** 01a → (tap / gaze / "what's this?") → `/detect` → 01 (searching) → `/search` → 01 (matched) → 03 / Save / Add → 05 → 06 → Stripe Checkout.
+**Flow:** 01a → tap → `select` → 01 (searching) → results → 01 (matched) → 03 / Save / Add → 05 → 06 → Stripe Checkout.
 
 ### Pipeline-driven design updates (now in Figma)
 - **01 · Searching state:**
@@ -390,10 +274,7 @@ The screens below (01–08) are **phone mode** (live video). Screens 03–06 (de
 ### Glasses-mode screens (not in Figma yet)
 | # | Frame | What it shows |
 |---|---|---|
-| G1 | Glasses Home | No video. A calm "Listening" state: a glasses-connected pill, "Glasses camera on · not recording" with **Pause**, a big push-to-talk mic, a hint ("Say 'Spotted, how much is that lamp?'"), and the latest captures below. |
-| G2 | Voice Command | While the user speaks: waveform, live transcript, the parsed action + target chips ("Price check · lamp"), and the earcon state. |
-| G3 | Capture Card | The **frame the backend used, with the item highlighted** (brackets on `segmentation.bbox`), then the searching → matched states (same content as 01b / 01), plus "Not this one" (re-resolve). |
-| G4 | Voice Which-One | The spoken question ("Floor lamp or desk lamp?"), mirrored on the phone as two cropped thumbnails, so the user can tap or answer by voice. |
+| G2 | Voice Command | While the user speaks: waveform, live transcript and the earcon state. |
 | G5 | Spotted Today | A feed of captures grouped by room: frame thumbnail, item, price, verdict, and Save/Add. It doubles as history and privacy proof ("every capture you asked for"). |
 | G6 | Live Activity / Dynamic Island | Compact: "Finding prices · lamp…" → "Lamp · $189 · Fair". Expanded: thumbnail plus Save / Add to cart. Also the lock-screen push-to-talk entry. |
 | G7 | Room Recap (optional) | "You looked at 4 things at Maya's", with Save all / pick. |
@@ -481,17 +362,10 @@ The mockups use **Inter**, a stand-in for SF Pro, which doesn't render in Figma'
 
 | State | Marker | Card | Trigger to next |
 |---|---|---|---|
-| Unselected (01a) | **Hotspot**: pulsing dot, no tag | none | tap / focus / "What's this?" |
-| Focused / hover | Hotspot brightens; **item tag appears** ("Lounge chair · Tap to view") | none | tap or confirm |
-| Selected (01) | **Accent brackets** + "Name · Likely" tag | Product card | Save / Add / Search |
-| Low confidence (07) | White brackets with A/B badges | Disambiguation card | "chair" / "lamp" / tap |
+| Unselected (01a) | Glass **quick label** ("Lounge chair · ~$900–1400") at the object's center; no box, no dot | none | tap the label |
+| Selected (01) | The same label in **lime** | Product card | Save / Add / Search |
 
-**Hover on iPhone:** there's no pointer hover on touch. Map the Figma Hover state to:
-1. **Glasses gaze:** the user's view stays centered on the object for about 0.5 s (preferred).
-2. **Press-and-hold** on the hotspot (phone fallback).
-3. VoiceOver focus: the tag's text is the hotspot's accessibility label.
-
-Transitions: 200 ms ease-out (matches the Figma Smart Animate). Respect **Reduce Motion**: no pulse, instant swap.
+Labels pop in (scale and fade) when the backend names an object, and stay inside the screen near its edges. Transitions: 200 ms ease-out. Respect **Reduce Motion**: instant swap.
 
 ---
 
@@ -515,13 +389,12 @@ The full guide is on the Figma **🎨 Style Guide** page (Verbal). Core rules:
 | State | Glasses say | Phone shows | Earcon |
 |---|---|---|---|
 | Identified | "Lounge chair. $1,299." | Product card (01) | Two-note chime |
-| Low confidence | "Chair or lamp?" | A/B card (07) | Question tone |
 | Added | "Chair added. Undo?" | Cart +1 | Coin clack |
 | Saved | "Saved." | Coral bookmark + "Saved" | Soft whoosh |
 | Over limit | "Over your limit. Approve on your phone." | Limit approval sheet | Low double tone |
 | Checkout | "$1,642 to Visa 4242. Confirm on your phone." | Pay sheet (06) | Heartbeat |
 | Paid | "Done. Receipt's on your phone." | Receipt | Success chord |
-| Disconnected | Phone speaks: "Glasses disconnected." | Banner (08) | Falling tone |
+| Disconnected | Phone speaks: "Glasses disconnected." | Toast; switches to the phone camera | Falling tone |
 | Camera paused | "Camera paused." | Dimmed feed | Click |
 
 **Vocabulary:** Spot / spotted · Save (not "favorite") · Add to cart · Check out (only at payment) · Room · Agent limit.
@@ -538,92 +411,52 @@ Target: **WCAG 2.2 AA** (the standard that the ADA, Section 508 and the European
   - Visa blue on dark backgrounds is about 2.2:1, so Visa marks need a light outline.
 - **Never color alone:** Saved = coral + filled icon + label; selected tab = accent + glass pill; confidence is shown as text ("Likely").
 - **Dynamic Type:** use system text styles; test cards at the largest accessibility sizes.
-- **VoiceOver:** hotspots are buttons labeled with the item name; the product card reads name, price and actions in order.
-- **Reduce Motion:** disable the hotspot pulse and bracket lock-in animation.
+- **VoiceOver:** quick labels are buttons labeled with the item name and price; the product card reads name, price and actions in order.
+- **Reduce Motion:** labels appear without the pop-in animation.
 
 ---
 
 ## Backend contract
 
-Base URL: the current **ngrok HTTPS** URL, set in `Config.swift`. It changes each time ngrok restarts unless the team uses a reserved domain.
+Base URL: `https://dubhacks.tamkar.ai` by default, set in `Spotted.xcconfig`. Override it in the untracked `Config.xcconfig`, for example with a laptop's address or an ngrok URL.
 
-> **Source of truth: `Models.swift`** from the backend team. It matches `backend/models.py` exactly, decodes 14 real server responses (including null cases and error bodies), and compiles in Swift 5 and 6. Drop it into `Network/Models.swift` as-is.
+> **Source of truth: `Network/Models.swift`**, which mirrors `backend/storefront/models.py`; change them together.
 > - Decode with a plain `JSONDecoder()` (all keys are mapped in `CodingKeys`; don't set `keyDecodingStrategy`).
 > - Optionals really can be `nil` at runtime. Never force-unwrap them.
-> - Errors (any non-2xx) decode as `APIError { detail }`.
+> - Errors (any non-2xx, or an RPC answering `ok: false`) become `APIError { detail }`.
 
-| Endpoint | Request | Response | Status |
-|---|---|---|---|
-| `POST /detect` | multipart `image` (JPEG, quality ~0.8, long side ≤ 2048 px); soon optional `hint_box`; **requested:** `track_id` (use buffered frame), `hint_text`, `hint_point` | `DetectResponse` | Live (~1.5 s); new fields requested |
-| `POST /search/{captureID}` | no body | `SearchResponse` (404 if unknown id) | Live (~4 s now, 8–10 s with real store search) |
-| `POST /identify` | multipart `image` | `IdentifyResponse` (detect + search) | Live; **testing only** |
-| `POST /checkout` | `CheckoutRequest` | `CheckoutResponse` | Live (test "Order placed!" page; Stripe test mode coming) |
-| `POST /cart` · `GET /cart` · `DELETE /cart/{index}` | `AddToCartRequest` | `Cart` (with `spokenSummary`) | Coming with the search/cart PR |
-| `GET /health` | — | `HealthResponse` | Live; use for the connection indicator |
-| `POST /offer` + data channel `detections` | `SessionDescription` | `SessionDescription`, `DetectionsMessage` | Our format, adopted by the backend; not live yet |
+| Endpoint | Request | Response |
+|---|---|---|
+| `POST /session/token` | `TokenRequest` (`participant_identity`, `category`; both optional) | `TokenResponse` (`server_url`, `participant_token`): a new room with the backend in it, tracking `category` |
+| `POST /checkout` | `CheckoutRequest` | `CheckoutResponse` (a stub for now) |
 
-### WebRTC page (continuous stream)
-The backend hosts a **WebRTC page**; the phone is a publisher.
+### The session's LiveKit room
 
-**Signaling** (confirm with backend; this is the common aiortc pattern):
-```jsonc
-// phone → backend:  POST /offer   (over the ngrok HTTPS URL)
-{ "sdp": "<phone SDP offer: 1 video track (sendonly) + data channel 'detections'>", "type": "offer" }
-// backend → phone
-{ "sdp": "<SDP answer>", "type": "answer" }
-```
+The phone joins as `phone-…`, the backend as `vision`. One session at a time: a new token makes the backend leave the old room.
 
-**Media:** video track, H.264 (VP8 as fallback), about 504×896 at 15 fps. The phone sends only; nothing comes back on the video track.
+**Backend → phone**, topic `updates`:
 
-**Data channel `detections`** (backend → phone, a few times per second):
-```jsonc
-{ "type": "detections", "ts": 1739812345123,
-  "objects": [ { "track_id": "t3", "box": [0.31,0.22,0.58,0.71], "label": "chair", "score": 0.88 },
-               { "track_id": "t4", "box": [0.70,0.30,0.98,0.60], "label": "lamp",  "score": 0.74 } ] }
-```
-- **Backend options:** SAM 3 text prompts on sampled frames, or a lighter detector, with simple tracking (`track_id`) so hotspots don't flicker.
-- **Message types:** use `ts` to ignore out-of-order messages. Optionally the phone can send `{"type":"select","track_id":"t3"}` on the same channel so the backend knows what's selected.
+| Message | Fields | When |
+|---|---|---|
+| `objects` (data) | `session`, `age_ms`, `objects: [{uid, box, prompt, score, in_view, last_seen_ts}]` | every tracking result |
+| `label` (data) | `uid`, `box`, `name`, `price_low`, `price_high` | once per object, after 0.5 s on screen |
+| `status` (data) | `tracking` (`stopped`, `starting`, `ok`, `offline`), `category`, `prompts` | when it changes |
+| `look` (text stream) | `uid`, `look_id`, `stage` (`started`, `described`, `results`, `failed`), `label`, `box`, `selected`, `crop_url`, `item`, `search`, `message` | each step of an object's Look |
 
-> **ngrok gotcha:** ngrok only tunnels the HTTP **signaling**. WebRTC **media goes over UDP**, peer to peer, and doesn't pass through ngrok.
-> - **Same Wi-Fi or hotspot** as the laptop: works with host ICE candidates and a public STUN server (`stun:stun.l.google.com:19302`).
-> - **Different networks or a strict venue Wi-Fi:** you need a **TURN** server (e.g., Cloudflare or Twilio TURN), configured on both peers.
-> - Demo safest bet: phone and laptop on the same phone hotspot.
+Boxes are `[x1, y1, x2, y2]`, normalized 0–1. `uid` is opaque. Someone joining mid-session gets the current state first.
 
-### `POST /detect` → `DetectResponse`
-Request: `multipart/form-data`, field `image` (JPEG, quality ~0.8, long side ≤ 2048 px). Coming soon: optional `hint_box` form field, the tapped hotspot's box as JSON `{"x","y","w","h"}` (use `BBox(corners: detection.box)`), so the backend cuts out the object the user chose.
+**Phone → backend**, RPCs to `vision`, each answering `{"ok": true, …}` or `{"ok": false, "detail"}`:
 
-| Field | Use in the app |
-|---|---|
-| `captureID` | Pass to `/search/{captureID}`; ignore any response whose `captureID` isn't the current scan |
-| `quickPhrase` | **Speak immediately** ("Lamp. Finding prices.") |
-| `foundSomething` (computed) | `false` → speak `quickPhrase` ("I couldn't spot a product there…"), show 01c, **stop** |
-| `segmentation.bbox` | SAM's tight box, **normalized `{x, y, w, h}`** → `bbox.rect(in: viewSize)` for brackets |
-| `segmentation.cutoutURL` | Thumbnail on the searching card. It's a **crop of the photo**, not the item on white. |
-| `segmentation.maskScore` | SAM confidence; `nil` on fallback crop |
-| `item.category` | Card title while searching ("Lamp") |
-| `item.description / style / brandGuess / searchQueries` | **Usually empty at `/detect` time** (SAM answers first; Claude describes the item server-side). Don't show them from `/detect`. |
+| Method | Payload | Notes |
+|---|---|---|
+| `select` | `{uid}` | Answers `{"ok": true, "look": {…}}`, the object's Look as it stands |
+| `mode` | `{mode: "glasses" or "phone"}` | after joining and on every camera switch |
+| `pause` | `{paused}` | stops tracking and purges it |
+| `voice` | `{on}` | brings the voice agent in, or sends it away |
 
-### `POST /search/{captureID}` → `SearchResponse`
-The server already started searching during `/detect`, so this call just waits for the result. Use a **~30 s request timeout** and keep the card in the searching state (01b) meanwhile.
+The agent calls the phone's RPC `action` (`VoiceAction`), answered with a `VoiceActionReply`.
 
-| Field | Use in the app |
-|---|---|
-| `bestMatch: Product?` | Main card. Can be **nil** (nothing for sale), so show "No exact match for sale" and fall back to dupes/used. |
-| `dupes: [Product]` | Dupes tab; cheapest savings first. Can be empty. |
-| `used: [Product]` | Used tab. Can be empty. |
-| `priceInsight.verdictText` | Ready-made line for the price verdict block ("West Elm is above the typical $120–$329 range.") |
-| `priceInsight.bestMatchVerdict.label` | Verdict chip: "Low price" / "Fair price" / "High price" |
-| `priceInsight.typicalLow / typicalHigh / median` | Range bar (p25 / p75 / median). Can be **nil**, so hide the bar. |
-| `spokenSummary` | **Speak when the cards appear** |
-| `sourcesOK` | Not sent yet, so it decodes as `nil`. **Treat `nil` as "all stores fine".** |
-
-`Product` fields that differ from the design's earlier names:
-- **Image:** `imageURL` (optional), not `thumbnail`.
-- **Similarity:** `matchScore` (optional, 0–100), not `similarity`. It's **`nil` until CLIP scoring is live**, so show **"Similar"**, never "Exact match", until `isExactMatch` can be true.
-- **Tier:** `tier` is `new` / `dupe` / `used`, and `tier.condition` gives "new" / "pre-owned".
-- **Source:** `source` is `lens` / `shopping` / `ebay`, and `source.displayName` gives "Google Lens" and so on.
-- **New fields:** `savingsPct` (dupes: "Save 34%") and `matchReason` (e.g. "Same tripod base and drum shade"), both great as a caption.
-- **Buy:** opens `product.url`.
+> **ngrok** only carries `POST /session/token`. The room runs on LiveKit Cloud, so video and messages don't go through ngrok and work across networks.
 
 ### `POST /agent`  (streamed, Server-Sent Events)
 ```jsonc
@@ -669,25 +502,16 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 - Each returns `Cart { items, total, spokenSummary }`. Speak `spokenSummary` after adds and removes.
 - Until the PR lands, keep the cart in `AppState` and switch to the server cart when the endpoints are live.
 
-### `GET /health` → `HealthResponse`
-Poll every ~10 s while the app is open.
-- `ok` drives the status pill.
-- `modelService == false` → show "Segmentation offline".
-- `fixtures == true` → show a small **"Test data"** badge in debug builds so nobody mistakes canned results for real ones.
-
 ### UI rules
 - **Hotspots from the stream:**
-  - Each `objects[]` entry with `score ≥ 0.6` becomes an **unselected Hotspot** (01a) at the center of its `box`.
-  - Key hotspots by `track_id` and animate them to new positions. Fade one out after ~1 s without updates.
-  - While the data channel is disconnected, show the stream as "Reconnecting…" in the status pill.
-- **Selected:** tapping a hotspot, gaze dwell or "what's this?" makes that object **selected** (brackets from `segmentation.bbox`) and starts `/detect`.
-- **Nothing found:** `foundSomething == false` → speak `quickPhrase`, show **Couldn't tell** (01c), and don't call `/search`.
-- **Low confidence:** if `segmentation.maskScore < 0.5`, show **Which one?** (07) when there are two hotspots, otherwise proceed.
+  - Each in-view `objects[]` entry with a `label` shows that label (01a) at the center of its `box`, keyed by `uid`. No box is drawn.
+  - While the room is reconnecting or `status.tracking` is `offline`, show "Reconnecting…" in the status pill.
+- **Selected:** tapping a label makes that object **selected** (the label turns lime) and calls `select`.
+- **Couldn't tell:** a `failed` Look → speak its `message`, show **Couldn't tell** (01c).
 - **Similarity:** show "Exact match" only when `product.isExactMatch` (`matchScore ≥ 85`). While `matchScore` is `nil` (today), show **"Similar"**.
 - **Price verdict chip:** text is `bestMatchVerdict.label`. Color: Low = success, Fair = secondary, High = warning. Always text plus color.
 - **Empty states:** `bestMatch == nil` → "No exact match for sale"; empty `dupes` or `used` → "No dupes found" / "No used listings".
-- **Partial results:** only when `sourcesOK` is non-nil and missing a source, show that source as "Unavailable right now". `nil` means all fine.
-- **Stale responses:** ignore any response whose `captureID` isn't the current scan.
+- **Stale messages:** follow only the selected uid's `look` messages.
 - **Errors:** show `APIError.detail` only in debug builds. Users see the verbal-guide line ("Couldn't reach the store search. Try again.").
 
 ---
@@ -703,10 +527,10 @@ Poll every ~10 s while the app is open.
    - `UIBackgroundModes` → `bluetooth-central`, plus `NSBluetoothAlwaysUsageDescription`
    - `NSLocalNetworkUsageDescription` + `NSBonjourServices`: as required by the DAT SDK for Wi-Fi streaming
    - `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`, `NSFaceIDUsageDescription`
-5. **Base URL (secret):** the backend team shares it by DM. **Never commit it.** The repo is public, and every `/detect` costs a Claude call.
-   - Put it in an **untracked** `Config.xcconfig` (`API_BASE_URL = https:/$()/…`) read via Info.plist, or an untracked `Config.swift`.
-   - Add the file to `.gitignore` and commit a `Config.example.xcconfig` with a placeholder.
-   - HTTPS means no App Transport Security exceptions. No ngrok header is needed; `URLSession` requests (API and images) go straight through.
+5. **Base URL:** `Spotted.xcconfig` defaults to `https://dubhacks.tamkar.ai`.
+   - For another backend (a laptop or an ngrok URL, say), copy `Config.example.xcconfig` to the **untracked** `Config.xcconfig` and set `API_BASE_URL` there. Don't commit ngrok URLs: the repo is public, and every session costs LiveKit and Claude usage.
+   - Debug builds also read `SPOTTED_API_BASE_URL` from the scheme; set it empty to run on mock data, as the UI tests do.
+6. **Cloudflare Access:** the backend sits behind a Cloudflare tunnel protected by Access. Set the service token's `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` in `Config.xcconfig` (Cloudflare Zero Trust → Access → Service Auth). Requests to the backend's host, including crop images, carry them as `CF-Access-Client-Id` and `CF-Access-Client-Secret`; requests to other hosts never do. The token ships inside the app bundle, so use a token scoped to this app only.
 
 ---
 
@@ -714,7 +538,7 @@ Poll every ~10 s while the app is open.
 
 - [ ] 1. Meta sample app running with the glasses' camera visible on the phone
 - [ ] 2. Own app with the live preview + `AppState`
-- [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/health`, `/detect`, `/search`, `/checkout`) against the real backend (or `/identify` for quick tests)
+- [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/detect`, `/search`, `/checkout`) against the real backend
 - [ ] 4a. WebRTC: add `stasel/WebRTC`, publish a test track (phone camera) to the backend page via `POST /offer`, and confirm it plays on the laptop
 - [ ] 4b. Swap in `GlassesVideoCapturer` (DAT frames → track); handle `detections` → live hotspots
 - [ ] 4c. Select a hotspot → best full-res frame → `/detect` → speak `quickPhrase` → card in searching state (01b)
@@ -727,7 +551,7 @@ Poll every ~10 s while the app is open.
 - [ ] 10a. `AgentClient` against a mock `/agent` SSE stream; `AgentTools` for save / add / remove / undo
 - [ ] 10b. Agent sheet (02) with action cards + typed input; `ConfirmGate` for removals and checkout (Face ID)
 - [ ] 10c. Point at the real `/agent`; test the guardrails (over-limit, removal confirm, barge-in)
-- [ ] 11. Error / timeout states, Which one? (07), Disconnected (08)
+- [ ] 11. Error / timeout states
 - [ ] 12. Point at the real ngrok backend
 - [ ] 13. Demo polish: pre-staged room with 3 products that segment and match reliably
 
@@ -739,7 +563,6 @@ Poll every ~10 s while the app is open.
 - [ ] M5. Capture card (G3) with highlighted frame; "Not this one" → next track
 - [ ] M6. Spotted Today feed (G5)
 - [ ] M7. Live Activity (G6) via ActivityKit
-- [ ] M8. Voice which-one (G4)
 - [ ] M9. Stretch: Siri / App Intents + Action Button trigger; room recap (G7)
 
 ---
@@ -747,7 +570,6 @@ Poll every ~10 s while the app is open.
 ## Open questions
 
 - **Scene memory:** how long a window (10–15 s?), and does the backend keep the best frame per track, or only boxes?
-- **`/detect` by `track_id`:** can the backend run it on its buffered frame? This makes glasses mode much faster and keeps it consistent with what was seen.
 - **Voice trigger for the demo:** push-to-talk (default), Siri / Action Button, or a foreground wake phrase?
 - **Room recap:** in or out for the demo?
 
@@ -758,13 +580,5 @@ Poll every ~10 s while the app is open.
 - **Phone "hover":** gaze vs press-and-hold for revealing the item tag.
 - **Visa track story:** checkout runs on **Stripe test mode**. Decide how Visa shows up for judges: Visa test cards in Stripe, the "agent limit" concept, or a Visa sandbox API (Intelligent Commerce / Token Service) layered on. Ask the Visa mentors early.
 - **`/agent` owner:** not on the backend yet. Decide who builds it, or fall back to on-device keyword commands (see the agent section).
-- **WebRTC page details:** confirm with the backend team:
-  - the signaling route (`POST /offer`?) and SDP format
-  - codec (H.264 vs VP8)
-  - the data channel name and message shape
-  - which model samples the stream, and at what rate
-  - whether a TURN server is needed at the venue
-
-  Fallback if WebRTC isn't ready: send a frame to `/detect` every ~2 s.
 - **T-Mobile Matchmaker:** get the brief from organizers. Ideas: nearest store with stock, "who else would love this?", 5G as the "instant" story.
 - **Glasses hardware:** Ray-Ban Display (in-lens screen, gated preview) or audio-only Ray-Ban Meta?

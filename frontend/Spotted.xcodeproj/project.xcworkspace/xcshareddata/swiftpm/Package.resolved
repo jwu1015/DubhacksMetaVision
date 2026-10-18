@@ -1,5 +1,5 @@
 {
-  "originHash" : "b408501302dcf55e24a6980dadc7d13be4d82a1ca16a2ae336ca00ea01a66f3a",
+  "originHash" : "f0a868e483be22c0007c9934af217fac28c2cb9bd991fe3824415a941a9b5f6a",
   "pins" : [
     {
       "identity" : "client-sdk-swift",
@@ -26,15 +26,6 @@
       "state" : {
         "revision" : "0bd369298eef6a980ad0bdb6c8a5502f2c02a08c",
         "version" : "1.0.1"
-      }
-    },
-    {
-      "identity" : "webrtc",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stasel/WebRTC",
-      "state" : {
-        "revision" : "44f36788497f701bc8c0306de3a1c2511d56019d",
-        "version" : "155.0.0"
       }
     },
     {

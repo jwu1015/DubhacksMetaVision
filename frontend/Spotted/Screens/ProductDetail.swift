@@ -22,7 +22,7 @@ struct ProductDetail: View {
         return ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 0) {
-                    hero(image: search.bestMatch?.imageURL ?? look.cutoutURL ?? "")
+                    hero(image: search.bestMatch?.imageURL ?? look.cropURL ?? "")
 
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -127,19 +127,12 @@ struct ProductDetail: View {
             }
             VerdictCard(insight: search.priceInsight, price: search.bestMatch?.price)
         case .dupes:
-            if search.isAvailable(.shopping) {
-                listingSection(search.dupes, noun: search.dupes.count == 1 ? "similar item" : "similar items",
-                               empty: "No similar items found")
-            }
+            listingSection(search.dupes, noun: search.dupes.count == 1 ? "similar item" : "similar items",
+                           empty: "No similar items found")
         case .used:
-            if search.isAvailable(.ebay) {
-                listingSection(search.used,
-                               noun: search.used.count == 1 ? "pre-owned listing" : "pre-owned listings",
-                               empty: "No pre-owned listings found")
-            }
-        }
-        ForEach(ProductSource.searchable.filter { !search.isAvailable($0) }, id: \.self) { source in
-            UnavailableSourceCard(source: source, onRetry: app.retrySearch)
+            listingSection(search.used,
+                           noun: search.used.count == 1 ? "pre-owned listing" : "pre-owned listings",
+                           empty: "No pre-owned listings found")
         }
     }
 
@@ -338,57 +331,10 @@ struct PriceRangeBar: View {
     }
 }
 
-/// Partial results: a source that timed out shows as unavailable, never as empty.
-struct UnavailableSourceCard: View {
-    let source: ProductSource
-    let onRetry: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Icon(name: "icon-timeout", size: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(source.displayName)
-                    .font(.spottedCallout)
-                    .foregroundStyle(.labelPrimary)
-                Text("Unavailable right now")
-                    .font(.spottedFootnote)
-                    .foregroundStyle(.labelSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: onRetry) {
-                HStack(spacing: 6) {
-                    Icon(name: "icon-retry", size: 16)
-                    Text("Retry")
-                        .font(.spottedCallout)
-                        .foregroundStyle(.labelPrimary)
-                }
-                .padding(.leading, 14)
-                .padding(.trailing, 16)
-                .frame(height: 44)
-                .background(.white.opacity(0.12), in: Capsule())
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityLabel("Retry \(source.displayName)")
-        }
-        .padding(.leading, 16)
-        .padding(.trailing, 12)
-        .padding(.vertical, 12)
-        .background(.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-        )
-    }
-}
-
 #Preview("03 · Product Detail") {
     let app = AppState()
-    app.show(.matched)
+    app.selectedUID = MockData.chair.uid
+    app.scan = .matched(MockData.chairResults, MockData.search)
     return ProductDetail().environment(app)
 }
 
-#Preview("03b · Dupes & Used") {
-    let app = AppState()
-    app.show(.usedTimeout)
-    return ProductDetail().environment(app)
-}

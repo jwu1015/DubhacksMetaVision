@@ -7,9 +7,9 @@ final class TapOutsideTests: SpottedUITestCase {
     }
 
     func testProductCardClosesOnFeedTapButNotOnCardTap() {
-        launch(frame: "matched")
+        launch()
+        openChairCard()
         let add = app.buttons["Add to cart"]
-        XCTAssertTrue(add.waitForExistence(timeout: 5))
 
         // A tap on the card itself (its price range line): stays open.
         app.staticTexts["typical $899–$1,349"].tap()
@@ -22,18 +22,13 @@ final class TapOutsideTests: SpottedUITestCase {
     }
 
     func testListeningSheetClosesOnTapAbove() {
-        launch(frame: "listening")
+        launch()
+        let talk = app.buttons["Talk to Spotted"].firstMatch
+        XCTAssertTrue(talk.waitForExistence(timeout: 5))
+        talk.tap()
         let stop = app.buttons["Stop listening"]
         XCTAssertTrue(stop.waitForExistence(timeout: 5))
         tap(0.5, 0.15)
         XCTAssertTrue(stop.waitForNonExistence(timeout: 3))
-    }
-
-    func testCaptureCardClosesOnEmptySpaceTap() {
-        launch(frame: "captureCard")
-        XCTAssertTrue(app.staticTexts["Price check · arc lamp"].waitForExistence(timeout: 5))
-        // Between "Not this one" and the tab bar.
-        tap(0.5, 0.845)
-        XCTAssertTrue(app.staticTexts["Look at something and ask"].waitForExistence(timeout: 3))
     }
 }
