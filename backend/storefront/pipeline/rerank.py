@@ -1,6 +1,6 @@
 """W3: re-rank search results by CLIP similarity between the cutout and each thumbnail.
 
-    python rerank.py <cutout_url> fixtures/products_raw_lamp.json [--fixture]
+    python -m storefront.pipeline.rerank <cutout_url> fixtures/products_raw_lamp.json [--fixture]
 
 --fixture answers /embed from fixtures/embed_service_*.json instead of calling a service.
 rerank() never raises: if /embed fails in any way, products come back in input order, unscored.
@@ -16,11 +16,10 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel
 
-import config
-import net
-from models import Product
+from storefront import config, net
+from storefront.models import Product
 
-log = logging.getLogger("gtl")
+log = logging.getLogger("storefront")
 
 # The CLIP service. Not MODEL_SERVICE_URL: that is the segmentation server, which has no /embed.
 EMBED_URL = os.getenv("EMBED_SERVICE_URL", "").rstrip("/")

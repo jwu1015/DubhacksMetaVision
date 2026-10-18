@@ -1,6 +1,6 @@
 """W4: where to buy it. Google Shopping and Amazon through OpenWeb Ninja (or SerpAPI), searched with Claude's queries.
 
-    python search.py <public_image_url> fixtures/item_lamp.json [--out products.json]
+    python -m storefront.pipeline.search <public_image_url> fixtures/item_lamp.json [--out products.json]
 
 Per item: Shopping for the item's first 2 search queries (Claude writes them in vision.py, most specific
 first; the SAM label when Claude didn't describe the item) and Amazon for the first, all at once. Amazon also
@@ -34,12 +34,11 @@ from contextlib import suppress
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import config
-import match
-import net
-from models import Item, Product
+from storefront import config, net
+from storefront.models import Item, Product
+from storefront.pipeline import match
 
-log = logging.getLogger("gtl.search")
+log = logging.getLogger("storefront.search")
 # httpx logs every request URL at INFO, and SerpAPI takes api_key as a URL parameter.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 

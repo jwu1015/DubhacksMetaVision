@@ -1,4 +1,4 @@
-"""Tests for webrtc.py, and a stand-in for the iPhone app. No GPU, no Cloudflare: both peers run in
+"""Tests for rtc/legacy_webrtc.py, and a stand-in for the iPhone app. No GPU, no Cloudflare: both peers run in
 this process and connect over localhost; tracking is the fake tracking server, Cloudflare is mocked.
 """
 import asyncio
@@ -13,17 +13,23 @@ from unittest import mock
 
 import av
 import httpx
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCRtpSender, RTCSessionDescription
+from aiortc import (
+    MediaStreamTrack,
+    RTCPeerConnection,
+    RTCRtpSender,
+    RTCSessionDescription,
+)
 from aiortc.contrib.media import MediaPlayer
 from aiortc.mediastreams import MediaStreamError
 from fastapi import FastAPI
 
-import config
-import stream
-import webrtc
-from stream import Stream
 from fakes.tracking import fake_server, make_video
-from tracker import Tracker
+from storefront import config
+from storefront.api import viewer
+from storefront.live import stream
+from storefront.live.stream import Stream
+from storefront.live.tracker import Tracker
+from storefront.rtc import legacy_webrtc as webrtc
 
 PHONE_SIZE = (504, 896)  # the glasses' portrait frames, as the app sends them
 PHONE_FPS = 15
@@ -235,7 +241,7 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
                     return await self.handler(request)
                 ice = self.ice(handler)
                 with mock.patch.object(webrtc, "MINT_TIMEOUT_S", 0.05), \
-                        self.assertLogs("gtl.webrtc", logging.WARNING) as logs:
+                        self.assertLogs("storefront.webrtc", logging.WARNING) as logs:
                     self.assertEqual(await ice.get(), [webrtc.STUN])
                     self.now += 29
                     self.assertEqual(await ice.get(), [webrtc.STUN])  # no new mint for 30s
@@ -253,11 +259,11 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
         await ice.get()
         self.now += 2.5 * 3600  # half an hour left
         self.replies = [503]
-        with self.assertLogs("gtl.webrtc", logging.WARNING):
+        with self.assertLogs("storefront.webrtc", logging.WARNING):
             self.assertEqual(await ice.get(), USABLE)
         self.now += 0.5 * 3600 + 1  # expired, and Cloudflare still down
         self.replies = [503]
-        with self.assertLogs("gtl.webrtc", logging.WARNING):
+        with self.assertLogs("storefront.webrtc", logging.WARNING):
             self.assertEqual(await ice.get(), [webrtc.STUN])
         self.assertEqual(len(self.requests), 3)
 
@@ -271,7 +277,7 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
             self.replies = [httpx.ConnectError("refused cf-api-token-secret")]
             self.now += 60
             await ice.get()
-        with self.assertLogs("gtl", logging.DEBUG) as ours, self.assertLogs("httpx", logging.DEBUG) as httpx_logs:
+        with self.assertLogs("storefront", logging.DEBUG) as ours, self.assertLogs("httpx", logging.DEBUG) as httpx_logs:
             await run()
         text = "\n".join(ours.output + httpx_logs.output)
         self.assertIn("minted in", text)
@@ -283,7 +289,7 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
                                  TURN_URLS=["turn:turn.example:3478?transport=udp", "turn:turn.example:oops",
                                             "turn:turn.example:53?transport=udp"]):
             ice = self.ice()
-            with self.assertLogs("gtl.webrtc", logging.WARNING) as logs:
+            with self.assertLogs("storefront.webrtc", logging.WARNING) as logs:
                 servers = await ice.get()
                 await ice.get()
         self.assertEqual(servers, [webrtc.STUN, {"urls": ["turn:turn.example:3478?transport=udp"],
@@ -295,7 +301,7 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
     async def test_nothing_configured_is_stun_only_with_one_warning(self):
         with mock.patch.multiple(webrtc, CF_TURN_KEY_ID="", CF_TURN_KEY_API_TOKEN=""):
             ice = self.ice()
-            with self.assertLogs("gtl.webrtc", logging.WARNING) as logs:
+            with self.assertLogs("storefront.webrtc", logging.WARNING) as logs:
                 self.assertEqual(await ice.get(), [{"urls": ["stun:stun.cloudflare.com:3478"]}])
                 self.assertEqual(await ice.get(), [webrtc.STUN])
             self.assertEqual(ice.mode, "STUN only")
@@ -374,7 +380,7 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         app = FastAPI()
-        app.include_router(stream.router)
+        app.include_router(viewer.router)
         app.include_router(webrtc.router)
         self.http = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://backend")
         self.clients: list[PhoneClient] = []
@@ -509,14 +515,14 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
     async def test_select_without_a_hook_or_with_a_failing_one(self):
         phone = await self.phone()
         await phone.detections()
-        with self.assertLogs("gtl.webrtc", logging.INFO) as logs:
+        with self.assertLogs("storefront.webrtc", logging.INFO) as logs:
             phone.select("t1")
             await until(lambda: any("no select handler" in line for line in logs.output))
 
         async def broken(oid):
             raise RuntimeError("look failed")
         webrtc.select_handler = broken
-        with self.assertLogs("gtl.webrtc", logging.ERROR) as logs:
+        with self.assertLogs("storefront.webrtc", logging.ERROR) as logs:
             phone.select("t2")
             await until(lambda: logs.records)
         self.assertIn("select t2 failed", logs.output[0])

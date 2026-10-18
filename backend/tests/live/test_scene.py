@@ -5,10 +5,10 @@ import unittest
 import numpy as np
 from PIL import Image, ImageFilter
 
-import scene
-from models import BBox
-from scene import Scene, centeredness, sharpness
-from tracker import TrackedObject, TrackResult
+from storefront.live import scene
+from storefront.live.scene import Scene, centeredness, sharpness
+from storefront.live.tracker import TrackedObject, TrackResult
+from storefront.models import BBox
 
 CENTER = BBox(x=0.4, y=0.4, w=0.2, h=0.2)
 LEFT = BBox(x=0.0, y=0.4, w=0.2, h=0.2)

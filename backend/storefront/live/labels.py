@@ -4,7 +4,7 @@ the segmentation server on 18 Oct; the server now only takes labels).
 tracker.py asks before starting a session, whenever SAM_CATEGORIES is empty; the session starts once
 the labels are back.
 
-    python labels.py fixtures/lamp_room.jpg "furniture and home decor"
+    python -m storefront.live.labels fixtures/lamp_room.jpg "furniture and home decor"
 """
 import asyncio
 import logging
@@ -14,10 +14,10 @@ import sys
 from PIL import Image
 from pydantic import BaseModel
 
-import config
-import vlm
+from storefront import config
+from storefront.pipeline import vlm
 
-log = logging.getLogger("gtl.labels")
+log = logging.getLogger("storefront.labels")
 
 MAX_LABELS = int(os.getenv("MAX_LABELS", "12"))
 TIMEOUT_S = 10.0  # both attempts; the session waits on this, so fail fast: the category is the fallback

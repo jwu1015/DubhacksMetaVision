@@ -3,7 +3,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import cart
+from storefront.api import cart
 
 
 def product(title="Mid-Century Tripod Floor Lamp", store="West Elm", price=349.0, rank=0):

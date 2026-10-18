@@ -1,42 +1,20 @@
-"""Routes, static uploads, and the Look on a tracked object.
-
-    uvicorn main:app --reload --port 8000 --timeout-graceful-shutdown 1        (from backend/)
-
-(--timeout-graceful-shutdown 1: an open projector page streams forever, which would otherwise block
-Ctrl+C and --reload.)
+"""Looks: what a tracked object is and where to buy it. The crop comes from the object's best frame in
+scene memory; Claude describes it, then the stores are searched on Claude's queries. Each step goes out
+as a "look" event on the stream.
 """
 import asyncio
-import json
 import logging
 import time
 import uuid
 from collections.abc import Awaitable
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import contextmanager
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from livekit import api as livekit_api
+from storefront import config
+from storefront.live import prefetch, stream
+from storefront.models import Capture, DetectResponse, Item, SearchResponse
+from storefront.pipeline import crop, pricing, rank, rerank, search, vision
 
-import cart
-import config
-import crop
-import net
-import prefetch
-import pricing
-import rank
-import rerank
-import search
-import stream
-import vision
-import webrtc
-from models import (
-    Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse, Item, Product,
-    SearchResponse, VoiceTokenRequest, VoiceTokenResponse,
-)
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("gtl")
+log = logging.getLogger("storefront.looks")
 
 captures: dict[str, Capture] = {}
 # capture -> the live-stream object it looked at, so the projector can highlight that box
@@ -55,25 +33,6 @@ def timed(timing: dict[str, int], key: str):
         yield
     finally:
         timing[key] = ms_since(t0)
-
-
-def fixture(name: str):
-    return json.loads((config.FIXTURES / name).read_text().replace("__BASE__", config.PUBLIC_BASE_URL))
-
-
-async def model_service_ok(timeout: float = 3.0) -> bool:
-    if not config.MODEL_SERVICE_URL:
-        return False
-    try:
-        r = await net.client().get(
-            f"{config.MODEL_SERVICE_URL}/health", timeout=timeout,
-            headers=config.segmentation_headers(), follow_redirects=False,  # no login-page redirects
-        )
-        body = r.json()
-        # Baptiste's SAM server answers {"status": "ok"}; the spec's model service {"ok": true}.
-        return r.status_code == 200 and (body.get("ok") is True or body.get("status") == "ok")
-    except Exception:  # unreachable, timeout, bad JSON: all just mean "not ok"
-        return False
 
 
 def announce(cap: Capture, step: str, **extra):
@@ -200,109 +159,3 @@ def background_look(track_id: int) -> prefetch.Background | None:
         return await search_item(item, cutout)
 
     return prefetch.Background(describe, asyncio.create_task(find()))
-
-
-async def warm_up():
-    """Make the first real request as fast as later ones: one call per Claude stage (vision, rank) so each
-    connection is open and the API has prepared its output schema (about a cent in total)."""
-    if not config.WARMUP:
-        return
-    item = Item.model_validate(fixture("item_lamp.json"))
-    products = [Product.model_validate(p) for p in fixture("products_ranked_lamp.json")]
-    calls = [("vision", vision.detect((config.FIXTURES / "lamp_room.jpg").read_bytes())),
-             ("rank", rank.choose(item, products, pricing.compute_price_insight(products)))]
-    for name, call in calls:
-        t0 = time.perf_counter()
-        try:
-            await call
-            log.info("warm-up: %s call %dms", name, ms_since(t0))
-        except Exception as e:
-            log.warning("warm-up: %s call failed: %r", name, e)
-
-
-# ---------- app ----------
-
-config.UPLOADS.mkdir(exist_ok=True)
-config.LOGS.mkdir(exist_ok=True)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # In the background, so the server accepts requests right away: wake the segmentation server
-    # (no cold start on the first request), warm up our own stages, and get TURN credentials (the
-    # phone's first /ice-servers is then fast).
-    background = [asyncio.create_task(model_service_ok(timeout=90.0)), asyncio.create_task(warm_up()),
-                  asyncio.create_task(webrtc.phones.ice.get())]
-    log.info("ready: warmup=%s ICE=%s base=%s", config.WARMUP, webrtc.phones.ice.mode, config.PUBLIC_BASE_URL)
-    yield
-    for task in background + list(search_tasks.values()):
-        task.cancel()
-    await webrtc.close()      # the phone's connection
-    await stream.live.stop()  # deletes the tracking session on the segmentation server
-    await net.close()
-
-
-app = FastAPI(title="Get the Look backend", lifespan=lifespan)
-app.mount("/uploads", StaticFiles(directory=config.UPLOADS), name="uploads")
-app.include_router(cart.router)
-
-
-@app.post("/look/{track_id}", response_model=DetectResponse, dependencies=[Depends(stream.local_only)])
-async def look_route(track_id: int):
-    """Look at a tracked object from this laptop (the phone does it over WebRTC)."""
-    resp = await look(track_id)
-    if resp is None:
-        raise HTTPException(404, f"the stream isn't tracking object {track_id}")
-    return resp
-
-
-@app.post("/voice/token", response_model=VoiceTokenResponse, status_code=201)
-async def voice_token_route(req: VoiceTokenRequest | None = None):
-    """The phone's ticket to the voice assistant (voice.py), in LiveKit's standard token-endpoint format,
-    so the app can use its SDK's endpoint token source. Every call opens a new room: LiveKit dispatches
-    the agent when a room is created."""
-    if not (config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET):
-        raise HTTPException(503, "voice isn't set up: LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are unset")
-    req = req or VoiceTokenRequest()
-    room = "spotted-" + uuid.uuid4().hex[:8]
-    token = (livekit_api.AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
-             .with_identity(req.participant_identity or "phone-" + uuid.uuid4().hex[:6])
-             .with_name(req.participant_name or "Spotted user")
-             .with_grants(livekit_api.VideoGrants(room_join=True, room=room))
-             .with_room_config(livekit_api.RoomConfiguration(
-                 agents=[livekit_api.RoomAgentDispatch(agent_name=config.VOICE_AGENT)])))
-    log.info("voice: token for room %s", room)
-    return VoiceTokenResponse(server_url=config.LIVEKIT_URL, participant_token=token.to_jwt())
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health_route():
-    return HealthResponse(ok=True, model_service=await model_service_ok(),
-                          webrtc_sessions=1 if webrtc.phones.current else 0, scene_memory=stream.live.running,
-                          voice=bool(config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET))
-
-
-# Stand-in until checkout lands: "pays" instantly and shows the success page.
-@app.post("/checkout", response_model=CheckoutResponse)
-async def checkout_route(req: CheckoutRequest):
-    return CheckoutResponse(checkout_url=f"{config.PUBLIC_BASE_URL}/checkout/success")
-
-
-@app.get("/checkout/success", response_class=HTMLResponse)
-async def checkout_success_route():
-    return ("<meta name=viewport content='width=device-width'>"
-            "<h1 style='font-family:sans-serif;text-align:center;margin-top:40vh'>Order placed!</h1>")
-
-
-# The live stream (stream.py): the projector page at /stream/viewer, its video and its events.
-app.include_router(stream.router)
-# The phone's live video over WebRTC (webrtc.py): GET /ice-servers, POST /offer. Tapping a hotspot is a
-# Look (its DetectResponse isn't needed: the steps go to the phone and the projector as "look" events).
-app.include_router(webrtc.router)
-webrtc.select_handler = look
-# Instant labels on the stream's objects, and background Looks so a pick shows results right away
-# (prefetch.py). A purge (pause, camera switch, disconnect) forgets them with scene memory.
-stream.live.on_objects = prefetch.observe
-stream.live.object_fields = prefetch.fields
-stream.live.on_purge = prefetch.reset
-prefetch.start_look = background_look

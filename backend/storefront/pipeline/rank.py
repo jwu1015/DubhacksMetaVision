@@ -1,6 +1,6 @@
 """W5: Claude picks the best match, dupes and used options; Python checks every pick.
 
-    python rank.py fixtures/item_lamp.json fixtures/products_ranked_lamp.json
+    python -m storefront.pipeline.rank fixtures/item_lamp.json fixtures/products_ranked_lamp.json
 
 The model only picks products (by their id in the prompt) and writes words. Every price, score,
 saving and verdict comes from our own Product data, and any pick that fails a check falls back
@@ -17,13 +17,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-import pricing
-import search
-import vlm
-from match import FOUND_SCORE  # the match score at which a result counts as the item itself
-from models import Item, PriceInsight, Product, SearchResponse
+from storefront.models import Item, PriceInsight, Product, SearchResponse
+from storefront.pipeline import pricing, search, vlm
+from storefront.pipeline.match import (
+    FOUND_SCORE,  # the match score at which a result counts as the item itself
+)
 
-log = logging.getLogger("gtl")
+log = logging.getLogger("storefront")
 
 BUDGET_S = 4.0                # both attempts together; /search must finish in 5s
 SHOW_NEW, SHOW_USED = 12, 3   # products sent to Claude, in re-ranked order; list index = id
@@ -285,7 +285,7 @@ def build(item: Item, products: list[Product], insight: PriceInsight, picks: Pic
 
 
 async def choose(item: Item, products: list[Product], insight: PriceInsight) -> SearchResponse:
-    """Best match, dupes and used picks, verdict filled in. main.py sets capture_id and timing_ms."""
+    """Best match, dupes and used picks, verdict filled in. looks.py sets capture_id and timing_ms."""
     if not products:
         return SearchResponse(capture_id="", best_match=None, dupes=[], used=[], price_insight=insight,
                               spoken_summary=NOT_FOUND, timing_ms={})

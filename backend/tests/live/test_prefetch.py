@@ -10,17 +10,12 @@ import httpx
 import pytest
 from PIL import Image
 
-import crop
-import main
-import prefetch
-import rank
-import rerank
-import search
-import stream
-import vision
-import webrtc
-from models import BBox, Item, SearchResponse
-from tracker import TrackedObject, TrackResult
+from storefront import app, config
+from storefront.live import prefetch, stream
+from storefront.live.tracker import TrackedObject, TrackResult
+from storefront.models import BBox, Item, SearchResponse
+from storefront.pipeline import crop, looks, rank, rerank, search, vision
+from storefront.rtc import legacy_webrtc as webrtc
 
 FRAME = Image.new("RGB", (640, 480), "gray")
 
@@ -206,7 +201,7 @@ def test_forgetting_and_reset_stop_only_the_looks_nobody_picked(clock, monkeypat
 
 
 def test_a_purge_forgets_everything_prefetch_knows():
-    assert main.stream.live.on_purge is prefetch.reset  # main.py's wiring
+    assert app.stream.live.on_purge is prefetch.reset  # app.py's wiring
     s = stream.Stream(tracker=object())
     purged = []
     s.on_purge = lambda: purged.append(True)
@@ -214,7 +209,7 @@ def test_a_purge_forgets_everything_prefetch_knows():
     assert purged == [True]
 
 
-# ---------- background Looks through main.py ----------
+# ---------- background Looks through looks.py ----------
 
 CLAUDE_ITEM = Item(category="insulated water bottle", description="Green Owala FreeSip, lime spout cover.",
                    search_queries=["Owala FreeSip 24 oz green"])
@@ -222,12 +217,12 @@ CLAUDE_ITEM = Item(category="insulated water bottle", description="Green Owala F
 
 def files() -> set:
     """Everything under uploads/ and logs/."""
-    return {p for folder in (main.config.UPLOADS, main.config.LOGS) if folder.exists() for p in folder.rglob("*")}
+    return {p for folder in (config.UPLOADS, config.LOGS) if folder.exists() for p in folder.rglob("*")}
 
 
 @pytest.fixture
 def fakes(monkeypatch):
-    """main.py's Looks on a fresh live stream with Claude and the stores faked; object 7, a bottle, is in
+    """looks.py's Looks on a fresh live stream with Claude and the stores faked; object 7, a bottle, is in
     scene memory. Yields what the fakes were given, the "look" events, and the stores' gate: clear it to
     hold their answer. "fail": the next search fails."""
     calls = {"detect": [], "search": [], "events": [], "fail": False, "gate": asyncio.Event()}
@@ -263,7 +258,7 @@ def fakes(monkeypatch):
         monkeypatch.setattr(target, name, value)
     yield calls
     for cid in {e["capture_id"] for e in calls["events"]}:
-        for path in main.config.UPLOADS.glob(f"{cid}*"):
+        for path in config.UPLOADS.glob(f"{cid}*"):
             path.unlink()
 
 
@@ -273,14 +268,14 @@ def seen_with(look: prefetch.Background) -> prefetch.Background:
 
 
 def test_a_background_look_keeps_only_what_it_found(fakes):
-    before, captures = files(), set(main.captures)
+    before, captures = files(), set(looks.captures)
 
     async def go():
-        look = main.background_look(7)
+        look = looks.background_look(7)
         return look, await look.search
 
     look, results = asyncio.run(go())
-    assert files() == before and set(main.captures) == captures  # no capture: no photo, crop or search log
+    assert files() == before and set(looks.captures) == captures  # no capture: no photo, crop or search log
     assert fakes["events"] == []  # nothing announced
     assert look.describe.result() == CLAUDE_ITEM and results.capture_id == "" and results.spoken_summary
     [(cutout, queries, capture_id)] = fakes["search"]
@@ -293,9 +288,9 @@ def test_a_background_look_keeps_only_what_it_found(fakes):
 
 def test_a_pick_takes_the_finished_background_look_at_once(fakes):
     async def go():
-        await seen_with(main.background_look(7)).search
-        resp = await main.look(7)  # the user taps the object
-        return resp, await main.search_tasks[resp.capture_id]
+        await seen_with(looks.background_look(7)).search
+        resp = await looks.look(7)  # the user taps the object
+        return resp, await looks.search_tasks[resp.capture_id]
 
     resp, found = asyncio.run(go())
     cid, events = resp.capture_id, fakes["events"]
@@ -305,7 +300,7 @@ def test_a_pick_takes_the_finished_background_look_at_once(fakes):
     assert found.capture_id == cid and found.item.description == CLAUDE_ITEM.description
     assert events[2]["search"] == found.model_dump(mode="json")
     assert len(fakes["detect"]) == len(fakes["search"]) == 1  # neither Claude nor the stores asked again
-    assert (main.config.UPLOADS / f"{cid}_cutout.jpg").exists()  # picked: now it's a capture
+    assert (config.UPLOADS / f"{cid}_cutout.jpg").exists()  # picked: now it's a capture
     assert prefetch.seen[7].look.claimed
 
 
@@ -313,13 +308,13 @@ def test_a_pick_while_the_background_look_still_searches(fakes):
     fakes["gate"].clear()  # the stores answer when the test says so
 
     async def go():
-        await seen_with(main.background_look(7)).describe
-        resp = await main.look(7)
+        await seen_with(looks.background_look(7)).describe
+        resp = await looks.look(7)
         for _ in range(3):
             await asyncio.sleep(0)
         so_far = [e["stage"] for e in fakes["events"]]
         fakes["gate"].set()
-        return so_far, await main.search_tasks[resp.capture_id]
+        return so_far, await looks.search_tasks[resp.capture_id]
 
     so_far, found = asyncio.run(go())
     assert so_far == ["detected", "described"]  # Claude's description at once; the results when they come
@@ -332,12 +327,12 @@ def test_after_a_failed_background_search_a_pick_looks_again(fakes):
     fakes["fail"] = True
 
     async def go():
-        look = seen_with(main.background_look(7))
+        look = seen_with(looks.background_look(7))
         with pytest.raises(RuntimeError):
             await look.search
         assert prefetch.claim(7) is None
-        resp = await main.look(7)
-        return await main.search_tasks[resp.capture_id]
+        resp = await looks.look(7)
+        return await looks.search_tasks[resp.capture_id]
 
     found = asyncio.run(go())
     assert [e["stage"] for e in fakes["events"]] == ["detected", "described", "results"]

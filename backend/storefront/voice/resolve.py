@@ -1,39 +1,12 @@
-"""Voice groundwork: the pieces a voice assistant over LiveKit will build on, with no model or tools yet.
-
-- Seen follows the main server's stream events (ws /stream/events): the scene memory and the latest Look.
-- resolve() works out which scene object a spoken target means ("that lamp", "the chair I just passed").
-- phone_action() asks the phone app to act, through its RPC method "action":
-
-    payload  {"name": "add_to_cart" | "save_item" | "show_results" | "undo_last" | "start_checkout",
-              "capture_id"?, "product"? (a Product, as in SearchResponse), "tab"? ("best_match" | "dupes" | "used")}
-    answer   {"ok": true} or {"ok": false, "detail": "why, in a few words"}
-
-The worker joins each room POST /voice/token opens and follows the stream; it says nothing yet.
-
-    python voice.py start      # needs LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and main.py on :8000
-"""
-import asyncio
-import json
-import logging
+"""Which scene object a spoken target means: "that lamp", "the green couch", "the chair I just passed"."""
 import math
-import os
 import re
 import time
 from dataclasses import dataclass
 from itertools import takewhile
-from typing import Callable
 
-import websockets
-from livekit import agents, rtc
-from livekit.agents import AgentServer, ToolError, get_job_context
+from storefront import config
 
-import config  # loads backend/.env: LIVEKIT_*, ANTHROPIC_API_KEY
-
-log = logging.getLogger("gtl.voice")
-
-BACKEND = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")  # main.py, on this laptop
-RPC_TIMEOUT_S = 15.0  # an action can wait on the user (checkout opens Face ID)
-RECONNECT_S = 2.0
 MEMORY_S = 15         # the stream's scene memory keeps an object this long after it was last seen
 CLOSE = 0.15          # two objects that fit what was said and score this close: ask which, don't guess
 
@@ -221,117 +194,3 @@ def resolve(objects: list[dict], target: str, exclude=(), among=(), described: d
             and score(pool[0], now) - score(pool[1], now) < CLOSE):
         return Resolved(pool, question(pool[0], pool[1]))
     return Resolved(pool)
-
-
-class Seen:
-    """What the user is looking at, from the main server's stream events: the scene memory (the tracked
-    objects in view, then those seen in the last MEMORY_S seconds) and the latest Look (the item picked,
-    then Claude's description, then the prices). Also what the assistant last made of "that lamp", for
-    "no, the other one" and the answers to its questions."""
-
-    def __init__(self):
-        self.objects: list[dict] = []        # the scene objects, in view first
-        self.described: dict[int, str] = {}  # Claude's name and description of each object looked at
-        self.look: dict | None = None  # the Look's "detected" or "nothing" event, plus item, search, failed
-        self.look_at = 0.0             # time.monotonic() when that Look started
-        self.ranked: list[int] = []    # the objects the last look_at found, best first
-        self.tried: list[int] = []     # those looked at since, the latest last
-        self.asked: list[int] = []     # the two its question was about, until it's answered
-
-    def forget(self):
-        """The scene memory is empty: nothing seen for a while, or it was reset (a mode switch or a pause)
-        and its ids start over, so none of the old ones mean anything now."""
-        self.objects, self.described, self.ranked, self.tried, self.asked = [], {}, [], [], []
-        if self.look:
-            self.look["track_id"] = None
-
-    def update(self, ev: dict) -> str | None:
-        """Take one stream event; return what to say about it, if anything. A replayed Look happened
-        before this session, maybe long ago, so it's ignored: each conversation starts with nothing picked."""
-        kind = ev.get("type")
-        if kind == "objects":
-            self.objects = ev["objects"]
-            if not self.objects:
-                self.forget()
-        elif kind == "status" and ev["tracking"] == "stopped":
-            self.forget()
-        if kind != "look" or ev.get("replay"):
-            return None
-        stage = ev["stage"]
-        if stage in ("detected", "nothing"):
-            self.look, self.look_at = dict(ev), time.monotonic()
-        elif self.look is None or ev["capture_id"] != self.look["capture_id"]:
-            return None  # a late event of an earlier Look
-        elif stage == "described":
-            self.look["item"] = item = ev["item"]
-            if self.look.get("track_id") is not None:
-                self.described[self.look["track_id"]] = " ".join(
-                    filter(None, (item.get("category"), item.get("description"))))
-        elif stage == "results":
-            self.look["search"] = ev["search"]
-        elif stage == "failed":
-            self.look["failed"] = ev.get("message") or "failed"
-        return {"detected": ev.get("quick_phrase"), "nothing": ev.get("quick_phrase"),
-                "results": (ev.get("search") or {}).get("spoken_summary"), "failed": ev.get("message")}.get(stage)
-
-    def resolve(self, target: str, exclude=()) -> Resolved:
-        return resolve(self.objects, target, exclude, self.asked, self.described)
-
-    async def follow(self, say: Callable[[str], None]):
-        """Keep up with the main server's stream events, reconnecting whenever it restarts, until cancelled."""
-        url = "ws" + BACKEND.removeprefix("http") + "/stream/events"
-        while True:
-            try:
-                async with websockets.connect(url, max_size=2**22) as ws:
-                    log.info("voice: following %s", url)
-                    async for raw in ws:
-                        try:
-                            text = self.update(json.loads(raw))
-                        except (ValueError, KeyError, TypeError) as e:
-                            log.warning("voice: skipped an event (%r)", e)
-                            continue
-                        if text:
-                            say(text)
-            except (OSError, websockets.WebSocketException) as e:
-                log.warning("voice: no stream events from %s (%s); retrying in %ds", url, e, RECONNECT_S)
-            await asyncio.sleep(RECONNECT_S)
-
-
-async def phone_action(name: str, **args) -> dict:
-    """Ask the phone app to do something (its RPC method "action"); its answer. ToolError if it can't."""
-    room = get_job_context().room
-    phone = next((p for p in room.remote_participants.values()
-                  if p.kind == rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD), None)
-    if phone is None:
-        raise ToolError("The phone app isn't connected.")
-    try:
-        reply = await room.local_participant.perform_rpc(
-            destination_identity=phone.identity, method="action", payload=json.dumps({"name": name, **args}),
-            response_timeout=RPC_TIMEOUT_S)
-    except rtc.RpcError as e:
-        log.warning("voice: action %s failed: %s (%s)", name, e.message, e.code)
-        raise ToolError("The phone app couldn't do that.")
-    try:
-        answer = json.loads(reply) if reply else {}
-    except ValueError:
-        answer = {}
-    if not answer.get("ok", True):
-        raise ToolError(answer.get("detail") or "The phone app couldn't do that.")
-    log.info("voice: action %s done", name)
-    return answer
-
-
-server = AgentServer(num_idle_processes=1)  # one phone at a time: one warm process, not one per CPU core
-
-
-@server.rtc_session(agent_name=config.VOICE_AGENT)
-async def entry(ctx: agents.JobContext):
-    seen = Seen()
-    follower = asyncio.create_task(seen.follow(lambda text: log.info("voice: would say %r", text)))
-    ctx.add_shutdown_callback(follower.cancel)
-    await ctx.connect()
-    log.info("voice: joined room %s", ctx.room.name)
-
-
-if __name__ == "__main__":
-    agents.cli.run_app(server)

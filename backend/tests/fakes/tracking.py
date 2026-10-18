@@ -14,7 +14,7 @@ import av
 from fastapi import Body, FastAPI, HTTPException, Request
 from PIL import Image
 
-import config
+from storefront import config
 
 
 def make_video(path, seconds: float = 1.0, fps: int = 15, size: tuple[int, int] = (320, 240)) -> Path:

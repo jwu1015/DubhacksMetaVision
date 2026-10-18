@@ -9,7 +9,7 @@ What a session tracks: SAM_CATEGORIES, or with that empty, labels Claude picks (
 SAM_AUTO_CATEGORY from the session's first frame. The session isn't created until those labels are
 back, and that frame is then its first.
 
-    python tracker.py fixtures/lamp_room.jpg [more.jpg ...]   # one session, these frames, then delete it
+    python -m storefront.live.tracker fixtures/lamp_room.jpg [more.jpg ...]   # one session, these frames, then delete it
 """
 import asyncio
 import io
@@ -21,12 +21,11 @@ import httpx
 from PIL import Image
 from pydantic import BaseModel
 
-import config
-import labels
-import net
-from models import BBox
+from storefront import config, net
+from storefront.live import labels
+from storefront.models import BBox
 
-log = logging.getLogger("gtl.tracker")
+log = logging.getLogger("storefront.tracker")
 
 EDGE = 640           # frames go out 640px wide: the server resizes anyway, bigger only costs upload time
 QUALITY = 80

@@ -1,6 +1,6 @@
 """Live view: frames in, tracked boxes out, shown on the projector page.
 
-The phone's video (webrtc.py) only calls live.push_frame(img).
+The phone's video (rtc/legacy_webrtc.py) only calls live.push_frame(img).
 The tracking loop sends the newest frame to Baptiste's server, waits for the answer and repeats,
 so frames that arrive meanwhile are skipped, never queued, and the video never waits on tracking.
 Each answer goes into scene memory (scene.py) and out to the projector page (and any other subscriber)
@@ -15,7 +15,7 @@ When the stream stops or resets (pause, camera switch, disconnect), what was tra
 "objects" event with no objects says so.
 
 Also {"type": "status", "tracking": "stopped" | "starting" | "ok" | "offline"} when that changes,
-and the "look" events main.py publishes as a picked item is identified and priced:
+and the "look" events pipeline/looks.py publishes as a picked item is identified and priced:
 
     {"type": "look", "stage": "detected" | "nothing" | "described" | "results" | "failed",
      "capture_id", "track_id" (the tracked object, or null for a photo), ...}
@@ -25,21 +25,16 @@ A client that connects mid-Look gets that Look's events so far first, marked "re
 import asyncio
 import logging
 import time
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import AsyncIterator, Callable
 
-from fastapi import APIRouter, HTTPException, Request, WebSocket
-from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image
 
-import config
-from scene import Scene
-from tracker import Tracker, TrackResult, encode
+from storefront.live.scene import Scene
+from storefront.live.tracker import Tracker, TrackResult, encode
 
-log = logging.getLogger("gtl.stream")
+log = logging.getLogger("storefront.stream")
 
-STATIC = config.ROOT / "static"
 VIDEO_EDGE = 1024    # the projector page's MJPEG
 VIDEO_FPS = 15
 VIDEO_QUALITY = 75
@@ -67,7 +62,7 @@ class Stream:
         self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
         self.scene = Scene()
         self._epoch = 0  # bumps when what was tracked is purged: answers to frames sent before are dropped
-        # Set by main.py (prefetch.py): told about every tracking result and every purge, and adds fields to
+        # Set by app.py (prefetch.py): told about every tracking result and every purge, and adds fields to
         # each object sent out.
         self.on_objects: Callable[[TrackResult, Image.Image], None] | None = None
         self.object_fields: Callable[[int], dict] | None = None
@@ -241,43 +236,4 @@ class Stream:
             await asyncio.sleep(max(0.0, 1 / VIDEO_FPS - (time.monotonic() - t0)))
 
 
-# ---------- routes ----------
-
-router = APIRouter(prefix="/stream")
 live = Stream()
-
-
-def local_only(request: Request):
-    """The test routes are for this laptop only. Tunnels (ngrok, Cloudflare) connect from localhost
-    too, but add X-Forwarded-For."""
-    if not request.client or request.client.host not in ("127.0.0.1", "::1") or "x-forwarded-for" in request.headers:
-        raise HTTPException(403, "local requests only")
-
-
-@router.get("/viewer", include_in_schema=False)
-async def viewer_route():
-    return FileResponse(STATIC / "viewer.html")
-
-
-@router.get("/video.mjpg")
-async def video_route():
-    return StreamingResponse(live.mjpeg(), media_type="multipart/x-mixed-replace; boundary=frame",
-                             headers={"Cache-Control": "no-store"})
-
-
-@router.websocket("/events")
-async def events_route(ws: WebSocket):
-    """The JSON events, starting with the current state, until the client goes away."""
-    await ws.accept()
-
-    async def send_all():
-        with suppress(Exception):  # the client left mid-send
-            async for event in live.subscribe():
-                await ws.send_json(event)
-
-    sender = asyncio.create_task(send_all())
-    try:
-        while (await ws.receive())["type"] != "websocket.disconnect":
-            pass
-    finally:
-        sender.cancel()

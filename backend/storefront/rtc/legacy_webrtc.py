@@ -25,7 +25,7 @@ as stream.py's "look" event, with its track_id as "t3" too:
 
     {"type": "look", "stage": "detected" | "described" | "results" | "failed", "capture_id", "track_id": "t3",
      ...}   ("detected": label, quick_phrase, box, cutout_path; "described": item; "results": search,
-            the whole /search answer; "failed": message)
+            the whole search answer; "failed": message)
 
 One phone at a time: a new offer closes the previous connection.
 
@@ -33,34 +33,34 @@ TURN: the phone and the laptop are on different networks, so media relays throug
 service. Credentials are minted with our TURN key (CF_TURN_KEY_ID, CF_TURN_KEY_API_TOKEN) and cached;
 without a key, static TURN_URLS (comma-separated), TURN_USERNAME and TURN_CREDENTIAL; without those,
 STUN only.
-
-    python webrtc.py [--port 8004]   # then open http://localhost:8004/stream/viewer
 """
-import argparse
 import asyncio
 import itertools
 import json
 import logging
 import os
 import time
-from contextlib import asynccontextmanager
 from typing import Awaitable, Callable
 
 import httpx
-import uvicorn
-from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
+from aiortc import (
+    RTCConfiguration,
+    RTCIceServer,
+    RTCPeerConnection,
+    RTCSessionDescription,
+)
 from aiortc.mediastreams import MediaStreamError
 from aiortc.rtcicetransport import parse_stun_turn_uri
 from aiortc.sdp import SessionDescription as ParsedSDP
-from fastapi import APIRouter, FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import config  # loads backend/.env
-import net
-import stream
+from storefront import (
+    net,
+)
+from storefront.live import stream
 
-log = logging.getLogger("gtl.webrtc")
+log = logging.getLogger("storefront.webrtc")
 logging.getLogger("aioice").setLevel(logging.WARNING)  # it logs every ICE connectivity check at INFO
 
 CF_TURN_KEY_ID = os.getenv("CF_TURN_KEY_ID", "")
@@ -557,40 +557,3 @@ async def offer_route(offer: SessionDescription):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return SessionDescription(sdp=answer.sdp, type=answer.type)
-
-
-# ---------- standalone runner ----------
-
-def main():
-    p = argparse.ArgumentParser(description="Serve the WebRTC routes and the projector page alone.")
-    p.add_argument("--port", type=int, default=8004)  # 8000 main server, 8002 stream runner, 8003 fake SAM
-    p.add_argument("--host", default="127.0.0.1")
-    args = p.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        warm = asyncio.create_task(phones.ice.get())  # mint now, so the phone's first call is fast
-        log.info("webrtc: POST /offer on http://localhost:%d  viewer: http://localhost:%d/stream/viewer  "
-                 "ICE: %s  tracking: %s", args.port, args.port, phones.ice.mode,
-                 config.MODEL_SERVICE_URL or "MODEL_SERVICE_URL unset")
-        yield
-        warm.cancel()
-        await close()
-        await stream.live.stop()
-        await net.close()
-
-    app = FastAPI(title="Get the Look WebRTC", lifespan=lifespan)
-    app.include_router(stream.router)
-    app.include_router(router)
-
-    @app.get("/", include_in_schema=False)
-    async def index():
-        return RedirectResponse("/stream/viewer")
-
-    # The MJPEG response never ends on its own: give open viewers 1s, then stop (and delete the session).
-    uvicorn.run(app, host=args.host, port=args.port, timeout_graceful_shutdown=1)
-
-
-if __name__ == "__main__":
-    main()

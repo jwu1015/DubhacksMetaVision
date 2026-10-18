@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]  # backend/
 if os.getenv("STOREFRONT_DOTENV") != "0":  # the tests set 0
     load_dotenv(ROOT / ".env")
 
@@ -37,12 +37,18 @@ def segmentation_headers() -> dict[str, str]:
 ANTHROPIC_WORKSPACE_ID = os.getenv("ANTHROPIC_WORKSPACE_ID", "").strip()
 ANTHROPIC_HEADERS = {"anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID} if ANTHROPIC_WORKSPACE_ID else {}
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast
-# LiveKit Cloud, for the voice assistant (voice.py) and the phone's token for it (POST /voice/token)
+# LiveKit Cloud, for the voice agent (voice/agent.py) and the phone's token for it (POST /voice/token)
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
-VOICE_AGENT = "spotted"  # the voice agent's dispatch name: tokens from /voice/token bring it into the room
+VOICE_AGENT = "storefront"  # the voice agent's dispatch name: tokens from /voice/token bring it into the room
 
+
+def livekit_ready() -> bool:
+    return bool(LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET)
+
+
+STATIC = ROOT / "static"
 UPLOADS = ROOT / "uploads"
 LOGS = ROOT / "logs"
 FIXTURES = ROOT / "fixtures"

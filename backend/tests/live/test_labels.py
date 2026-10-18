@@ -7,8 +7,8 @@ from unittest import mock
 
 from PIL import Image
 
-import labels
-import vlm
+from storefront.live import labels
+from storefront.pipeline import vlm
 
 PHOTO = Image.new("RGB", (1024, 768), "white")
 

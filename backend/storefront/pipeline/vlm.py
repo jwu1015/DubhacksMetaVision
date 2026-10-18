@@ -22,9 +22,11 @@ import anthropic
 from PIL import Image, ImageOps
 from pydantic import BaseModel, ValidationError
 
-import config  # loads .env before the Anthropic client reads ANTHROPIC_API_KEY
+from storefront import (
+    config,  # loads .env before the Anthropic client reads ANTHROPIC_API_KEY
+)
 
-log = logging.getLogger("gtl.vlm")
+log = logging.getLogger("storefront.vlm")
 
 MODEL = "claude-haiku-5-5"
 MIN_ATTEMPT_S = 1.0  # a retry with less time left than this would only time out

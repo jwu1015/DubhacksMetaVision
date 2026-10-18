@@ -1,4 +1,4 @@
-"""Tests for voice.py and POST /voice/token. No LiveKit, no Claude, no network: the main server's stream
+"""Tests for the voice groundwork (voice/) and POST /voice/token. No LiveKit, no Claude, no network: the main server's stream
 events come from a local WebSocket server, its /look route from httpx.MockTransport, and the phone's RPC
 from a stand-in room.
 """
@@ -12,10 +12,12 @@ from fastapi.testclient import TestClient
 from livekit import api, rtc
 from livekit.agents import ToolError
 
-import config
-import main
-import voice
 from fakes.livekit import FakeLocalParticipant, FakeParticipant, FakeRoom
+from storefront import app as main
+from storefront import config
+from storefront.voice import actions, resolve
+from storefront.voice import seen as seen_module
+from storefront.voice.seen import Seen
 
 
 def look(stage, capture_id="c_1", track_id=3, **extra):
@@ -45,11 +47,11 @@ OBJECTS = {"type": "objects", "frame_idx": 9, "width": 504, "height": 896, "age_
     {"id": 5, "label": "vase", "score": 0.7, "box": {"x": 0.8, "y": 0.8, "w": 0.1, "h": 0.1}}]}
 
 
-NOW = 1792286014123  # ms: the scene memory's clock in these tests (voice.now_ms)
+NOW = 1792286014123  # ms: the scene memory's clock in these tests (resolve.now_ms)
 
 
 def setUpModule():
-    patcher = mock.patch.object(voice, "now_ms", lambda: NOW)
+    patcher = mock.patch.object(resolve, "now_ms", lambda: NOW)
     patcher.start()
     unittest.addModuleCleanup(patcher.stop)
 
@@ -65,7 +67,7 @@ def scene(*objects) -> dict:
     return {"type": "objects", "frame_idx": 42, "width": 504, "height": 896, "age_ms": 310, "objects": list(objects)}
 
 
-def ids(found: voice.Resolved) -> list[int]:
+def ids(found: resolve.Resolved) -> list[int]:
     return [o["id"] for o in found.found]
 
 
@@ -75,9 +77,9 @@ CHAIR = thing(2, "chair", 0.05, 0.40, 0.30, 0.50, ago=5, centered=0.40, seconds_
 LEFT_LAMP = thing(7, "lamp", 0.02, 0.30, 0.28, 0.30, centered=0.80)  # as far left of the center as LAMP is right
 
 
-def picked() -> voice.Seen:
+def picked() -> Seen:
     """A Seen with the lamp picked, described and priced."""
-    seen = voice.Seen()
+    seen = Seen()
     for ev in (OBJECTS, look("detected", label="lamp", quick_phrase="Lamp. Finding prices."),
                look("described", item=ITEM), look("results", search=SEARCH)):
         seen.update(ev)
@@ -86,7 +88,7 @@ def picked() -> voice.Seen:
 
 class SeenTest(unittest.TestCase):
     def test_a_look_is_followed_and_narrated(self):
-        seen = voice.Seen()
+        seen = Seen()
         self.assertIsNone(seen.update(OBJECTS))
         self.assertEqual(seen.update(look("detected", label="lamp", quick_phrase="Lamp. Finding prices.")),
                          "Lamp. Finding prices.")
@@ -98,7 +100,7 @@ class SeenTest(unittest.TestCase):
         self.assertEqual(seen.objects, [])
 
     def test_failed_and_nothing_are_said_too(self):
-        seen = voice.Seen()
+        seen = Seen()
         seen.update(look("detected", quick_phrase="Lamp. Finding prices."))
         self.assertEqual(seen.update(look("failed", message="Couldn't get prices for that one.")),
                          "Couldn't get prices for that one.")
@@ -106,13 +108,13 @@ class SeenTest(unittest.TestCase):
                          "I couldn't spot a product there.")
 
     def test_a_replayed_look_is_ignored(self):  # it's from before this conversation, maybe long before
-        seen = voice.Seen()
+        seen = Seen()
         for ev in (look("detected", quick_phrase="Lamp. Finding prices."), look("results", search=SEARCH)):
             self.assertIsNone(seen.update({**ev, "replay": True}))
         self.assertIsNone(seen.look)
 
     def test_late_events_of_an_older_look_are_ignored(self):
-        seen = voice.Seen()
+        seen = Seen()
         seen.update(look("detected", "c_old"))
         seen.update(look("detected", "c_new", quick_phrase="Sofa. Finding prices."))
         self.assertIsNone(seen.update(look("results", "c_old", search=SEARCH)))
@@ -144,88 +146,88 @@ class ResolveTest(unittest.TestCase):
                             ("throw pillow", "pillow"), ("light blue chair", "chair"),
                             ("lamp next to the couch", "lamp"),
                             ("that mirror over there", "mirror"), ("the bed I just passed", "bed")):
-            found = voice.resolve(objects, said)
+            found = resolve.resolve(objects, said)
             self.assertEqual((found.found[0]["label"], found.say), (label, None), said)
         # A tracker label of another kind counts as its kind: a floor lamp is a lamp.
         objects = [thing(1, "floor lamp", 0.1, 0.1, 0.1, 0.1), thing(2, "couch", 0.8, 0.8, 0.1, 0.1)]
         for said, picked_id in (("light", 1), ("lamp", 1), ("floor lamp", 1), ("sofa", 2), ("couch", 2)):
-            self.assertEqual(ids(voice.resolve(objects, said)), [picked_id], said)
+            self.assertEqual(ids(resolve.resolve(objects, said)), [picked_id], said)
 
     def test_that_is_what_is_at_the_center_of_the_view(self):
         objects = OBJECTS["objects"]  # an event from before scene memory: no in_view, centered or times
         for said in ("", "this", "that one", "what's this thing"):  # the lamp and the sofa cover the center:
-            found = voice.resolve(objects, said)                     # the lamp, in front
+            found = resolve.resolve(objects, said)                     # the lamp, in front
             self.assertEqual((ids(found)[0], found.say), (3, None), said)
-        self.assertEqual(ids(voice.resolve(objects[2:], "")), [5])  # nothing covers it: the nearest
-        self.assertEqual(ids(voice.resolve(objects, "sofa")), [4])
-        found = voice.resolve([CHAIR], "")  # only what's in view counts
+        self.assertEqual(ids(resolve.resolve(objects[2:], "")), [5])  # nothing covers it: the nearest
+        self.assertEqual(ids(resolve.resolve(objects, "sofa")), [4])
+        found = resolve.resolve([CHAIR], "")  # only what's in view counts
         self.assertEqual((found.found, found.say), ([], "Nothing's in view right now."))
 
     def test_an_out_of_view_chair(self):
         for said in ("chair", "what about the chair I just passed", "the one I just passed", "the armchair before"):
-            found = voice.resolve([LAMP, CHAIR], said)
+            found = resolve.resolve([LAMP, CHAIR], said)
             self.assertEqual((ids(found)[0], found.say), (2, None), said)
-        self.assertEqual(ids(voice.resolve([LAMP, CHAIR], "lamp")), [4])
+        self.assertEqual(ids(resolve.resolve([LAMP, CHAIR], "lamp")), [4])
         # A chair in view, at the edge: "chair" is that one, "the chair I passed" the other.
         edge = thing(8, "chair", 0.0, 0.4, 0.1, 0.2, centered=0.2)
-        self.assertEqual(ids(voice.resolve([edge, LAMP, CHAIR], "chair")), [8, 2])
-        self.assertEqual(ids(voice.resolve([edge, LAMP, CHAIR], "the chair I passed"))[0], 2)
+        self.assertEqual(ids(resolve.resolve([edge, LAMP, CHAIR], "chair")), [8, 2])
+        self.assertEqual(ids(resolve.resolve([edge, LAMP, CHAIR], "the chair I passed"))[0], 2)
 
     def test_two_lamps_ask_which(self):
-        found = voice.resolve([LAMP, LEFT_LAMP, CHAIR], "how much is that lamp")
+        found = resolve.resolve([LAMP, LEFT_LAMP, CHAIR], "how much is that lamp")
         self.assertEqual((ids(found), found.say), ([4, 7], "The lamp on the left or the right?"))
         for answer, picked_id in (("the left one", 7), ("left", 7), ("the right one", 4)):
-            found = voice.resolve([LAMP, LEFT_LAMP, CHAIR], answer, among=[4, 7])
+            found = resolve.resolve([LAMP, LEFT_LAMP, CHAIR], answer, among=[4, 7])
             self.assertEqual((ids(found)[0], found.say), (picked_id, None), answer)
-        self.assertEqual(ids(voice.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp on the left"))[0], 7)
-        self.assertEqual(ids(voice.resolve([LAMP, LEFT_LAMP, CHAIR], "the lamp right there"))[0], 4)  # not "right"
+        self.assertEqual(ids(resolve.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp on the left"))[0], 7)
+        self.assertEqual(ids(resolve.resolve([LAMP, LEFT_LAMP, CHAIR], "the lamp right there"))[0], 4)  # not "right"
 
         high, low = thing(5, "lamp", 0.4, 0.0, 0.2, 0.3), thing(6, "lamp", 0.42, 0.7, 0.2, 0.3)
-        self.assertEqual(voice.resolve([high, low], "lamp").say, "The higher lamp or the lower one?")
-        self.assertEqual(ids(voice.resolve([high, low], "the bottom one", among=[5, 6]))[0], 6)
+        self.assertEqual(resolve.resolve([high, low], "lamp").say, "The higher lamp or the lower one?")
+        self.assertEqual(ids(resolve.resolve([high, low], "the bottom one", among=[5, 6]))[0], 6)
 
         passed = thing(9, "lamp", 0.4, 0.3, 0.2, 0.3, ago=1)  # just out of view, against one at the edge in view
         edge = thing(10, "lamp", 0.95, 0.3, 0.05, 0.3, centered=0.0)
-        found = voice.resolve([edge, passed], "lamp")
+        found = resolve.resolve([edge, passed], "lamp")
         self.assertEqual((ids(found), found.say), ([10, 9], "The lamp in front of you, or the one you passed?"))
-        self.assertEqual(ids(voice.resolve([edge, passed], "the one I passed", among=[10, 9]))[0], 9)
-        self.assertEqual(ids(voice.resolve([edge, passed], "the one in front", among=[10, 9]))[0], 10)
+        self.assertEqual(ids(resolve.resolve([edge, passed], "the one I passed", among=[10, 9]))[0], 9)
+        self.assertEqual(ids(resolve.resolve([edge, passed], "the one in front", among=[10, 9]))[0], 10)
 
         older = thing(11, "lamp", 0.4, 0.3, 0.2, 0.3, ago=2.5)
-        found = voice.resolve([LAMP, passed, older], "lamp", exclude=[4])
+        found = resolve.resolve([LAMP, passed, older], "lamp", exclude=[4])
         self.assertEqual((ids(found), found.say), ([9, 11], "The lamp you just passed, or the one before?"))
-        self.assertEqual(ids(voice.resolve([LAMP, passed, older], "the one before", among=[9, 11]))[0], 11)
-        self.assertEqual(ids(voice.resolve([LAMP, passed, older], "the lamp I just passed", exclude=[4]))[0], 9)
+        self.assertEqual(ids(resolve.resolve([LAMP, passed, older], "the one before", among=[9, 11]))[0], 11)
+        self.assertEqual(ids(resolve.resolve([LAMP, passed, older], "the lamp I just passed", exclude=[4]))[0], 9)
 
         vase = thing(12, "vase", 0.58, 0.45, 0.1, 0.1, centered=0.82)  # "that": two things as near the center
-        self.assertEqual(voice.resolve([LAMP, vase, LEFT_LAMP], "").say, "The vase or the lamp?")
-        for found in (voice.resolve([LAMP, LEFT_LAMP], "lamp"), voice.resolve([LAMP, vase], "")):
+        self.assertEqual(resolve.resolve([LAMP, vase, LEFT_LAMP], "").say, "The vase or the lamp?")
+        for found in (resolve.resolve([LAMP, LEFT_LAMP], "lamp"), resolve.resolve([LAMP, vase], "")):
             self.assertShort(found.say)
 
     def test_no_question_when_one_is_clearly_it(self):
         center = thing(5, "lamp", 0.4, 0.2, 0.2, 0.5, centered=0.3)  # covering the center now
-        self.assertEqual(voice.resolve([LAMP, center], "lamp"), voice.Resolved([center, LAMP]))
+        self.assertEqual(resolve.resolve([LAMP, center], "lamp"), resolve.Resolved([center, LAMP]))
         far = thing(6, "lamp", 0.0, 0.0, 0.1, 0.1, centered=0.1)
-        self.assertEqual(voice.resolve([LAMP, far], "lamp"), voice.Resolved([LAMP, far]))
+        self.assertEqual(resolve.resolve([LAMP, far], "lamp"), resolve.Resolved([LAMP, far]))
         sofa = thing(7, "sofa", 0.0, 0.3, 1.0, 0.7, centered=1.0)  # the lamp in front of it covers the center too
-        self.assertEqual(voice.resolve([sofa, center], ""), voice.Resolved([center, sofa]))
+        self.assertEqual(resolve.resolve([sofa, center], ""), resolve.Resolved([center, sofa]))
         stale = thing(8, "lamp", 0.4, 0.3, 0.2, 0.3, ago=4)
-        self.assertEqual(voice.resolve([LAMP, stale], "lamp").found, [LAMP, stale])
+        self.assertEqual(resolve.resolve([LAMP, stale], "lamp").found, [LAMP, stale])
 
     def test_the_other_one(self):
-        found = voice.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp", exclude=[7])
+        found = resolve.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp", exclude=[7])
         self.assertEqual((ids(found), found.say), ([4], None))
-        found = voice.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp", exclude=[7, 4])
+        found = resolve.resolve([LAMP, LEFT_LAMP, CHAIR], "lamp", exclude=[7, 4])
         self.assertEqual((found.found, found.say), ([], "That's the only lamp I've seen."))
-        self.assertEqual(voice.resolve([LAMP], "", exclude=[4]).say, "Nothing else is in view.")
+        self.assertEqual(resolve.resolve([LAMP], "", exclude=[4]).say, "Nothing else is in view.")
 
     def test_what_it_looks_like_from_claudes_descriptions(self):
         described = {4: "table lamp Green ceramic lamp with a white shade.", 7: "floor lamp Brass arc floor lamp."}
         for said, picked_id in (("green lamp", 4), ("the floor lamp", 7), ("brass one", 7), ("the green one", 4)):
-            found = voice.resolve([LAMP, LEFT_LAMP], said, described=described)
+            found = resolve.resolve([LAMP, LEFT_LAMP], said, described=described)
             self.assertEqual((ids(found)[0], found.say), (picked_id, None), said)
-        self.assertIsNotNone(voice.resolve([LAMP, LEFT_LAMP], "red lamp", described=described).say)  # unknown: ask
-        self.assertIsNotNone(voice.resolve([LAMP, LEFT_LAMP], "green lamp").say)  # nothing to check it against
+        self.assertIsNotNone(resolve.resolve([LAMP, LEFT_LAMP], "red lamp", described=described).say)  # unknown: ask
+        self.assertIsNotNone(resolve.resolve([LAMP, LEFT_LAMP], "green lamp").say)  # nothing to check it against
 
     def test_nothing_matches(self):
         for objects, said, say in (([LAMP, CHAIR], "mirror", "No mirror in view or seen recently."),
@@ -233,7 +235,7 @@ class ResolveTest(unittest.TestCase):
                                    ([LAMP], "couch", "No couch in view or seen recently."),
                                    ([], "", "Nothing's in view right now."),
                                    ([], "lamp", "No lamp in view or seen recently.")):
-            found = voice.resolve(objects, said)
+            found = resolve.resolve(objects, said)
             self.assertEqual((found.found, found.say), ([], say), said)
             self.assertShort(say)
 
@@ -253,8 +255,8 @@ class FollowTest(unittest.IsolatedAsyncioTestCase):
         said: list[str] = []
         async with websockets.serve(serve, "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
-            with mock.patch.object(voice, "BACKEND", f"http://127.0.0.1:{port}"):
-                seen = voice.Seen()
+            with mock.patch.object(seen_module, "BACKEND", f"http://127.0.0.1:{port}"):
+                seen = Seen()
                 follower = asyncio.create_task(seen.follow(said.append))
                 async with asyncio.timeout(5):
                     while len(said) < 2:
@@ -269,24 +271,24 @@ class ActionTest(unittest.IsolatedAsyncioTestCase):
         self.local = FakeLocalParticipant()
         self.room = FakeRoom(self.local, FakeParticipant("agent-x", rtc.ParticipantKind.PARTICIPANT_KIND_AGENT),
                              FakeParticipant("phone-1", rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD))
-        patcher = mock.patch.object(voice, "get_job_context", lambda: mock.Mock(room=self.room))
+        patcher = mock.patch.object(actions, "get_job_context", lambda: mock.Mock(room=self.room))
         patcher.start()
         self.addCleanup(patcher.stop)
 
     async def test_an_action_goes_to_the_phone(self):
-        self.assertEqual(await voice.phone_action("add_to_cart", capture_id="c_1"), {"ok": True})
+        self.assertEqual(await actions.phone_action("add_to_cart", capture_id="c_1"), {"ok": True})
         self.assertEqual(self.local.calls, [("phone-1", "action", {"name": "add_to_cart", "capture_id": "c_1"})])
 
     async def test_when_the_phone_cant(self):
         self.local.reply = json.dumps({"ok": False, "detail": "The cart is full."})
         with self.assertRaisesRegex(ToolError, "The cart is full."):
-            await voice.phone_action("add_to_cart")
+            await actions.phone_action("add_to_cart")
         self.local.reply = rtc.RpcError(rtc.RpcError.ErrorCode.UNSUPPORTED_METHOD, "no such method")
         with self.assertRaisesRegex(ToolError, "couldn't do that"):
-            await voice.phone_action("undo_last")
+            await actions.phone_action("undo_last")
         self.room.remote_participants.pop("phone-1")  # only the agent is left
         with self.assertRaisesRegex(ToolError, "isn't connected"):
-            await voice.phone_action("start_checkout")
+            await actions.phone_action("start_checkout")
 
 
 class TokenRouteTest(unittest.TestCase):
@@ -309,7 +311,7 @@ class TokenRouteTest(unittest.TestCase):
         claims = api.TokenVerifier(self.KEY, self.SECRET).verify(body["participant_token"])
         self.assertEqual(claims.identity, "phone-shiven")
         self.assertTrue(claims.video.room_join)
-        self.assertTrue(claims.video.room.startswith("spotted-"))  # our room, not the one asked for
+        self.assertTrue(claims.video.room.startswith("storefront-"))  # our room, not the one asked for
         self.assertEqual([a.agent_name for a in claims.room_config.agents], [config.VOICE_AGENT])
         other_claims = api.TokenVerifier(self.KEY, self.SECRET).verify(other["participant_token"])
         self.assertNotEqual(other_claims.video.room, claims.video.room)  # a new room each time: the agent comes

@@ -1,6 +1,6 @@
 """W1: Claude looks at the photo and returns the Item (category, description, queries, rough bbox).
 
-    python vision.py fixtures/lamp_room.jpg      # prints the Item, writes fixtures/lamp_room_box.jpg
+    python -m storefront.pipeline.vision fixtures/lamp_room.jpg      # prints the Item, writes fixtures/lamp_room_box.jpg
 """
 import asyncio
 import base64
@@ -14,10 +14,10 @@ import anthropic
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel, ValidationError
 
-import config  # loads .env so the client finds ANTHROPIC_API_KEY
-from models import BBox, Item
+from storefront import config  # loads .env so the client finds ANTHROPIC_API_KEY
+from storefront.models import BBox, Item
 
-log = logging.getLogger("gtl.vision")
+log = logging.getLogger("storefront.vision")
 
 MODEL = "claude-sonnet-5-5"
 MAX_EDGE = 1024  # resize before the call; never upscale
