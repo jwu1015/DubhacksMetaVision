@@ -25,20 +25,20 @@ struct ProfileView: View {
                         if let glasses = app.glasses {
                             GlassesConnectionRow(glasses: glasses)
                         }
-                        // Glasses mode without hardware: the phone camera stands in for the glasses.
                         Toggle(isOn: Binding(get: { app.captureMode == .glasses },
                                              set: { app.setCaptureMode($0 ? .glasses : .phone) })) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Glasses mode")
+                                Text("Stream from the glasses")
                                     .font(.spottedCallout)
                                     .foregroundStyle(.labelPrimary)
                                 Text(app.glasses?.hasGlasses == true
-                                     ? "On automatically while your glasses are connected"
-                                     : "No preview, ask by voice · uses the phone camera")
+                                     ? "Instead of the phone camera"
+                                     : "Connect your glasses first")
                                     .font(.spottedFootnote)
                                     .foregroundStyle(.labelSecondary)
                             }
                         }
+                        .disabled(app.glasses?.hasGlasses != true && app.captureMode != .glasses)
                         .tint(.accent)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)

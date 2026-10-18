@@ -41,7 +41,7 @@ struct LiveView: View {
 
     @ViewBuilder private var feed: some View {
         if let track = app.liveVideoTrack {
-            SwiftUIVideoView(track, layoutMode: .fill)
+            SwiftUIVideoView(track, layoutMode: .fill, mirrorMode: .off)
         } else {
             MockCameraFeed()
         }
@@ -74,7 +74,8 @@ struct LiveView: View {
 
     @ViewBuilder private var topBar: some View {
         HStack(alignment: .top) {
-            StatusPill(connection: app.connection, isPaused: app.isCameraPaused)
+            StatusPill(connection: app.connection, isPaused: app.isCameraPaused,
+                       isGlassesMode: app.captureMode == .glasses)
             Spacer()
             GlassIconButton(icon: "icon-pause", iconSize: 18,
                             label: app.isCameraPaused ? "Resume camera" : "Pause camera") {

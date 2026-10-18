@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "● Glasses · Live" in the top-left of the Live view.
+/// "● Glasses · Live" or "● Phone camera · Live" in the top-left of the Live view.
 struct StatusPill: View {
     let connection: AppState.Connection
     let isPaused: Bool
@@ -9,7 +9,7 @@ struct StatusPill: View {
     var body: some View {
         HStack(spacing: 8) {
             Icon(name: isLive ? "dot-live" : "dot-warning", size: 8)
-            Icon(name: "icon-glasses", size: 18)
+            Icon(name: isGlassesMode ? "icon-glasses" : "icon-camera", size: 18)
             Text(text)
                 .font(.spottedFootnote.weight(.semibold))
                 .foregroundStyle(.labelPrimary)
@@ -26,7 +26,7 @@ struct StatusPill: View {
     private var text: String {
         if isPaused { return "Camera paused" }
         switch connection {
-        case .live: return isGlassesMode ? "Glasses · Connected" : "Glasses · Live"
+        case .live: return isGlassesMode ? "Glasses · Live" : "Phone camera · Live"
         case .reconnecting: return "Reconnecting…"
         }
     }

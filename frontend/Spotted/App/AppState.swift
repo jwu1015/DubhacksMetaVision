@@ -40,7 +40,7 @@ final class AppState {
     var selectedUID: String?
     var currentRoom = "Maya’s apartment"
 
-    // Glasses mode (G1–G7)
+    /// Where the video comes from, picked on the start screen.
     var captureMode: CaptureMode = .phone {
         didSet {
             guard captureMode != oldValue else { return }
@@ -52,8 +52,6 @@ final class AppState {
     }
     /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
     private(set) var glasses: GlassesManager?
-    /// "Glasses connected. Say “Spotted” to capture." on Glasses Home for a few seconds.
-    var modeBanner: String?
     /// Every Look the user asked for: Spotted Today and the room recap.
     var captures: [Capture] = []
     var isShowingRoomRecap = false
@@ -276,8 +274,9 @@ final class AppState {
     /// False until the start screen's button: nothing streams before that.
     private(set) var isStreaming = false
 
-    /// The start screen's button: join the session and start the camera.
-    func startStreaming() {
+    /// The start screen's button: join the session and stream from the chosen camera.
+    func startStreaming(from mode: CaptureMode) {
+        captureMode = mode
         isStreaming = true
         startLive()
     }
@@ -311,21 +310,24 @@ final class AppState {
 
     // MARK: - Meta glasses
 
-    /// Starts the DAT SDK's glasses tracking. Glasses connecting switches to glasses mode and video;
-    /// disconnecting switches back to the phone camera.
+    /// Starts the DAT SDK's glasses tracking, so the start screen knows whether glasses are there.
+    /// Glasses dropping out while they're the source switches back to the phone camera.
     func startGlasses() {
         guard glasses == nil, GlassesManager.configure() else { return }
         let manager = GlassesManager()
         manager.onAvailabilityChange = { [weak self] available in
-            self?.setCaptureMode(available ? .glasses : .phone)
-            self?.updateVideoSource()
+            guard let self else { return }
+            if !available, captureMode == .glasses {
+                setCaptureMode(.phone)
+                showToast("Glasses disconnected. Using your phone camera.", canUndo: false)
+            }
+            updateVideoSource()
         }
         glasses = manager
-        if manager.hasGlasses { setCaptureMode(.glasses) }
     }
 
-    /// Glasses video only in glasses mode with real glasses connected and the camera not paused;
-    /// otherwise the phone camera (so "simulate glasses" without hardware still streams something).
+    /// Glasses video only in glasses mode with the glasses connected and the camera not paused;
+    /// otherwise the phone camera.
     private func updateVideoSource() {
         guard let live else { return }
         if captureMode == .glasses, let glasses, glasses.hasGlasses, !isCameraPaused {
@@ -436,37 +438,12 @@ final class AppState {
 
     // MARK: - Glasses mode
 
-    /// Switches modes from the glasses' connection state, with the toast from FRONTEND.md.
+    /// Switches the camera mid-stream. The backend starts tracking over for the new camera.
     func setCaptureMode(_ mode: CaptureMode) {
         guard mode != captureMode else { return }
         captureMode = mode
         clearScan()
-        switch mode {
-        case .glasses:
-            showModeBanner()
-        case .phone:
-            lookActivity.end()
-            showToast("Glasses disconnected. Using your phone camera.", canUndo: false)
-        }
-    }
-
-    private func showModeBanner() {
-        let text = "Glasses connected. Say “Spotted” to capture."
-        modeBanner = text
-        Task {
-            try? await Task.sleep(for: .seconds(6))
-            if modeBanner == text { modeBanner = nil }
-        }
-    }
-
-    /// The next-best object for "Not this one" (G3): the most confident one that isn't selected.
-    var nextBestObject: LiveObject? {
-        objects.filter { $0.inView && $0.uid != selectedUID }.max { $0.score < $1.score }
-    }
-
-    func notThisOne() {
-        guard let next = nextBestObject else { return clearScan() }
-        select(next)
+        if mode == .phone { lookActivity.end() }
     }
 
     /// Live Activities can only start while the app is in front, so re-sync when it becomes active.

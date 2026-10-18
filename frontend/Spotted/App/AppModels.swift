@@ -65,8 +65,7 @@ extension Look {
 
 // MARK: - Glasses mode
 
-/// Glasses connected: video is processed but not shown, and the user picks by voice.
-/// Phone: the live preview with hotspots to tap.
+/// Where the video comes from: the phone's camera or the Meta glasses.
 enum CaptureMode {
     case phone, glasses
 }

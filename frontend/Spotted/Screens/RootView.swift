@@ -13,8 +13,7 @@ struct RootView: View {
             Color.ink.ignoresSafeArea()
 
             switch (app.tab, app.captureMode) {
-            case (.live, .phone): LiveView()
-            case (.live, .glasses): GlassesLiveView()
+            case (.live, _): LiveView()
             case (.saved, .phone): SavedView()
             case (.saved, .glasses): SpottedTodayView()
             case (.cart, _): CartView()
@@ -24,10 +23,7 @@ struct RootView: View {
             if !app.isListening {
                 HStack(spacing: 8) {
                     GlassTabBar(selection: $app.tab)
-                    // Glasses Home has its own big push-to-talk button.
-                    if !(app.captureMode == .glasses && app.tab == .live) {
-                        MicButton { app.isListening = true }
-                    }
+                    MicButton { app.isListening = true }
                 }
             }
 
@@ -42,7 +38,7 @@ struct RootView: View {
 
             if app.isListening {
                 // The phone Live view dims its own feed under the sheet, so it only needs a tap target.
-                let dims = app.tab != .live || app.captureMode == .glasses
+                let dims = app.tab != .live
                 Color.black.opacity(dims ? 0.35 : 0.001)
                     .ignoresSafeArea()
                     .onTapGesture { app.isListening = false }

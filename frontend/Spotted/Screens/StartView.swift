@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Before anything streams: where the app will connect, and the button that starts the camera.
+/// Before anything streams: pick the camera (the glasses only when they're connected), see where the
+/// app will connect, and start.
 struct StartView: View {
     @Environment(AppState.self) private var app
+    @State private var source: CaptureMode = .phone
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,8 +21,22 @@ struct StartView: View {
             }
             .padding(.horizontal, 32)
             Spacer()
+            VStack(spacing: 10) {
+                SourceRow(title: "Phone camera", detail: "The iPhone's back camera", icon: "icon-camera",
+                          isSelected: source == .phone, isEnabled: true) { source = .phone }
+                SourceRow(title: "Meta glasses", detail: glassesDetail, icon: "icon-glasses",
+                          isSelected: source == .glasses, isEnabled: hasGlasses) { source = .glasses }
+                if let glasses = app.glasses, !glasses.isRegistered {
+                    Button("Connect glasses in the Meta AI app", action: glasses.connect)
+                        .font(.spottedFootnote)
+                        .foregroundStyle(Color.accent)
+                        .disabled(glasses.registration == .registering)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
             VStack(spacing: 12) {
-                PrimaryButton(title: "Start streaming", height: 56, action: app.startStreaming)
+                PrimaryButton(title: "Start streaming", height: 56) { app.startStreaming(from: source) }
                 Text(server)
                     .font(.spottedFootnote)
                     .foregroundStyle(.labelTertiary)
@@ -30,10 +46,66 @@ struct StartView: View {
         }
         .frame(maxWidth: .infinity)
         .background(Color.ink)
+        // The glasses went away while picked: back to the phone.
+        .onChange(of: hasGlasses) { _, available in
+            if !available { source = .phone }
+        }
+    }
+
+    private var hasGlasses: Bool { app.glasses?.hasGlasses == true }
+
+    private var glassesDetail: String {
+        guard let glasses = app.glasses else { return "Not available on this device" }
+        if hasGlasses { return "Connected" }
+        if glasses.registration == .registering { return "Connecting in Meta AI…" }
+        return glasses.isRegistered ? "No glasses found · turn them on" : "No glasses found"
     }
 
     private var server: String {
         AppConfig.baseURL?.host().map { "Connects to \($0)" } ?? "No backend set: demo data"
+    }
+}
+
+/// One camera to pick from. Dimmed and inert when it isn't available.
+private struct SourceRow: View {
+    let title: String
+    let detail: String
+    let icon: String
+    let isSelected: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Icon(name: icon, size: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.spottedCallout)
+                        .foregroundStyle(.labelPrimary)
+                    Text(detail)
+                        .font(.spottedFootnote)
+                        .foregroundStyle(.labelSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Circle()
+                    .strokeBorder(isSelected ? Color.accent : Color.white.opacity(0.3), lineWidth: 2)
+                    .background(Circle().fill(isSelected ? Color.accent : .clear).padding(5))
+                    .frame(width: 22, height: 22)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 64)
+            .background(.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accent : .clear, lineWidth: 1.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

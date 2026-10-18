@@ -49,29 +49,29 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 
 ## Modes: glasses vs phone
 
-The app has **two modes and one pipeline**. In both, the camera goes up as one **LiveKit** video track, and the backend tracks every object and runs a Look on each (see [Pipeline](#pipeline)). What changes is whether the video is **shown**, and how the user picks an item.
+The app has **two camera sources and one pipeline**. The user picks the source on the start screen; the glasses can only be picked while they're connected. Either way the camera goes up as one **LiveKit** video track, the Live view shows that source's frames with each object's quick label, and the backend tracks every object and runs a Look on each (see [Pipeline](#pipeline)).
 
-| | **Glasses mode** (glasses connected) | **Phone mode** (no glasses) |
+| | **Meta glasses** | **Phone camera** |
 |---|---|---|
 | Video source | Glasses camera → phone (DAT) → LiveKit | Phone camera (AVFoundation) → LiveKit |
-| Shown to the user? | **No.** Processed only; the phone renders no preview. | **Yes.** Live preview, full screen. |
-| How the user picks | **Voice**, once the agent is back | **Tap** an object's quick label (01a) |
-| Target resolved by | The voice agent, which calls `select` on the backend like a tap | The tapped object's `uid` |
-| Results | **Spoken** in the glasses, plus a capture card, Live Activity and history on the phone | On screen, over the live view (01 / 01b) |
+| Shown on the phone | The glasses' frames, full screen | The phone camera's frames, full screen |
+| How the user picks | **Tap** a quick label; **voice** once the agent is back | **Tap** a quick label (01a) |
+| Results | On screen (01 / 01b), spoken through the glasses, plus a Live Activity | On screen, over the live view (01 / 01b) |
 
-**Switching:** the app picks the mode from the glasses' connection state.
-- **Glasses connect** → glasses mode.
-- **Glasses disconnect** → phone mode, with a toast: "Glasses disconnected. Using your phone camera."
+**Switching:**
+- **Start screen:** "Phone camera" or "Meta glasses" (inert, with "No glasses found", until glasses connect; a link opens the Meta AI app to connect them).
+- **Mid-stream:** Profile → "Stream from the glasses".
+- **Glasses disconnect** while they're the source → the phone camera, with a toast: "Glasses disconnected. Using your phone camera."
 - **One track:** both capturers feed the same LiveKit video track, so switching never republishes. The phone sends the `mode` RPC and the backend restarts tracking with new uids.
 
 ### Glasses mode: voice (when the agent returns)
 
-The backend keeps a scene memory of the last ~15 s, and the voice agent's groundwork (`backend/storefront/voice`) resolves "that lamp" or "the other one" against it. The agent's behavior is removed for now. When it returns, it joins the room on `voice {on}`, calls `select {uid}` on the backend like a tap, and asks the phone to act through the `action` RPC. Showing the agent's pick on the phone (the capture card) comes back with it.
+The backend keeps a scene memory of the last ~15 s, and the voice agent's groundwork (`backend/storefront/voice`) resolves "that lamp" or "the other one" against it. The agent's behavior is removed for now. When it returns, it joins the room on `voice {on}`, calls `select {uid}` on the backend like a tap, and asks the phone to act through the `action` RPC. Showing the agent's pick on the phone comes back with it.
 
 **Room recap (optional):** when the user leaves a room, the phone shows "You looked at 4 things here", built from the captures. It's opt-in.
 
-### Phone mode: tap the live video
-1. The app opens on a start screen; **Start streaming** joins the room and starts the camera.
+### Tap the live video
+1. The app opens on a start screen: pick the camera, then **Start streaming** joins the room and starts it.
 2. Each object's quick `label` (name and price estimate) pops up at the center of its box (01a). Objects without a label yet show nothing, and no box is drawn.
 3. Tapping a label calls `select`: the label turns lime → searching card (01b) → results (01).
 
@@ -230,7 +230,7 @@ enum ScanState {
 
 Each screen exists in Figma in both themes: **📱 Screens** (Lime) and **📱 Screens · Visa Night**.
 
-The screens below (01–06) are **phone mode** (live video). Screens 03–06 (detail, saved, cart, checkout) are shared by both modes. The glasses-mode screens (G1–G6) are listed after them.
+The screens below (01–06) are the Live view and what follows it, for either camera. The glasses-mode screens (G2–G7) are listed after them.
 
 | # | Frame | What it shows |
 |---|---|---|
@@ -274,9 +274,7 @@ The screens below (01–06) are **phone mode** (live video). Screens 03–06 (de
 ### Glasses-mode screens (not in Figma yet)
 | # | Frame | What it shows |
 |---|---|---|
-| G1 | Glasses Home | No video. A calm "Listening" state: a glasses-connected pill, "Glasses camera on · not recording" with **Pause**, a big push-to-talk mic, a hint ("Say 'Spotted, how much is that lamp?'"), and the latest captures below. |
 | G2 | Voice Command | While the user speaks: waveform, live transcript and the earcon state. |
-| G3 | Capture Card | The **frame the backend used, with the item highlighted** (brackets on the Look's box), then the searching → matched states (same content as 01b / 01), plus "Not this one" (re-resolve). |
 | G5 | Spotted Today | A feed of captures grouped by room: frame thumbnail, item, price, verdict, and Save/Add. It doubles as history and privacy proof ("every capture you asked for"). |
 | G6 | Live Activity / Dynamic Island | Compact: "Finding prices · lamp…" → "Lamp · $189 · Fair". Expanded: thumbnail plus Save / Add to cart. Also the lock-screen push-to-talk entry. |
 | G7 | Room Recap (optional) | "You looked at 4 things at Maya's", with Save all / pick. |
