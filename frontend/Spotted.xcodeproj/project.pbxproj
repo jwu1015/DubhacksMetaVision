@@ -6,8 +6,25 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5D0A00000000000000000022 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000021 /* WebRTC */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5D0A00000000000000000016 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5D0A00000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5D0A00000000000000000006;
+			remoteInfo = Spotted;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		5D0A00000000000000000001 /* Spotted.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spotted.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D0A00000000000000000010 /* SpottedUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpottedUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D0A00000000000000000023 /* Spotted.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Spotted.xcconfig; sourceTree = "<group>"; };
+		5D0A00000000000000000024 /* Spotted-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Spotted-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +33,23 @@
 			path = Spotted;
 			sourceTree = "<group>";
 		};
+		5D0A00000000000000000011 /* SpottedUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SpottedUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		5D0A00000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5D0A00000000000000000022 /* WebRTC in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5D0A00000000000000000012 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +63,9 @@
 			isa = PBXGroup;
 			children = (
 				5D0A00000000000000000002 /* Spotted */,
+				5D0A00000000000000000011 /* SpottedUITests */,
+				5D0A00000000000000000023 /* Spotted.xcconfig */,
+				5D0A00000000000000000024 /* Spotted-Info.plist */,
 				5D0A00000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				5D0A00000000000000000001 /* Spotted.app */,
+				5D0A00000000000000000010 /* SpottedUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -64,9 +98,33 @@
 				5D0A00000000000000000002 /* Spotted */,
 			);
 			name = Spotted;
+			packageProductDependencies = (
+				5D0A00000000000000000021 /* WebRTC */,
+			);
 			productName = Spotted;
 			productReference = 5D0A00000000000000000001 /* Spotted.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5D0A00000000000000000015 /* SpottedUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5D0A00000000000000000018 /* Build configuration list for PBXNativeTarget "SpottedUITests" */;
+			buildPhases = (
+				5D0A00000000000000000013 /* Sources */,
+				5D0A00000000000000000012 /* Frameworks */,
+				5D0A00000000000000000014 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5D0A00000000000000000017 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5D0A00000000000000000011 /* SpottedUITests */,
+			);
+			name = SpottedUITests;
+			productName = SpottedUITests;
+			productReference = 5D0A00000000000000000010 /* SpottedUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +139,10 @@
 					5D0A00000000000000000006 = {
 						CreatedOnToolsVersion = 27.1;
 					};
+					5D0A00000000000000000015 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = 5D0A00000000000000000006;
+					};
 				};
 			};
 			buildConfigurationList = 5D0A0000000000000000000B /* Build configuration list for PBXProject "Spotted" */;
@@ -92,18 +154,29 @@
 			);
 			mainGroup = 5D0A00000000000000000004;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5D0A00000000000000000005 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				5D0A00000000000000000006 /* Spotted */,
+				5D0A00000000000000000015 /* SpottedUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5D0A00000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5D0A00000000000000000014 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -120,7 +193,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5D0A00000000000000000013 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5D0A00000000000000000017 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5D0A00000000000000000006 /* Spotted */;
+			targetProxy = 5D0A00000000000000000016 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5D0A0000000000000000000C /* Debug */ = {
@@ -163,13 +251,17 @@
 		};
 		5D0A0000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5D0A00000000000000000023 /* Spotted.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Spotted-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -190,13 +282,17 @@
 		};
 		5D0A0000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5D0A00000000000000000023 /* Spotted.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Spotted-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -212,6 +308,36 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		5D0A00000000000000000019 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Spotted;
+			};
+			name = Debug;
+		};
+		5D0A0000000000000000001A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Spotted;
 			};
 			name = Release;
 		};
@@ -236,7 +362,35 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		5D0A00000000000000000018 /* Build configuration list for PBXNativeTarget "SpottedUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5D0A00000000000000000019 /* Debug */,
+				5D0A0000000000000000001A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 155.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5D0A00000000000000000021 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5D0A00000000000000000009 /* Project object */;
 }

@@ -74,5 +74,32 @@
     "rerank": 450,
     "rank": 1200,
     "total": 3900
+  },
+  "item": {
+    "category": "floor lamp",
+    "description": "mid-century walnut tripod floor lamp with linen drum shade",
+    "style": "mid-century modern",
+    "colors": [
+      "walnut brown",
+      "off-white"
+    ],
+    "materials": [
+      "wood",
+      "linen"
+    ],
+    "brand_guess": "West Elm",
+    "confidence": 0.72,
+    "search_queries": [
+      "walnut tripod floor lamp linen drum shade",
+      "mid-century tripod floor lamp",
+      "wood floor lamp"
+    ],
+    "bbox": {
+      "x": 0.3,
+      "y": 0.1,
+      "w": 0.3,
+      "h": 0.78
+    },
+    "quick_phrase": "Mid-century floor lamp. Finding prices."
   }
 }

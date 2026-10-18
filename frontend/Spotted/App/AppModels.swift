@@ -47,13 +47,47 @@ enum ScanState: Equatable {
     case idle
     /// JPEG uploading / /detect running.
     case looking
-    /// Quick phrase spoken, card in "searching".
-    case detected(DetectResponse)
+    /// Quick phrase spoken, card in "searching". Claude's item fills in when "described" arrives.
+    case detected(Look)
     /// Full card + verdict.
-    case matched(DetectResponse, SearchResponse)
+    case matched(Look, SearchResponse)
     /// Low confidence: ask "Which one?" (07).
     case ambiguous([Candidate])
     case failed(String)
+}
+
+// MARK: - Look
+
+/// What the app knows about the selected object while its Look runs. Built from the "detections"
+/// channel's look messages (detected → described → results), or from a DetectResponse in mock mode.
+struct Look: Equatable {
+    let captureID: String
+    /// SAM's short label from the detected stage, e.g. "lamp".
+    var label: String
+    var quickPhrase: String
+    var cutoutURL: String?
+    /// Claude's item from the described stage, replaced by SearchResponse.item when results arrive.
+    var item: Item?
+
+    /// Claude's name once it's known ("tripod floor lamp"), else the short label.
+    var name: String {
+        if let category = item?.category, !category.isEmpty { return category }
+        return label
+    }
+}
+
+extension Look {
+    init(_ detect: DetectResponse) {
+        self.init(captureID: detect.captureID, label: detect.category, quickPhrase: detect.quickPhrase,
+                  cutoutURL: detect.cutoutURL, item: detect.item)
+    }
+
+    /// With the results' finished item, so the card shows Claude's name.
+    func finished(with search: SearchResponse) -> Look {
+        var look = self
+        look.item = search.item ?? item
+        return look
+    }
 }
 
 // MARK: - App-side state

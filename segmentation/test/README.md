@@ -28,7 +28,7 @@ python run_tests.py --file my.mov --category furniture   # your own video, one p
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--url` | `https://dubhacks.tamkar.ai/inference` | API base URL |
-| `--category` | none | Category sent to `/labels` (with `--file`) |
+| `--category` | `things to buy` | Category sent to `/labels` (with `--file`) |
 | `--prompt` | from `/labels` | Skip `/labels` and use these comma-separated phrases |
 | `--fps` | 30 | Rate frames are extracted at (the "camera" rate) |
 | `--max-frames` | 0 (whole video) | Cap on extracted frames |
@@ -52,4 +52,4 @@ The summary has latency, objects per frame, frames with no objects, and id stabi
 {"name": "bedroom", "url": "https://…/bedroom.mp4", "category": "furniture"}
 ```
 
-`path` points to a file in `videos/` (`table.mov` is checked in). `url` entries are downloaded to `videos/` on first use. Entries without a `category` call `/labels` without one.
+`path` points to a file in `videos/` (`table.mov` is checked in). `url` entries are downloaded to `videos/` on first use. Entries without a `category` use `things to buy`, since the server requires one.

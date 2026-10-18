@@ -32,6 +32,7 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = Path(__file__).parent
 VIDEOS = HERE / "videos"
 OUTPUT = HERE / "output"
+DEFAULT_CATEGORY = "things to buy"  # the server requires a category for /labels
 load_dotenv(HERE / ".env")
 AUTH = {
     "CF-Access-Client-Id": os.environ.get("CF_ACCESS_CLIENT_ID", ""),
@@ -71,7 +72,7 @@ def is_living(obj):
 
 def generate_prompt(url, frame_path, category):
     """POST the first frame to /labels; returns the labels (minus living things) to use as the session prompt."""
-    r = requests.post(f"{url}/labels", params={"category": category} if category else None, data=frame_path.read_bytes(),
+    r = requests.post(f"{url}/labels", params={"category": category}, data=frame_path.read_bytes(),
                       headers={**AUTH, "Content-Type": "image/jpeg"}, timeout=120)
     r.raise_for_status()
     return [l for l in r.json()["labels"] if l.strip().lower() not in LIVING]
@@ -107,7 +108,9 @@ def run_video(name, video, prompt, category, args):
         if not prompt:
             prompt = generate_prompt(args.url, frames[0], category)
             print(f"  /labels -> {prompt}")
-        sid = requests.post(f"{args.url}/session", json={"prompt": prompt} if prompt else {}, headers=AUTH, timeout=60)
+            if not prompt:
+                raise RuntimeError("/labels returned no usable labels")
+        sid = requests.post(f"{args.url}/session", json={"prompt": prompt}, headers=AUTH, timeout=60)
         sid.raise_for_status()
         sid = sid.json()["session_id"]
         latencies, per_frame, sent = [], [], []  # sent: index into frames of each frame we sent
@@ -193,7 +196,7 @@ def main():
     jobs = []
     if args.file:
         p = Path(args.file)
-        jobs.append((p.stem, p, args.category, args.prompt))
+        jobs.append((p.stem, p, args.category or DEFAULT_CATEGORY, args.prompt))
     else:
         catalog = json.loads((HERE / "videos.json").read_text())
         unknown = set(args.names) - {e["name"] for e in catalog}
@@ -201,12 +204,11 @@ def main():
             sys.exit(f"unknown video(s): {', '.join(sorted(unknown))}")
         for e in catalog:
             if not args.names or e["name"] in args.names:
-                jobs.append((e["name"], download(e), e.get("category"), args.prompt))
+                jobs.append((e["name"], download(e), e.get("category", DEFAULT_CATEGORY), args.prompt))
 
     results, failed = [], 0
     for name, path, category, prompt in jobs:
-        if category:  # one output per (video, category) pass
-            name = f"{name}-{category.replace(' ', '-')}"
+        name = f"{name}-{category.replace(' ', '-')}"  # one output per (video, category) pass
         try:
             summary, per_frame = run_video(name, path, prompt, category, args)
             results.append({"summary": summary, "frames": per_frame})

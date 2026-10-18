@@ -8,32 +8,32 @@ struct ProductDetail: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        if let detect = app.currentDetect, let search = app.currentSearch {
-            content(detect: detect, search: search)
+        if let look = app.currentLook, let search = app.currentSearch {
+            content(look: look, search: search)
         } else {
             Color.ink.ignoresSafeArea()
         }
     }
 
-    private func content(detect: DetectResponse, search: SearchResponse) -> some View {
+    private func content(look: Look, search: SearchResponse) -> some View {
         @Bindable var app = app
-        let title = search.bestMatch?.title ?? detect.category.sentenceCased
+        let title = look.name.sentenceCased
 
         return ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 0) {
-                    hero(image: search.bestMatch?.imageURL ?? detect.cutoutURL ?? "")
+                    hero(image: search.bestMatch?.imageURL ?? look.cutoutURL ?? "")
 
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text((search.bestMatch?.store ?? detect.item.brandGuess ?? "").uppercased())
+                            Text((search.bestMatch?.store ?? look.item?.brandGuess ?? "").uppercased())
                                 .font(.spottedCaption)
                                 .foregroundStyle(.labelSecondary)
                             Text(title)
                                 .font(.spottedTitle1)
                                 .foregroundStyle(.labelPrimary)
                             HStack(spacing: 6) {
-                                Text((detect.item.style ?? detect.category).sentenceCased)
+                                Text((look.item?.style ?? look.label).sentenceCased)
                                     .foregroundStyle(.labelPrimary)
                                 Text("· \(app.currentRoom)").foregroundStyle(.labelSecondary)
                             }
@@ -179,7 +179,9 @@ struct ProductDetail: View {
     // MARK: - Bottom bar
 
     private func bottomBar(match: Product, search: SearchResponse) -> some View {
-        let newPrices = ([match] + search.dupes).filter { !$0.isUsed && $0.isExactMatch }.map(\.price)
+        // Compare against every new listing, dupes included, so "lowest new" is never claimed
+        // while a cheaper new option is one tab away.
+        let newPrices = ([match] + search.dupes).filter { !$0.isUsed }.map(\.price)
         let isLowestNew = !match.isUsed && match.price <= (newPrices.min() ?? match.price)
 
         return HStack(spacing: 10) {

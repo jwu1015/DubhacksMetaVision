@@ -44,7 +44,7 @@ class Product(BaseModel):
     currency: str = "USD"
     url: str
     image_url: str | None = None
-    source: Literal["lens", "shopping", "ebay"]
+    source: Literal["lens", "shopping", "ebay", "amazon"]
     tier: Literal["new", "dupe", "used"] = "new"
     source_rank: int
     match_score: int | None = None     # 0-100, set by rerank
@@ -87,6 +87,7 @@ class SearchResponse(BaseModel):
     price_insight: PriceInsight
     spoken_summary: str
     timing_ms: dict[str, int]
+    item: Item | None = None          # ADDED: the finished item (Claude's name, description, queries)
 
 
 class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search merged"
@@ -95,6 +96,16 @@ class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search mer
 
 
 # --- Request/response bodies for the remaining routes (typed versions of Section 4e) ---
+
+class AddToCartRequest(BaseModel):
+    product: Product
+
+
+class Cart(BaseModel):
+    items: list[Product]
+    total: float
+    spoken_summary: str
+
 
 class CheckoutItem(BaseModel):
     title: str
@@ -110,8 +121,21 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
 
 
+class VoiceTokenRequest(BaseModel):   # LiveKit's standard token-endpoint request; every field is optional
+    participant_identity: str | None = None
+    participant_name: str | None = None
+
+
+class VoiceTokenResponse(BaseModel):  # ... and its response, which LiveKit's client SDKs read
+    server_url: str
+    participant_token: str
+
+
 class HealthResponse(BaseModel):
     ok: bool
     model_service: bool
     fixtures: bool
     demo_mode: bool
+    webrtc_sessions: int = 0     # phones streaming over WebRTC (one at a time)
+    scene_memory: bool = False   # the live stream is tracking, so scene memory is filling
+    voice: bool = False          # the voice assistant is set up (LiveKit keys present)

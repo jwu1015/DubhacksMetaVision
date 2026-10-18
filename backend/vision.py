@@ -14,7 +14,7 @@ import anthropic
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel, ValidationError
 
-import config  # noqa: F401 - loads .env so the client finds ANTHROPIC_API_KEY
+import config  # loads .env so the client finds ANTHROPIC_API_KEY
 from models import BBox, Item
 
 log = logging.getLogger("gtl.vision")
@@ -23,22 +23,27 @@ MODEL = "claude-sonnet-5-5"
 MAX_EDGE = 1024  # resize before the call; never upscale
 
 SYSTEM_PROMPT = """\
-You identify home goods and furniture in photos for a shopping app.
+You identify consumer products in photos for a shopping app.
 The photo was taken from smart glasses, so the item the user is looking at
 is usually the most prominent object near the center of the frame. Focus on
 that single item. Ignore people, walls, floors, ceilings, and windows.
 
 Fill in these fields:
-- category: short noun phrase (e.g. "floor lamp", "accent chair", "area rug")
+- category: short noun phrase (e.g. "floor lamp", "running shoes", "backpack", "coffee maker")
   - this is also used as a segmentation text prompt, so keep it simple
-- description: one detailed sentence a shopper would type into a search box,
-  including shape, color, material, and distinctive features
-- style: design style (e.g. "mid-century modern", "japandi", "boho", "industrial")
+- description: 2-4 sentences, detailed enough to tell this exact product
+  apart from similar ones: exact colors and finishes, materials, shape and
+  proportions, distinctive design details, any visible text, logos, labels
+  or model numbers, and approximate size
+- style: design style if the product has one (e.g. "mid-century modern", "minimalist",
+  "streetwear", "industrial"), else null
 - colors: 1-3 colors
 - materials: 1-3 materials
 - brand_guess: brand if there is a visible logo or very distinctive design, else null
 - confidence: 0-1, how sure you are of the category and description
-- search_queries: 3 shopping search queries, most specific to most generic
+- search_queries: 3 shopping search queries, most specific to most generic.
+  If the brand or model is visible or recognizable, the first query names it
+  (brand, product line, model, color)
 - bbox: bounding box around that item as normalized coordinates
   {"x": left, "y": top, "w": width, "h": height}, each between 0 and 1,
   relative to the full image
@@ -70,7 +75,7 @@ def client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
         # /detect has a ~2s budget; the SDK default (10 min, 2 retries) would hang the app.
-        _client = anthropic.AsyncAnthropic(timeout=15.0, max_retries=1)
+        _client = anthropic.AsyncAnthropic(timeout=15.0, max_retries=1, default_headers=config.ANTHROPIC_HEADERS)
     return _client
 
 
@@ -120,9 +125,13 @@ def to_item(out: VisionOut, size: tuple[int, int]) -> Item:
     )
 
 
-async def detect(image_bytes: bytes) -> Item:
-    """Identify the main item. Unusable output twice -> Item(category=None); API errors raise."""
+async def detect(image_bytes: bytes, hint: str | None = None) -> Item:
+    """Identify the main item. hint: what the user asked about (their voice command, e.g. "green floor
+    lamp"), as one line before the question. Unusable output twice -> Item(category=None); API errors raise."""
     b64, size = prepare(image_bytes)
+    question = "What is the main item in this photo?"
+    if hint:
+        question = f"The user asked about: {hint}\n{question}"
     for attempt in (1, 2):
         t0 = time.perf_counter()
         try:
@@ -132,7 +141,7 @@ async def detect(image_bytes: bytes) -> Item:
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": [
                     {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                    {"type": "text", "text": "What is the main item in this photo?"},
+                    {"type": "text", "text": question},
                 ]}],
                 output_format=VisionOut,
                 output_config={"effort": "low"},  # extraction: low effort skips thinking on most photos

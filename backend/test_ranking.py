@@ -141,6 +141,16 @@ class RerankTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent, [])
         self.assertEqual(dump(out), dump([p.model_copy(update={"match_score": None}) for p in RAW]))
 
+    async def test_no_url_keeps_scores_search_set_best_first(self):
+        scores = [55, None, 30, 90] + [None] * (len(RAW) - 4)
+        scored = [p.model_copy(update={"match_score": s}) for p, s in zip(RAW, scores)]
+        sent = []
+        with mock.patch.object(rerank, "EMBED_URL", ""):
+            out = await self.rerank(scored, lambda request: sent.append(request))
+        self.assertEqual(sent, [])
+        self.assertEqual([p.match_score for p in out[:2]], [90, 55])  # 30 is under MIN_SCORE: dropped
+        self.assertEqual([p.url for p in out[2:]], [p.url for p in scored if p.match_score is None])
+
     async def test_no_thumbnails_or_no_products(self):
         no_thumbs = [p.model_copy(update={"image_url": None}) for p in RAW]
         self.assertEqual(dump(await self.rerank(no_thumbs, lambda r: 1 / 0)), dump(no_thumbs))
@@ -237,9 +247,12 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((p.title, p.store, p.price, p.match_score, p.image_url, p.source_rank),
                              (src.title, src.store, src.price, src.match_score, src.image_url, src.source_rank))
             self.assertLess(len(p.match_reason.split()), 12)
-        if best:
-            self.assertEqual(best.tier, "new")
-            self.assertNotEqual(ours[best.url].tier, "used")
+        if best:  # new, unless only a used listing is the item itself (match_score of FOUND_SCORE or more)
+            used_best = ours[best.url].tier == "used"
+            self.assertEqual(best.tier, "used" if used_best else "new")
+            if used_best:
+                self.assertGreaterEqual(best.match_score, rank.FOUND_SCORE)
+                self.assertFalse(any(p.tier != "used" and (p.match_score or 0) >= rank.FOUND_SCORE for p in products))
         for d in resp.dupes:
             self.assertEqual((d.tier, ours[d.url].tier), ("dupe", "new"))
             self.assertLess(d.price, best.price)
@@ -439,6 +452,50 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
         used = [product(50.0, 50, "used", n=100 + n) for n in range(5)]
         self.assertEqual([p.tier for p in rank.shortlist(used[:2] + many_new + used[2:])],
                          ["new"] * 12 + ["used"] * 3)
+
+    @staticmethod
+    def best_pick(id: int) -> str:
+        return json.dumps({"best_match": {"id": id, "match_reason": "Same bottle"}, "dupes": [], "used": [],
+                           "spoken_summary": "That's a Store floor lamp, about 300 dollars."})
+
+    async def test_low_match_score_gives_the_closest_not_exact(self):
+        products = [product(300.0, 60, n=0), product(200.0, 70, n=1), product(100.0, 40, n=2)]
+        resp = await self.choose(self.best_pick(0), products=products)
+        self.assertEqual(resp.best_match.url, products[1].url)  # highest score, though under FOUND_SCORE
+        self.assertEqual(resp.best_match.match_reason, rank.NOT_EXACT_REASON)
+        self.assertTrue(resp.spoken_summary.startswith("I couldn't find this exact one."), resp.spoken_summary)
+        self.assertTrue(resp.price_insight.verdict_text.startswith("Not the exact item."))
+        self.assertEqual(resp.price_insight.best_match_verdict, "fair")
+
+    async def test_low_scoring_pick_gives_way_to_a_found_match(self):
+        products = [product(300.0, 60, n=0), product(200.0, 88, n=1)]
+        resp = await self.choose(self.best_pick(0), products=products)
+        self.assertEqual(resp.best_match.url, products[1].url)
+        self.assertEqual(resp.best_match.match_reason, "Highest match score")
+        self.assertNotIn("couldn't find", resp.spoken_summary)  # Claude's summary was about its own pick
+
+    async def test_final_best_match_goes_through_store_link(self):
+        async def linked(best):
+            return best.model_copy(update={"url": "https://store.example/p"})
+
+        with mock.patch.object(rank, "call_model", mock.AsyncMock(return_value=reply())), \
+                mock.patch.object(rank.search, "with_store_link", linked):
+            resp = await rank.choose(ITEM, RANKED, INSIGHT)
+        self.assertEqual(resp.best_match.url, "https://store.example/p")
+        self.assertEqual(resp.best_match.title, BY_TITLE["Mid-Century Tripod Floor Lamp"].title)  # Claude's pick
+
+    async def test_only_a_used_listing_found_makes_it_the_match(self):
+        products = [product(300.0, 60, n=0), product(120.0, 90, "used", n=1), product(200.0, 50, n=2)]
+        resp = await self.choose(self.best_pick(0), products=products)
+        self.assertEqual((resp.best_match.url, resp.best_match.tier), (products[1].url, "used"))
+        self.assertEqual(resp.best_match.match_reason, rank.USED_MATCH_REASON)
+        self.assertEqual(resp.spoken_summary, "That's a Store floor lamp, used, about 120 dollars.")
+
+    async def test_found_match_keeps_claudes_pick_and_summary(self):
+        products = [product(300.0, 80, n=0), product(200.0, 95, n=1)]
+        resp = await self.choose(self.best_pick(0), products=products)
+        self.assertEqual((resp.best_match.url, resp.best_match.match_reason), (products[0].url, "Same bottle"))
+        self.assertEqual(resp.spoken_summary, "That's a Store floor lamp, about 300 dollars.")
 
 
 if __name__ == "__main__":
