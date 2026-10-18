@@ -52,9 +52,9 @@ RED, YELLOW = (255, 60, 60), (255, 210, 0)
 
 
 class Found(NamedTuple):
-    box: BBox     # normalized to the photo
-    score: float
-    label: str    # the category that matched, e.g. "sofa"
+    box: BBox             # normalized to the photo
+    score: float | None   # None for a box the app sent without one
+    label: str            # the category that matched, e.g. "sofa"
 
 
 def ms_since(t0: float) -> int:
