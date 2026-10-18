@@ -138,6 +138,12 @@ class FocusTest(unittest.TestCase):
         self.seen.update(objects(LAMP, VASE))
         self.assertEqual(self.seen.focus(), (None, "none"))
 
+    def test_a_pick_by_voice_is_this_like_a_tap(self):
+        self.seen.pick("1.2")
+        self.assertEqual(self.seen.focus(), (LAMP, "picked"))
+        self.clock.now += seen_module.PICK_S + 1
+        self.assertEqual(self.seen.focus(), (MUG, "in_front"))
+
 
 class AssistantTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -280,3 +286,35 @@ class ActionToolsTest(AssistantTest):
         await self.agent.undo_last(None)
         await self.agent.start_checkout(None)
         self.assertEqual(self.rpcs("action"), [{"name": "undo_last"}, {"name": "start_checkout"}])
+
+
+class PickByVoiceTest(AssistantTest):
+    async def test_whats_here_lists_the_tracked_items_with_their_ids(self):
+        self.seen.update(objects(SOFA, MUG, LAMP, CHAIR))
+        self.assertEqual(app_data(await self.agent.whats_here(None))["items"], [
+            {"id": "1.0", "name": "sofa", "where": "center"}, {"id": "1.1", "name": "white ceramic mug", "where": "center"},
+            {"id": "1.2", "name": "lamp", "where": "top right"}, {"id": "1.4", "name": "chair", "where": "out of view now"}])
+        self.seen.update(objects())
+        self.assertEqual(await self.agent.whats_here(None), "Nothing is tracked right now.")
+
+    async def test_a_pick_opens_it_in_the_app_and_makes_it_this(self):
+        self.seen.update(look("1.2", "results"))
+        data = app_data(await self.agent.select_object(None, "1.2"))
+        self.assertEqual(self.rpcs("action"), [{"name": "select_item", "uid": "1.2"}])
+        self.assertEqual((data["tracked_as"], data["why"], data["in_front"]), ("lamp", "picked", "white ceramic mug"))
+        self.assertEqual(self.seen.focus(), (LAMP, "picked"))  # over the mug in front, from now on
+        await self.agent.show_results(None, tab="dupes")  # the app shows it, so its results can open there
+        self.assertEqual(self.rpcs("action")[-1], {"name": "show_results", "tab": "dupes"})
+
+    async def test_an_app_that_cant_open_it_yet(self):
+        self.local.reply = json.dumps({"ok": False, "detail": "Not in the app yet."})
+        self.seen.update(look("1.2", "results"))
+        data = app_data(await self.agent.select_object(None, "1.2"))
+        self.assertEqual((data["why"], self.seen.focus()), ("picked", (LAMP, "picked")))  # still what "this" is
+        with self.assertRaisesRegex(ToolError, "tap the"):  # but the app shows something else
+            await self.agent.show_results(None)
+
+    async def test_an_item_no_longer_tracked(self):
+        with self.assertRaisesRegex(ToolError, "isn't tracked anymore"):
+            await self.agent.select_object(None, "9.9")
+        self.assertEqual(self.rpcs("action"), [])
