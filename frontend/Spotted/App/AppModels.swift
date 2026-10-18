@@ -48,6 +48,15 @@ extension Product {
 
 extension Detection {
     func rect(in size: CGSize) -> CGRect { bbox.rect(in: size) }
+
+    /// The quick name once the backend has one ("Black insulated water bottle"), else the label.
+    var displayName: String { (name ?? label).sentenceCased }
+
+    /// "~$30–50" when both prices are in; "~" marks it as an estimate.
+    var priceEstimate: String? {
+        guard let low = priceLow, let high = priceHigh else { return nil }
+        return low == high ? "~$\(low)" : "~$\(low)–\(high)"
+    }
 }
 
 // MARK: - Scan state

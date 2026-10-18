@@ -5,6 +5,8 @@ import SwiftUI
 struct Hotspot: View {
     /// "Lounge chair"
     let item: String
+    /// "~$30–50" once the backend has a rough price; replaces "Tap to view".
+    var priceEstimate: String?
     var isFocused = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,7 +34,7 @@ struct Hotspot: View {
                 }
             }
             .accessibilityElement()
-            .accessibilityLabel(item)
+            .accessibilityLabel(priceEstimate.map { "\(item), about \($0.dropFirst())" } ?? item)
             .accessibilityHint("Shows price and matches")
             .accessibilityAddTraits(.isButton)
     }
@@ -40,7 +42,7 @@ struct Hotspot: View {
     private var tag: some View {
         HStack(spacing: 6) {
             Text(item).foregroundStyle(.labelPrimary)
-            Text("· Tap to view").foregroundStyle(.labelSecondary)
+            Text("· \(priceEstimate ?? "Tap to view")").foregroundStyle(.labelSecondary)
         }
         .font(.spottedCaption)
         .padding(.leading, 10)

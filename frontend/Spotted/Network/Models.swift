@@ -336,13 +336,20 @@ struct Detection: Codable, Identifiable, Hashable {
     let box: [Double]            // normalized x1, y1, x2, y2
     let label: String
     let score: Double
+    // Arrive ~1–3 s after the object appears; nil until the backend has them. `var` with defaults so
+    // the mock detections can leave them out; decoding is the same.
+    var name: String? = nil      // quick label, e.g. "black insulated water bottle"
+    var priceLow: Int? = nil     // whole dollars, a rough estimate
+    var priceHigh: Int? = nil
 
     var id: String { trackID }
     var bbox: BBox { BBox(corners: box) }
 
     enum CodingKeys: String, CodingKey {
-        case box, label, score
+        case box, label, score, name
         case trackID = "track_id"
+        case priceLow = "price_low"
+        case priceHigh = "price_high"
     }
 }
 
