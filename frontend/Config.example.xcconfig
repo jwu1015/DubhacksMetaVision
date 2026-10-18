@@ -1,0 +1,3 @@
+// Copy to Config.xcconfig (git-ignored) and set the backend's current ngrok URL.
+// "//" starts a comment in xcconfig files, so write the scheme as https:/$()/
+API_BASE_URL = https:/$()/your-subdomain.ngrok-free.app

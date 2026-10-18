@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from livekit import api as livekit_api
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+import cart
 import config
 import net
 import stream
@@ -222,7 +223,7 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
 
     sam_failed = False
     if claude and segment and config.MODEL_SERVICE_URL:
-        # SAM first: every home-goods object in view; the user is looking at the one at the center of
+        # SAM first: every object in view from SAM_CATEGORIES; the user is looking at the one at the center of
         # the view.
         with timed(timing, "sam"):
             found = await segment.sam_objects(img, segment.SAM_CATEGORIES or None,
@@ -425,6 +426,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Get the Look backend", lifespan=lifespan)
 app.mount("/uploads", StaticFiles(directory=config.UPLOADS), name="uploads")
+app.include_router(cart.router)
 
 
 @app.post("/detect", response_model=DetectResponse)

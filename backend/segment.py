@@ -2,7 +2,7 @@
 (segmentation/server.py). The server returns boxes only (no masks yet), so a cutout is a crop.
 
 SAM first (main.py, when a segmentation server is configured): sam_objects() with SAM_CATEGORIES
-finds every home-goods object in view, and center_object() picks the one at the center of the view,
+finds every object in view from its category list, and center_object() picks the one at the center of the view,
 where glasses point. Claude then only describes that object for search.
 
 Claude first (the fallback, segment()): Claude has picked the item; SAM is asked about Claude's

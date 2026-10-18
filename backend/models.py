@@ -44,7 +44,7 @@ class Product(BaseModel):
     currency: str = "USD"
     url: str
     image_url: str | None = None
-    source: Literal["lens", "shopping", "ebay"]
+    source: Literal["lens", "shopping", "ebay", "amazon"]
     tier: Literal["new", "dupe", "used"] = "new"
     source_rank: int
     match_score: int | None = None     # 0-100, set by rerank
@@ -96,6 +96,16 @@ class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search mer
 
 
 # --- Request/response bodies for the remaining routes (typed versions of Section 4e) ---
+
+class AddToCartRequest(BaseModel):
+    product: Product
+
+
+class Cart(BaseModel):
+    items: list[Product]
+    total: float
+    spoken_summary: str
+
 
 class CheckoutItem(BaseModel):
     title: str

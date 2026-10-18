@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="42" height="6" viewBox="0 0 42 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Page Dots" clip-path="url(#clip0_0_32)">
+<circle id="Ellipse" cx="3" cy="3" r="3" fill="white"/>
+<circle id="Ellipse_2" cx="15" cy="3" r="3" fill="white" fill-opacity="0.35"/>
+<circle id="Ellipse_3" cx="27" cy="3" r="3" fill="white" fill-opacity="0.35"/>
+<circle id="Ellipse_4" cx="39" cy="3" r="3" fill="white" fill-opacity="0.35"/>
+</g>
+<defs>
+<clipPath id="clip0_0_32">
+<rect width="42" height="6" fill="white"/>
+</clipPath>
+</defs>
+</svg>

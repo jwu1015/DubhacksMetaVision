@@ -29,6 +29,11 @@ def segmentation_headers() -> dict[str, str]:
     if not CF_ACCESS_CLIENT_ID:
         return {}
     return {"CF-Access-Client-Id": CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": CF_ACCESS_CLIENT_SECRET}
+
+
+# An Anthropic key that isn't scoped to a workspace must name one on every request (vision, match, rank).
+ANTHROPIC_WORKSPACE_ID = os.getenv("ANTHROPIC_WORKSPACE_ID", "").strip()
+ANTHROPIC_HEADERS = {"anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID} if ANTHROPIC_WORKSPACE_ID else {}
 USE_FIXTURES = _flag("USE_FIXTURES")
 DEMO_MODE = _flag("DEMO_MODE")
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast

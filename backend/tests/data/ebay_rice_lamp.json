@@ -1,0 +1,176 @@
+{
+  "search_metadata": {
+    "id": "6ad3df9dd23ff899a83a35ce",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/TgxTS15ZvnhQ5uf0zDpe77bvqHUJcvOvPy5_DirdUk0/6ad3df9dd23ff899a83a35ce.json",
+    "markdown_endpoint": "https://serpapi.com/searches/TgxTS15ZvnhQ5uf0zDpe77bvqHUJcvOvPy5_DirdUk0/6ad3df9dd23ff899a83a35ce.md",
+    "created_at": "2026-10-17 20:50:37 UTC",
+    "processed_at": "2026-10-17 20:50:37 UTC",
+    "ebay_url": "https://www.ebay.com/sch/i.html?_nkw=white+rice+paper+square+table+lamp",
+    "raw_html_file": "https://serpapi.com/searches/TgxTS15ZvnhQ5uf0zDpe77bvqHUJcvOvPy5_DirdUk0/6ad3df9dd23ff899a83a35ce.html",
+    "total_time_taken": 6.58
+  },
+  "search_parameters": {
+    "engine": "ebay",
+    "_nkw": "white rice paper square table lamp",
+    "ebay_domain": "ebay.com"
+  },
+  "search_information": {
+    "organic_results_state": "Results for exact spelling",
+    "total_results": 71,
+    "query_displayed": "white rice paper square table lamp"
+  },
+  "organic_results": [
+    {
+      "title": "Table Lamp Paper Lamp Able Lamp Standing Lamps with Rice Paper Shade for Bedr...",
+      "link": "https://www.ebay.com/itm/406727059456?_skw=white+rice+paper+square+table+lamp&itmmeta=01M55T34VB3BFWESY0YSXGQT40&hash=item5eb2d26800:g:7aYAAeSwjW9pon-d&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde89Ac9AqsDVuwE5WWu0rNcN7NPKvBlG5OEoIWvtORp6HZx3ITlGwP1%2F%2B%2FmPyIyCJI0h4gqPugzhEzyApBJtYmHIcVW1xnOBLGhbLPDw%2B9pvBp4z7ovz74yiN9zk1X93tK5kR%2Ftt2rF4f2V%2FSSbl7QXkUz0GtbzE7dJlHahXoFm5yTpHVfWmYN8VvEAbHSTpt0Xmf%2B%2FyfEX3Gf8hKITvuv%2FOasx31dCWyUSmQ452RYr7Pl%2BTqmkWK%2BHZuwFsv1I04bhLnG7px4UM2ZuzRMeWoMC6S2EhnUuiuwbIB21a%2B9gVEXahnXTxja8MNa7Jie88EI4%3D%7Ctkp%3ABk9SR4LOjLqpaA",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=406727059456",
+      "product_id": "406727059456",
+      "condition": "Brand New",
+      "price": {
+        "raw": "$30.40",
+        "extracted": 30.4
+      },
+      "shipping": {
+        "raw": "+$9.99 delivery in 2-4 days",
+        "extracted": 9.99
+      },
+      "location": "Located in United States",
+      "returns": "Free returns",
+      "buying_format": "buy_it_now",
+      "buying_format_text": "Buy It Now",
+      "thumbnail": "https://i.ebayimg.com/images/g/7aYAAeSwjW9pon-d/s-l500.webp",
+      "seller": {
+        "username": "fairtrade_25",
+        "reviews": 2800,
+        "positive_feedback_in_percentage": 99.6
+      }
+    },
+    {
+      "sponsored": true,
+      "title": "Japanese Paper Table Lamp White 7.8\"x13\" Color Changing 3 Bulb Paper Shade",
+      "link": "https://www.ebay.com/itm/398341530871?_skw=white+rice+paper+square+table+lamp&itmmeta=01M55T34VBGJ0DSB1901X216BB&hash=item5cbf0164f7:g:nMkAAeSwYspqlK4Q&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde8AMXoAd859EO8886hmIm2BGCSIJ4JmZRUaUpgfxCiff8QRf8dssGPzdbka097Jr1w0lrTmI232UZ7py%2BXUfNBOt96dX35DFs%2FxtZG1%2BFt3V4RpXWN9r6DwcdC0wWsZKNdjGr9w30QMXvfPC2F%2BnLgahwNNn7Ch2iRQj92nuq%2BvU1Ipd6hXWDnmrJzjQviHZ%2FVhwxt6YM5WLh7fDf3tFpQ%2B%2BzLSs1xvHQfz3muw4fDXJfpStS9FKr%2BvbxxLhVyycMWpUDGMlVnqbJZE1wFjrhosYYDPiSG%2BmOMpJGnaCmfR%2BA8HKi4GmXyb319Ywzl1H7Y%3D%7Ctkp%3ABFBMgs6Muqlo",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=398341530871",
+      "product_id": "398341530871",
+      "condition": "Brand New",
+      "price": {
+        "raw": "$52.99",
+        "extracted": 52.99
+      },
+      "shipping": "Free delivery in 2-4 days",
+      "location": "Located in United States",
+      "returns": "Free returns",
+      "buying_format": "buy_it_now",
+      "buying_format_text": "Buy It Now",
+      "thumbnail": "https://i.ebayimg.com/images/g/nMkAAeSwYspqlK4Q/s-l500.webp",
+      "seller": {
+        "username": "shadow_taf",
+        "reviews": 472,
+        "positive_feedback_in_percentage": 99
+      }
+    },
+    {
+      "sponsored": true,
+      "title": "Table Lamp Paper Lamp Able Lamp Standing Lamps with Rice Paper Shade for Bedr...",
+      "link": "https://www.ebay.com/itm/406727059443?_skw=white+rice+paper+square+table+lamp&itmmeta=01M55T34VBM23J2WW9QX3EZBN8&hash=item5eb2d267f3:g:ewsAAeSw3Yhpon7q&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde8O0Hj38CS84q%2F1bTrfsOkBfukGrcgb0qMn9ZsWNTtj89afk2YR7lorUrHAcEhpgtHkP2nc4WLe%2Bx5k7oMM0CAoci0%2F271m4oTVbviekmnUmzrQszSm7n372H2oMGTdm3oMVZmT0trpGzdyMEQIk9yuxJ3EpmExw%2BjpLL66QKeKxOjzikq2mFGen8t176CU4HlNyF4UQmBnrsG55qHct9jJTCArI8xuj28N0fWPxg7Wf6al4JnrHD5Jdww4eYqzRxJi7gvtIwQVlPuhVhiqFQ8Ke7YqTN2dY1gpnoAr9i2FZTkEDJULd1Xt5u5MjAJdIjI%3D%7Ctkp%3ABFBMgs6Muqlo",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=406727059443",
+      "product_id": "406727059443",
+      "condition": "Brand New",
+      "price": {
+        "raw": "$30.40",
+        "extracted": 30.4
+      },
+      "shipping": {
+        "raw": "+$9.99 delivery in 2-4 days",
+        "extracted": 9.99
+      },
+      "location": "Located in United States",
+      "returns": "Free returns",
+      "buying_format": "buy_it_now",
+      "buying_format_text": "Buy It Now",
+      "thumbnail": "https://i.ebayimg.com/images/g/ewsAAeSw3Yhpon7q/s-l500.webp",
+      "seller": {
+        "username": "fairtrade_25",
+        "reviews": 2800,
+        "positive_feedback_in_percentage": 99.6
+      }
+    },
+    {
+      "sponsored": true,
+      "title": "Table Lamp Paper Lamp Able Lamp Standing Lamps with Rice Paper Shade for Bedr...",
+      "link": "https://www.ebay.com/itm/187927921944?_skw=white+rice+paper+square+table+lamp&itmmeta=01M55T34VCEYVX2HJJS28Q8023&hash=item2bc1608518:g:NckAAeSw2zJpX2lJ&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde9yYFTsNllb1DEKT11KnAa37F%2FiOFQOcwP7QNX3xPCmhdwYFjqBKamujTzSjtzOiEWTVoTH%2FrAsU28mxOJZQQqppV5PU4raxYw7HTbbEHHyFSoJ9FMxiljzxlsYXAIXFnatpSU0DAhe73MjToIdp141oVPVcGiFC60PtHPpNgEh%2FBsT0QqjWA1z7NHyRdHf1JUowb2fbgL2jgxsQeAbFUomXSjCu7aDj4stCLFGWGwmpkTWbQOIKWLtWpdQAICErL1ISWQY3lhU4K5vMtLPz4BtQqiNzw22tDilfkSLW%2BTz1vR0s2vXOylXrHcthO5rh00%3D%7Ctkp%3ABFBMgs6Muqlo",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=187927921944",
+      "product_id": "187927921944",
+      "condition": "Brand New",
+      "price": {
+        "raw": "$30.05",
+        "extracted": 30.05
+      },
+      "shipping": {
+        "raw": "+$9.99 delivery in 2-4 days",
+        "extracted": 9.99
+      },
+      "location": "Located in United States",
+      "returns": "Free returns",
+      "buying_format": "buy_it_now",
+      "buying_format_text": "Buy It Now",
+      "thumbnail": "https://i.ebayimg.com/images/g/NckAAeSw2zJpX2lJ/s-l500.webp",
+      "seller": {
+        "username": "mmi_inc",
+        "reviews": 18500,
+        "positive_feedback_in_percentage": 99.5
+      }
+    },
+    {
+      "title": "Japan Design White Rice Paper Decorative Table Lamp 17\"",
+      "link": "https://www.ebay.com/itm/177094595714?_skw=white+rice+paper+square+table+lamp&itmmeta=01M55T34VCE8N6WKX4D2HVMV6H&hash=item293ba91482:g:KbAAAOSwPXloJTGC&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde9MkuOUvjUY2fu5zozuS8%2BY8l9eh5KP--HH%2Ft2IsRrAYvctUNPSAmW%2BGUaDFL%2FBQZlNrRqqGAJ12DRGeXv53oEJRrGZc02JnfqgcmdKKl1%2FKNKhpM1jv9eIKyEdPWRT%2BeEe7P68RD4sIRUzfA4eSHNh3soXCltJz3qbCdnQTCauf8On2IYl%2FuQ01YGtgMDEOFB7RDwIkth8W8mM4k3AfKiBRChSp3bT2sczu90X2IW0VU3MDyZKzsXAxQwiYKXU0pUguaH%2B9e6PV3waztqfXYJoDf6%2FXgoDRj7%2BSTm%2FhRPnbjUn8TaJSL7HwZ9CWevt6ps%3D%7Ctkp%3ABk9SR4LOjLqpaA",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=177094595714",
+      "product_id": "177094595714",
+      "condition": "Brand New",
+      "price": {
+        "raw": "$49.99",
+        "extracted": 49.99
+      },
+      "shipping": "Free delivery",
+      "location": "Located in United States",
+      "watchers": "17 watchers",
+      "extracted_watchers": 17,
+      "buying_format": "accepts_offers",
+      "buying_format_text": "or Best Offer",
+      "thumbnail": "https://i.ebayimg.com/images/g/KbAAAOSwPXloJTGC/s-l500.webp",
+      "seller": {
+        "username": "dealer_mart",
+        "reviews": 285,
+        "positive_feedback_in_percentage": 99.1
+      }
+    },
+    {
+      "sponsored": true,
+      "title": "Small Rice Paper Lamp, Japanese Lamp Lantern Table Lamp, Paper Table Lamp, La...",
+      "link": "https://www.ebay.com/itm/398412296691?_skw=white+rice+paper+square+table+lamp&var=666697530999&itmmeta=01M55T34VF0RCQ4K7V2RMG14VR&hash=item5cc33931f3:g:UmUAAeSwLgNqrznQ&itmprp=enc%3AAQALAAABACHNgUiiE%2FjQhlDTaMiAde%2FaFGHaMRiY4VZFirPWoSpZ8XNW%2BYnH0Cp77qGDJuHi303cOv08GtVw19y%2B%2FcMqOhlh%2Bnx6RjdKBAMOj9WSmHU7ulsXOeMvEwnIIAtyjndB%2B3vnS5%2F3nz19oBDD8Qf0jKkY6hlt3eEnSfzb2hwvk2adA0fKumcKvcn76c75i9CGR6vSp9bWXLl2M34dPj1CWEmyT%2Fdt73e2T1ViKGCMudOmsvjWez%2FAN%2B6GEhqu1at4uNF8WM6YAOzddKlpBCaNVEvQQPCxHGtUyeO2c5ElKDxWctiPiv3zG3JpnKt662Khz0bgpvXZyh5W5Vu2uqY00wk%3D%7Ctkp%3ABFBMhM6Muqlo",
+      "serpapi_link": "https://serpapi.com/search.json?ebay_domain=ebay.com&engine=ebay_product&product_id=398412296691",
+      "product_id": "398412296691",
+      "condition": "Brand New",
+      "price": {
+        "from": {
+          "raw": "$49.99",
+          "extracted": 49.99
+        },
+        "to": {
+          "raw": "$71.99",
+          "extracted": 71.99
+        }
+      },
+      "shipping": "Free delivery in 3-4 days",
+      "location": "Located in United States",
+      "buying_format": "buy_it_now",
+      "buying_format_text": "Buy It Now",
+      "thumbnail": "https://i.ebayimg.com/images/g/UmUAAeSwLgNqrznQ/s-l500.webp",
+      "seller": {
+        "username": "colsm_10",
+        "reviews": 113,
+        "positive_feedback_in_percentage": 97.4
+      }
+    }
+  ]
+}

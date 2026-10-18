@@ -1,0 +1,24 @@
+{
+  "search_metadata": {
+    "id": "6ad3df9df680d191940d6616",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/Dj4SGLme4sWcR_-A1ikCDxhvW1ABfFqtxXY1hNV1K7w/6ad3df9df680d191940d6616.json",
+    "markdown_endpoint": "https://serpapi.com/searches/Dj4SGLme4sWcR_-A1ikCDxhvW1ABfFqtxXY1hNV1K7w/6ad3df9df680d191940d6616.md",
+    "created_at": "2026-10-17 20:50:37 UTC",
+    "processed_at": "2026-10-17 20:50:37 UTC",
+    "google_lens_url": "https://lens.google.com/uploadbyurl?url=https%3A%2F%2Fupload.wikimedia.org%2Fwikipedia%2Fcommons%2F8%2F8d%2FORGEL_table_lamp.jpg&hl=en",
+    "raw_html_file": "https://serpapi.com/searches/Dj4SGLme4sWcR_-A1ikCDxhvW1ABfFqtxXY1hNV1K7w/6ad3df9df680d191940d6616.html",
+    "total_time_taken": 13.02
+  },
+  "search_parameters": {
+    "engine": "google_lens",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/8/8d/ORGEL_table_lamp.jpg",
+    "hl": "en",
+    "country": "US",
+    "type": "exact_matches"
+  },
+  "search_information": {
+    "images_results_state": "Fully empty"
+  },
+  "error": "Google Lens hasn't returned any results for this query."
+}
