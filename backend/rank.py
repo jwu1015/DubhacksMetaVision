@@ -15,18 +15,16 @@ import sys
 import time
 from pathlib import Path
 
-import anthropic
 from pydantic import BaseModel
 
-import config  # loads .env before the Anthropic client reads ANTHROPIC_API_KEY
 import pricing
 import search
+import vlm
 from match import FOUND_SCORE  # the match score at which a result counts as the item itself
 from models import Item, PriceInsight, Product, SearchResponse
 
 log = logging.getLogger("gtl")
 
-MODEL = "claude-haiku-5-5"
 BUDGET_S = 4.0                # both attempts together; /search must finish in 5s
 SHOW_NEW, SHOW_USED = 12, 3   # products sent to Claude, in re-ranked order; list index = id
 MAX_DUPES, MAX_USED = 3, 2
@@ -72,18 +70,6 @@ class Picks(BaseModel):
     spoken_summary: str
 
 
-OUTPUT_FORMAT = {"type": "json_schema", "schema": anthropic.transform_schema(Picks)}
-
-_client: anthropic.AsyncAnthropic | None = None
-
-
-def client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        # ask() retries once, within BUDGET_S
-        _client = anthropic.AsyncAnthropic(max_retries=0, default_headers=config.ANTHROPIC_HEADERS)
-    return _client
-
 
 # ---------- the Claude call ----------
 
@@ -101,36 +87,13 @@ def prompt(item: Item, shown: list[Product], insight: PriceInsight) -> str:
             f"Results: {json.dumps(results)}")
 
 
-async def call_model(user: str, timeout: float) -> str:
-    """One Claude call; returns the reply text."""
-    msg = await client().messages.create(
-        model=MODEL, max_tokens=1500, system=SYSTEM, timeout=timeout,
-        messages=[{"role": "user", "content": user}],
-        thinking={"type": "disabled"},  # adaptive at low effort still thought here: 3.7s+ vs ~2.2s
-        output_config={"effort": "low", "format": OUTPUT_FORMAT},
-    )
-    if msg.stop_reason != "end_turn":
-        raise ValueError(f"stop_reason={msg.stop_reason}")
-    return "".join(b.text for b in msg.content if b.type == "text")
-
-
 async def ask(item: Item, shown: list[Product], insight: PriceInsight) -> Picks | None:
     """Claude's picks, or None after two failed attempts (or once the time budget runs out)."""
-    user = prompt(item, shown, insight)
-    deadline = time.perf_counter() + BUDGET_S
-    for attempt in (1, 2):
-        timeout = deadline - time.perf_counter()
-        if timeout < 1.0:
-            break
-        t0 = time.perf_counter()
-        try:
-            picks = Picks.model_validate_json(await call_model(user, timeout))
-            log.info("rank: claude %dms (attempt %d)", ms_since(t0), attempt)
-            return picks
-        except (anthropic.AnthropicError, ValueError) as e:  # ValueError covers bad JSON/schema
-            log.warning("rank: claude attempt %d failed after %dms: %s: %s",
-                        attempt, ms_since(t0), type(e).__name__, " ".join(str(e).split())[:200])
-    return None
+    try:
+        return await vlm.haiku.ask("rank", SYSTEM, prompt(item, shown, insight), Picks,
+                                   max_tokens=1500, timeout=BUDGET_S, attempts=2)
+    except vlm.VLMError:
+        return None
 
 
 # ---------- checking the picks ----------
@@ -338,7 +301,7 @@ async def main(item_path: str, products_path: str):
     resp = await choose(item, products, pricing.compute_price_insight(products))
     print(resp.model_dump_json(indent=2))
     print(f"choose: {ms_since(t0)}ms total (Claude latency is in the log line above)", file=sys.stderr)
-    await client().close()
+    await vlm.haiku.close()
 
 
 if __name__ == "__main__":

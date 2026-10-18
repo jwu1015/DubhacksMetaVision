@@ -222,7 +222,8 @@ def test_search_all_uses_claudes_queries_with_shopping_and_amazon(monkeypatch, s
     monkeypatch.setattr(search, "serp", fake_serp(seen))
     products = asyncio.run(search.search_all("https://img.example/c.jpg", ITEM))
     q = ITEM.search_queries
-    assert sorted(seen) == sorted([("google_shopping", q[0]), ("google_shopping", q[1]), ("amazon", q[0])])
+    assert sorted(seen) == sorted([("google_shopping", q[0]), ("google_shopping", q[1]), ("amazon", q[0]),
+                                   ("amazon", q[2])])  # q[2], the most generic: similar items, alongside
     assert {p.source for p in products} == {"shopping", "amazon"}  # no Lens, no eBay
     shop1 = [p.source_rank for p in products if p.store.endswith("(q1)")]
     assert shop1 == list(range(6, 12))  # query 1 continues query 0's numbering
@@ -261,6 +262,68 @@ def test_search_all_survives_a_slow_source(monkeypatch, scored):
     products, stats = asyncio.run(search.search_all_with_stats("https://img.example/c.jpg", ITEM))
     assert stats["amazon"]["status"].startswith("timeout")
     assert {p.source for p in products} == {"shopping"}
+
+
+def similar_serp(seen, fail=()):
+    """fake_serp, with the similar-items search's results marked so tests can tell them apart."""
+    base = fake_serp(seen, fail)
+
+    async def serp(params, capture_id=None, name=None):
+        data = await base(params, capture_id, name)
+        if name == "amazon_similar":
+            data = json.loads(json.dumps(data))
+            for r in data["organic_results"]:
+                r["title"] = "SIMILAR " + r["title"]
+                r["link_clean"] = (r.get("link_clean") or r["link"]) + "?similar"
+        return data
+    return serp
+
+
+def test_similar_items_used_when_the_exact_searches_find_nothing(monkeypatch, scored):
+    seen = []
+    monkeypatch.setattr(search, "serp", similar_serp(seen, fail={"shopping_0", "shopping_1", "amazon"}))
+    products, stats = asyncio.run(search.search_all_with_stats("https://img.example/c.jpg", ITEM))
+    assert stats["amazon_similar"]["status"] == "ok"
+    assert products and all(p.title.startswith("SIMILAR ") for p in products)
+    assert scored[0][2] == products  # they're scored like any other results
+
+
+def test_similar_items_ignored_when_the_exact_searches_find_something(monkeypatch, scored):
+    seen = []
+    monkeypatch.setattr(search, "serp", similar_serp(seen, fail={"shopping_0", "shopping_1"}))
+    products = asyncio.run(search.search_all("https://img.example/c.jpg", ITEM))
+    assert ("amazon", ITEM.search_queries[2]) in seen  # it ran, in parallel
+    assert products and not any(p.title.startswith("SIMILAR ") for p in products)  # Amazon's exact search answered
+
+
+def test_slow_similar_search_doesnt_hold_up_found_results(monkeypatch, scored):
+    base = fake_serp()
+
+    async def serp(params, capture_id=None, name=None):
+        if name == "amazon_similar":
+            await asyncio.sleep(3)  # within its limit, but slow
+        return await base(params, capture_id, name)
+
+    monkeypatch.setattr(search, "serp", serp)
+
+    async def go():
+        t0 = asyncio.get_running_loop().time()
+        products, stats = await search.search_all_with_stats("https://img.example/c.jpg", ITEM)
+        return products, stats, asyncio.get_running_loop().time() - t0
+
+    products, stats, took = asyncio.run(go())
+    assert products and took < 1.0  # didn't wait the 3 s for the similar search
+    assert stats["amazon_similar"]["status"] == "not needed"
+
+
+@pytest.mark.parametrize("queries, category, expected", [
+    (["hydro flask 40 oz", "black water bottle wide mouth", "insulated water bottle"], "water bottle", "insulated water bottle"),
+    (["hydro flask 40 oz", "black water bottle"], "water bottle", "water bottle"),  # fewer than 3: the category
+    (["water bottle"], "water bottle", None),  # the same as the first query: nothing to add
+    ([], None, None),
+])
+def test_similar_query(queries, category, expected):
+    assert search.similar_query(Item(category=category, search_queries=queries), queries) == expected
 
 
 def test_search_all_returns_the_match_scores(monkeypatch):
@@ -420,3 +483,56 @@ def test_serp_logs_serpapi_processing_time(monkeypatch, caplog, took, expected):
     with caplog.at_level("INFO", logger="gtl.search"):
         asyncio.run(go())
     assert "search lens: " in caplog.text and expected in caplog.text
+
+
+# ---------- OpenWeb Ninja (SHOPPING_PROVIDER=openwebninja) ----------
+
+OWN_SEARCH = raw("own_product_search.json")      # real responses
+OWN_OFFERS = raw("own_product_offers_v2.json")
+
+
+def test_parse_own_shopping_real_response():
+    products, dropped = search.parse_own_shopping(OWN_SEARCH, rank_offset=40)
+    assert len(products) == 10 and dropped == 0
+    first = products[0]
+    assert (first.title, first.store, first.price, first.source, first.source_rank) == \
+        ("HYDRO FLASK WIDE MOUTH FLEX CAP", "Hydro Flask", 49.95, "shopping", 40)
+    assert first.image_url.startswith("https://encrypted-tbn")
+
+
+def test_provider_switch_and_store_link_from_own_offers(monkeypatch):
+    calls = []
+
+    async def own_get(path, params, capture_id=None, name=None):
+        calls.append(path)
+        return OWN_OFFERS if path.endswith("product-offers-v2") else OWN_SEARCH
+
+    monkeypatch.setattr(search, "SHOPPING_PROVIDER", "openwebninja")
+    monkeypatch.setattr(search, "own_get", own_get)
+
+    async def go():
+        products, _ = await search.shopping_search("hydro flask 40 oz")
+        best = products[0].model_copy(update={"match_score": 95})
+        return await search.with_store_link(best)
+
+    linked = asyncio.run(go())
+    assert calls == ["realtime-product-search/search", "realtime-product-search/product-offers-v2"]
+    assert linked.url.startswith("https://www.hydroflask.com/")  # the offer from the listing's own store
+
+
+def test_parse_own_amazon_real_response():
+    products, dropped = search.parse_own_amazon(raw("own_amazon_search.json"))
+    assert len(products) >= 40 and dropped <= 8
+    first = products[0]
+    assert (first.source, first.store, first.price) == ("amazon", "Amazon", 49.95)
+    assert first.url == "https://www.amazon.com/dp/B0G99GK5P6" and first.image_url.startswith("https://m.media-amazon.com/")
+
+
+def test_amazon_provider_switch(monkeypatch):
+    async def own_get(path, params, capture_id=None, name=None):
+        assert path == "realtime-amazon-data/search" and params["query"] == "hydro flask"
+        return raw("own_amazon_search.json")
+    monkeypatch.setattr(search, "AMAZON_PROVIDER", "openwebninja")
+    monkeypatch.setattr(search, "own_get", own_get)
+    products, _ = asyncio.run(search.amazon_search("hydro flask"))
+    assert products and all(p.source == "amazon" for p in products)

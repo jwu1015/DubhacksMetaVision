@@ -1,9 +1,12 @@
 """pytest tests/test_prefetch.py  (from backend/). No network: Claude, the stores and the tracker are faked."""
 import asyncio
+import base64
 import io
 import json
 import time
 
+import anthropic
+import httpx
 import pytest
 from PIL import Image
 
@@ -39,11 +42,11 @@ def clock(monkeypatch):
 
 
 def fake_label(monkeypatch, calls=None):
-    async def call_model(jpeg):
+    async def call_model(system, content, schema, max_tokens, timeout):
         if calls is not None:
-            calls.append(jpeg)
+            calls.append(base64.b64decode(content[0]["source"]["data"]))
         return json.dumps({"name": "black insulated water bottle", "price_low": 30, "price_high": 50})
-    monkeypatch.setattr(prefetch, "call_model", call_model)
+    monkeypatch.setattr(prefetch.vlm.haiku, "call", call_model)
 
 
 LABEL = {"name": "black insulated water bottle", "price_low": 30, "price_high": 50}
@@ -74,17 +77,17 @@ def test_quick_label_once_after_half_a_second(clock, monkeypatch):
     ({"name": " ", "price_low": 10, "price_high": 30}, None),
 ])
 def test_quick_label_cleans_up_the_answer(monkeypatch, reply, expected):
-    async def call_model(jpeg):
+    async def call_model(system, content, schema, max_tokens, timeout):
         return json.dumps(reply)
-    monkeypatch.setattr(prefetch, "call_model", call_model)
+    monkeypatch.setattr(prefetch.vlm.haiku, "call", call_model)
     q = asyncio.run(prefetch.quick_label(b"jpeg"))
     assert (q.name, q.price_low, q.price_high) == expected if expected else q is None
 
 
 def test_quick_label_failure_gives_none(monkeypatch):
-    async def call_model(jpeg):
-        raise RuntimeError("API down")
-    monkeypatch.setattr(prefetch, "call_model", call_model)
+    async def call_model(system, content, schema, max_tokens, timeout):
+        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+    monkeypatch.setattr(prefetch.vlm.haiku, "call", call_model)
     assert asyncio.run(prefetch.quick_label(b"jpeg")) is None
 
 
