@@ -1,13 +1,19 @@
-"""W4: where to buy it. SAM-first: Google Lens on the SAM crop, then Lens's titles drive Google Shopping + eBay.
+"""W4: where to buy it. Google Shopping and Amazon through SerpAPI, searched with Claude's queries.
 
-    python search.py lamp=<public_image_url> [chair=<url> ...] [--out products.json]
+    python search.py <public_image_url> fixtures/item_lamp.json [--out products.json]
 
-Per item: Lens on the crop, then up to 3 queries are built from the top Lens titles (with the SAM label
-as a fallback), then Shopping (2 queries) and eBay run together. search_room does up to 5 items at once.
+Per item: Shopping for the item's first 2 search queries (Claude writes them in vision.py, most specific
+first; the SAM label when Claude didn't describe the item) and Amazon for the first, all at once. Then
+match.py has Claude rate how likely each result's photo is the same product (match_score). Once rank has
+chosen, with_store_link() swaps a found best match's Google Shopping page for its direct store link (one more
+search). search_room does up to 5 items at once.
+
+Lens isn't called: through SerpAPI it took 14-45s per photo (Oct 17) and often found nothing, while
+Claude's queries named the product in 2-3s. eBay isn't called either: Shopping already lists eBay sellers and
+second-hand offers. lens_raw, parse_lens, ebay_search and parse_ebay stay for reference.
 
 Field names were checked against saved SerpAPI responses (tests/data/) and, for Lens
-visual_matches, the example in SerpAPI's Google Lens docs (live Lens calls failed while this was
-written, so re-check parse_lens against a real response once Lens works).
+visual_matches, the example in SerpAPI's Google Lens docs.
 
 SERP_DEV_CACHE=true replays raw responses from .serp_dev_cache/ instead of spending searches while
 iterating. Keep it off for the demo.
@@ -26,6 +32,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import config
+import match
 import net
 from models import Item, Product
 
@@ -34,17 +41,16 @@ log = logging.getLogger("gtl.search")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-# Per-source limits, set so results come back rather than for speed (the 3.5s target is on hold).
-# Real calls took ~1s (Shopping), ~3.5s (eBay) and 7-8s (Lens), with a 13s Lens outlier. On Oct 17 a Lens
-# call took 14s (SerpAPI's own processing time, not network) and two others didn't finish within 15s and 40s.
-TIMEOUT_S = {"lens": 15.0, "shopping": 10.0, "ebay": 10.0}
+# Per-source limits. 7s caps how long one slow search can hold up an item: real calls usually took 1-3s
+# (Shopping, Amazon), but Shopping sometimes hung for the whole limit. (Lens took 14-45s; it isn't called.)
+TIMEOUT_S = {"lens": 15.0, "shopping": 7.0, "ebay": 7.0, "amazon": 7.0}
 # "all" (the default) returned only an ai_overview link and no visual_matches in our one test, so ask
 # for visual_matches directly. Compare again once Lens returns results.
 LENS_TYPE = "visual_matches"
 DEV_CACHE = config.ROOT / ".serp_dev_cache"
 
 TRACKING_PARAMS = {"gclid", "srsltid", "fbclid"}  # plus anything starting with utm_
-USED = re.compile(r"pre-?owned|\bused\b|refurb", re.I)
+USED = re.compile(r"pre-?owned|\bused\b|refurb|renewed", re.I)  # Amazon "Renewed" is refurbished
 NON_USD = re.compile(
     r"[€£¥₹₩₽₺₪₫₱฿]"
     r"|\b(?:EUR|GBP|JPY|CAD|AUD|NZD|INR|CHF|MXN|BRL|CNY)\b"
@@ -148,8 +154,9 @@ def parse_shopping(raw: dict, rank_offset: int = 0) -> tuple[list[Product], int]
         if price is None:
             dropped += 1
             continue
+        tier = "used" if r.get("second_hand_condition") else "new"  # "pre-owned" or "refurbished"
         out.append(Product(title=r["title"], store=r.get("source") or "", price=price, url=url,
-                           image_url=r.get("thumbnail"), source="shopping", source_rank=rank_offset + i))
+                           image_url=r.get("thumbnail"), source="shopping", tier=tier, source_rank=rank_offset + i))
     return out, dropped
 
 
@@ -172,8 +179,36 @@ def parse_ebay(raw: dict) -> tuple[list[Product], int]:
 
 # ---------- SerpAPI ----------
 
+
+def parse_amazon(raw: dict) -> tuple[list[Product], int]:
+    out, dropped = [], 0
+    for rank, r in enumerate(raw.get("organic_results") or []):
+        url = r.get("link_clean") or r.get("link")  # link_clean skips the ad redirect on sponsored results
+        if not (url and r.get("title")):
+            continue
+        price = parse_price(r.get("extracted_price"), r.get("price"))
+        if price is None:
+            dropped += 1
+            continue
+        tier = "used" if USED.search(r["title"]) else "new"
+        out.append(Product(title=r["title"], store="Amazon", price=price, url=url,
+                           image_url=r.get("thumbnail"), source="amazon", tier=tier, source_rank=rank))
+    return out, dropped
+
 def _dev_cache_on() -> bool:
     return os.getenv("SERP_DEV_CACHE", "false").strip().lower() in ("1", "true", "yes")
+
+
+def log_serpapi_time(name: str | None, data: dict, waited: float):
+    """SerpAPI's own processing time next to our wait for the request: a big gap means the delay is ours."""
+    took = (data.get("search_metadata") or {}).get("total_time_taken")
+    if not isinstance(took, (int, float)):
+        log.info("search %s: our request %.1fs (SerpAPI gave no processing time)", name, waited)
+    elif waited < took:  # can't get results faster than they were made: SerpAPI replayed its 1-hour cache
+        log.info("search %s: our request %.1fs, served from SerpAPI's cache (first run took %.1fs)",
+                 name, waited, took)
+    else:
+        log.info("search %s: SerpAPI processing %.1fs, our request %.1fs", name, took, waited)
 
 
 async def serp(params: dict, capture_id: str | None = None, name: str | None = None) -> dict:
@@ -186,9 +221,11 @@ async def serp(params: dict, capture_id: str | None = None, name: str | None = N
     if _dev_cache_on() and cache.exists():
         data = json.loads(cache.read_text())
     else:
+        t0 = time.perf_counter()
         r = await net.client().get(SERPAPI_URL, params=params | {"api_key": os.getenv("SERPAPI_KEY", "")},
                                    timeout=max(TIMEOUT_S.values()))  # _run's wait_for is the real limit
         data = r.json()  # SerpAPI errors are JSON too
+        log_serpapi_time(name, data, time.perf_counter() - t0)
         if r.status_code != 200:
             raise SerpError(f"HTTP {r.status_code}: {data.get('error')}")
         if _dev_cache_on():
@@ -208,20 +245,43 @@ async def lens_raw(cutout_url: str, capture_id: str | None = None) -> dict:
                       capture_id, "lens")
 
 
-def lens_titles(raw: dict) -> list[str]:
-    """Titles of every visual match, priced or not: an unpriced Lens match still names the product."""
-    return [r["title"] for r in raw.get("visual_matches") or [] if r.get("title")]
+# Google Shopping results carry no store link, only a token for the product's page of sellers. Kept by result
+# URL, so the found product's direct link can be fetched later (one more search, found items only).
+PAGE_TOKENS: dict[str, str] = {}
+STORE_LINK_TIMEOUT_S = 5.0
 
 
 async def shopping_search(query: str, capture_id: str | None = None,
                           name: str = "shopping_0") -> tuple[list[Product], int]:
     raw = await serp({"engine": "google_shopping", "q": query, "gl": "us", "hl": "en"}, capture_id, name)
+    if len(PAGE_TOKENS) > 5000:  # a long-running server: forget old searches
+        PAGE_TOKENS.clear()
+    for r in raw.get("shopping_results") or []:
+        url, token = r.get("link") or r.get("product_link"), r.get("immersive_product_page_token")
+        if url and token:
+            PAGE_TOKENS[url] = token
     return parse_shopping(raw)
+
+
+async def store_link(p: Product) -> str | None:
+    """A Shopping result's direct link at its store, from Google's page of sellers; None if there isn't one."""
+    token = PAGE_TOKENS.get(p.url) if p.source == "shopping" else None
+    if not token:
+        return None
+    raw = await serp({"engine": "google_immersive_product", "page_token": token})
+    stores = [s for s in (raw.get("product_results") or {}).get("stores") or [] if s.get("link")]
+    same = next((s for s in stores if (s.get("name") or "").lower() == p.store.lower()), None)
+    return (same or (stores[0] if stores else {})).get("link")
 
 
 async def ebay_search(query: str, capture_id: str | None = None) -> tuple[list[Product], int]:
     raw = await serp({"engine": "ebay", "_nkw": query, "ebay_domain": "ebay.com"}, capture_id, "ebay")
     return parse_ebay(raw)
+
+
+async def amazon_search(query: str, capture_id: str | None = None) -> tuple[list[Product], int]:
+    raw = await serp({"engine": "amazon", "k": query, "amazon_domain": "amazon.com"}, capture_id, "amazon")
+    return parse_amazon(raw)
 
 
 # ---------- search_all ----------
@@ -253,147 +313,118 @@ async def _run(name: str, job, stats: dict) -> list[Product]:
     return products
 
 
-# ---------- queries from Lens ----------
-
-MAX_QUERY_WORDS = 8
-
-
-def _clean_title(title: str) -> str:
-    title = re.split(r"\s+[|\u2013\u2014-]\s+", title)[0]  # "Arc Floor Lamp - Wayfair" -> "Arc Floor Lamp"
-    return " ".join(title.split()[:MAX_QUERY_WORDS])
-
-
-def queries_from_lens(label: str, titles: list[str], limit: int = 3) -> list[str]:
-    """Search queries from the top Lens titles, most similar match first.
-
-    Skips one-word and repeated titles, and puts the SAM label in front when a title lacks it. With no
-    usable title (Lens failed or found nothing) the bare label is the only query.
-    """
-    label = label.strip()
-    queries, seen = [], set()
-    for title in titles:
-        q = _clean_title(title)
-        key = _title_key(q)
-        if len(q.split()) < 2 or key in seen:
-            continue
-        seen.add(key)
-        queries.append(f"{label} {q}" if label and label.lower() not in q.lower() else q)
-        if len(queries) == limit:
-            break
-    return queries or ([label] if label else [])
-
-
-# ---------- search_item / search_room ----------
+# ---------- search_all / search_room ----------
 
 MAX_ROOM_ITEMS = 5
-ROOM_CONCURRENCY = 3  # items searched at once; each is about 4 SerpAPI calls
+ROOM_CONCURRENCY = 3  # items searched at once; each is about 3 SerpAPI calls and one Claude call
 
 
-async def search_item_with_stats(cutout_url: str, label: str,
-                                 capture_id: str | None = None) -> tuple[list[Product], dict, list[str]]:
-    titles: list[str] = []
+def queries_for(item: Item) -> list[str]:
+    """Claude's search queries, most specific first; the SAM label (category) when there are none."""
+    return [q.strip() for q in item.search_queries if q.strip()] or ([item.category] if item.category else [])
 
-    async def lens_job():
-        raw = await lens_raw(cutout_url, capture_id)
-        titles.extend(lens_titles(raw))
-        return parse_lens(raw)
 
-    stats: dict = {}
-    results = {"lens": await _run("lens", lens_job(), stats)}
-
-    queries = queries_from_lens(label, titles)
+async def search_all_with_stats(cutout_url: str, item: Item,
+                                capture_id: str | None = None) -> tuple[list[Product], dict]:
+    queries = queries_for(item)
     jobs = {}
     for i, q in enumerate(queries[:2]):
         jobs[f"shopping_{i}"] = shopping_search(q, capture_id, f"shopping_{i}")
     if queries:
-        jobs["ebay"] = ebay_search(queries[0], capture_id)  # first query is the closest Lens match
-    stats.update(dict.fromkeys(jobs))  # filled by _run; keeps job order for printing
-    results |= dict(zip(jobs, await asyncio.gather(*(_run(n, j, stats) for n, j in jobs.items()))))
+        jobs["amazon"] = amazon_search(queries[0], capture_id)  # the first query is the most specific
+
+    stats: dict = dict.fromkeys(jobs)  # filled by _run; keeps job order for printing
+    results = dict(zip(jobs, await asyncio.gather(*(_run(n, j, stats) for n, j in jobs.items()))))
 
     # Shopping query 1 continues query 0's numbering.
     offset = max((p.source_rank for p in results.get("shopping_0", [])), default=-1) + 1
     for p in results.get("shopping_1", []):
         p.source_rank += offset
 
-    products = dedupe([p for name in results for p in results[name]])
-    log.info("search %s (%s): queries=%s, %d products after dedupe", capture_id, label, queries, len(products))
-    return products, stats, queries
+    products = dedupe([p for name in jobs for p in results[name]])
+    products = await match.score(cutout_url, item, products)
+    log.info("search %s: queries=%s, %d products after dedupe", capture_id, queries, len(products))
+    return products, stats
 
 
-async def search_item(cutout_url: str, label: str, capture_id: str | None = None) -> list[Product]:
-    """Lens on the crop, then Shopping (2 queries) + eBay from the Lens titles.
+async def search_all(cutout_url: str, item: Item, capture_id: str | None = None) -> list[Product]:
+    """Shopping for the item's first 2 queries + Amazon for the first, at once, then a match score for each result.
 
     Normalized, priced, deduped. A failing or slow source contributes [] and never raises.
     """
-    products, _, _ = await search_item_with_stats(cutout_url, label, capture_id)
+    products, _ = await search_all_with_stats(cutout_url, item, capture_id)
     return products
 
 
-async def search_room(items: list[tuple[str, str]], capture_id: str | None = None,
+async def search_room(items: list[tuple[Item, str]], capture_id: str | None = None,
                       on_result=None) -> list[list[Product]]:
-    """Search up to 5 (label, crop_url) pairs at once; results line up with the input order.
+    """Search up to 5 (item, crop_url) pairs at once; results line up with the input order.
 
-    on_result(index, label, products) is awaited as each item finishes, so the app can show prices as they
+    on_result(index, item, products) is awaited as each item finishes, so the app can show prices as they
     arrive. One failing item gives [] and does not affect the others.
     """
     sem = asyncio.Semaphore(ROOM_CONCURRENCY)
 
-    async def one(i: int, label: str, url: str) -> list[Product]:
+    async def one(i: int, item: Item, url: str) -> list[Product]:
         try:
             async with sem:
-                products = await search_item(url, label, f"{capture_id}_{i}" if capture_id else None)
+                products = await search_all(url, item, f"{capture_id}_{i}" if capture_id else None)
         except Exception as e:
-            log.warning("search %s item %d (%s) failed: %s", capture_id, i, label, _scrub(e))
+            log.warning("search %s item %d (%s) failed: %s", capture_id, i, item.category, _scrub(e))
             products = []
         if on_result:
-            await on_result(i, label, products)
+            await on_result(i, item, products)
         return products
 
-    return list(await asyncio.gather(*(one(i, label, url) for i, (label, url) in enumerate(items[:MAX_ROOM_ITEMS]))))
+    return list(await asyncio.gather(*(one(i, item, url) for i, (item, url) in enumerate(items[:MAX_ROOM_ITEMS]))))
 
 
-async def search_all(cutout_url: str, item: Item, capture_id: str | None = None) -> list[Product]:
-    """What main.py calls today for one item: search_item with the item's category as the label."""
-    return await search_item(cutout_url, item.category or "", capture_id)
+async def with_store_link(best: Product | None) -> Product | None:
+    """The chosen best match, if found (match score FOUND_SCORE or more), with its direct store link in place
+    of Google Shopping's page: one more search. eBay results already link to the listing. Never raises."""
+    if best is None or (best.match_score or 0) < match.FOUND_SCORE:
+        return best
+    try:
+        link = await asyncio.wait_for(store_link(best), STORE_LINK_TIMEOUT_S)
+    except Exception as e:  # timeout, SerpAPI error: keep the link it has
+        log.warning("search: no store link for %r: %s", best.title[:60], _scrub(e))
+        return best
+    if link:
+        log.info("search: found %r (score %s), store link %s", best.title[:60], best.match_score, link)
+    return best.model_copy(update={"url": link}) if link else best
 
 
 # ---------- CLI ----------
 
-async def _cli(pairs: list[tuple[str, str]], out: str | None):
+async def _cli(image_url: str, item_path: str, out: str | None):
+    item = Item.model_validate_json(Path(item_path).read_text())
     capture_id = "cli_" + time.strftime("%Y%m%d_%H%M%S")
     t0 = time.perf_counter()
     try:
-        results = await asyncio.gather(*(search_item_with_stats(url, label, f"{capture_id}_{i}")
-                                         for i, (label, url) in enumerate(pairs)))
+        products, stats = await search_all_with_stats(image_url, item, capture_id)
     finally:
         await net.close()
     total_ms = round((time.perf_counter() - t0) * 1000)
 
-    for (label, _), (products, stats, queries) in zip(pairs, results):
-        print(f"\n=== {label}  queries: {queries}")
-        print(f"{'source':12} {'priced':>6} {'no price':>8} {'ms':>6}  status")
-        for name, s in stats.items():
-            print(f"{name:12} {s['priced']:>6} {s['dropped_no_price']:>8} {s['ms']:>6}  {s['status']}")
-        print(f"{len(products)} products after dedupe")
-        for p in products[:10]:
-            print(f"{p.source:8} #{p.source_rank:<3} {p.tier:4} ${p.price:>9,.2f}  {p.store[:18]:18}  {p.title[:60]}")
-    print(f"\ntotal {total_ms} ms (raw responses in logs/{capture_id}_<n>/)")
+    print(f"\nqueries: {queries_for(item)}")
+    print(f"{'source':12} {'priced':>6} {'no price':>8} {'ms':>6}  status")
+    for name, s in stats.items():
+        print(f"{name:12} {s['priced']:>6} {s['dropped_no_price']:>8} {s['ms']:>6}  {s['status']}")
+    print(f"\n{len(products)} products after dedupe, total {total_ms} ms (raw responses in logs/{capture_id}/)\n")
+    for p in sorted(products, key=lambda p: (p.match_score is None, -(p.match_score or 0)))[:10]:
+        score = "-" if p.match_score is None else p.match_score
+        print(f"{score:>3}  {p.source:8} #{p.source_rank:<3} {p.tier:4} ${p.price:>9,.2f}  "
+              f"{p.store[:18]:18}  {p.title[:60]}")
     if out:
-        data = {label: [p.model_dump() for p in products] for (label, _), (products, _, _) in zip(pairs, results)}
-        Path(out).write_text(json.dumps(data, indent=2) + "\n")
-        print(f"wrote {sum(len(v) for v in data.values())} products to {out}")
+        Path(out).write_text(json.dumps([p.model_dump() for p in products], indent=2) + "\n")
+        print(f"\nwrote {len(products)} products to {out}")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    ap = argparse.ArgumentParser(description="Search one or more SAM crops: label=<public image url> ...")
-    ap.add_argument("items", nargs="+", metavar="label=url", help="e.g. lamp=https://example.com/lamp.jpg")
+    ap = argparse.ArgumentParser(description="Run search_all for one image URL + Item JSON.")
+    ap.add_argument("image_url", help="public URL of the crop (or any product photo)")
+    ap.add_argument("item_json", help="Item JSON file, e.g. fixtures/item_lamp.json")
     ap.add_argument("--out", help="also write the products as JSON here")
     args = ap.parse_args()
-    pairs = []
-    for arg in args.items:
-        label, sep, url = arg.partition("=")
-        if not sep or not url.startswith("http"):
-            ap.error(f"expected label=<public image url>, got {arg!r}")
-        pairs.append((label, url))
-    asyncio.run(_cli(pairs, args.out))
+    asyncio.run(_cli(args.image_url, args.item_json, args.out))

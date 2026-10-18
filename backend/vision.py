@@ -14,7 +14,7 @@ import anthropic
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel, ValidationError
 
-import config  # noqa: F401 - loads .env so the client finds ANTHROPIC_API_KEY
+import config  # loads .env so the client finds ANTHROPIC_API_KEY
 from models import BBox, Item
 
 log = logging.getLogger("gtl.vision")
@@ -31,15 +31,19 @@ that single item. Ignore people, walls, floors, ceilings, and windows.
 Fill in these fields:
 - category: short noun phrase (e.g. "floor lamp", "running shoes", "backpack", "coffee maker")
   - this is also used as a segmentation text prompt, so keep it simple
-- description: one detailed sentence a shopper would type into a search box,
-  including shape, color, material, and distinctive features
+- description: 2-4 sentences, detailed enough to tell this exact product
+  apart from similar ones: exact colors and finishes, materials, shape and
+  proportions, distinctive design details, any visible text, logos, labels
+  or model numbers, and approximate size
 - style: design style if the product has one (e.g. "mid-century modern", "minimalist",
   "streetwear", "industrial"), else null
 - colors: 1-3 colors
 - materials: 1-3 materials
 - brand_guess: brand if there is a visible logo or very distinctive design, else null
 - confidence: 0-1, how sure you are of the category and description
-- search_queries: 3 shopping search queries, most specific to most generic
+- search_queries: 3 shopping search queries, most specific to most generic.
+  If the brand or model is visible or recognizable, the first query names it
+  (brand, product line, model, color)
 - bbox: bounding box around that item as normalized coordinates
   {"x": left, "y": top, "w": width, "h": height}, each between 0 and 1,
   relative to the full image
@@ -71,7 +75,7 @@ def client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
         # /detect has a ~2s budget; the SDK default (10 min, 2 retries) would hang the app.
-        _client = anthropic.AsyncAnthropic(timeout=15.0, max_retries=1)
+        _client = anthropic.AsyncAnthropic(timeout=15.0, max_retries=1, default_headers=config.ANTHROPIC_HEADERS)
     return _client
 
 

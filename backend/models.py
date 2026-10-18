@@ -44,7 +44,7 @@ class Product(BaseModel):
     currency: str = "USD"
     url: str
     image_url: str | None = None
-    source: Literal["lens", "shopping", "ebay"]
+    source: Literal["lens", "shopping", "ebay", "amazon"]
     tier: Literal["new", "dupe", "used"] = "new"
     source_rank: int
     match_score: int | None = None     # 0-100, set by rerank
