@@ -2,9 +2,8 @@
 
     python fixtures/make_fixtures.py        (run from backend/)
 
-URLs served by our backend use the placeholder __BASE__; main.py swaps in
-PUBLIC_BASE_URL when it serves fixtures. Product links point at example.com and
-thumbnails at placehold.co so the iOS team gets loadable images without fake store links.
+URLs served by our backend use the placeholder __BASE__, which readers swap for PUBLIC_BASE_URL.
+Product links point at example.com and thumbnails at placehold.co, so images load without fake store links.
 """
 import json
 import statistics
@@ -16,17 +15,13 @@ from PIL import Image, ImageDraw
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from models import (  # noqa: E402
-    BBox, DetectResponse, IdentifyResponse, Item, PriceInsight, Product,
-    SearchResponse, Segmentation,
-)
+from models import BBox, Item, PriceInsight, Product, SearchResponse  # noqa: E402
 
 BASE = "__BASE__"
 CAPTURE_ID = "c_fixture"
 IMG_W, IMG_H = 1024, 768
 
-# Where the lamp is drawn, and Claude's rougher box around it. The tight (SAM) box
-# is measured from the drawn mask so it matches the mask pixels exactly.
+# Where the lamp is drawn, and Claude's rougher box around it.
 LAMP_BOX = BBox(x=0.33, y=0.14, w=0.22, h=0.71)
 ROUGH = BBox(x=0.30, y=0.10, w=0.30, h=0.78)
 
@@ -59,28 +54,6 @@ def make_images():
     d.rectangle([80, int(IMG_H * 0.86), 900, IMG_H - 10], fill=(120, 60, 50))
     draw_lamp(d, LAMP_BOX)
     room.save(HERE / "lamp_room.jpg", quality=85)
-
-    # Mask: same size as the input image, 255 = object.
-    mask = Image.new("L", (IMG_W, IMG_H), 0)
-    draw_lamp(ImageDraw.Draw(mask), LAMP_BOX, fill_shade=255, fill_wood=255)
-    left, top, right, bottom = mask.getbbox()
-    tight = BBox(x=round(left / IMG_W, 4), y=round(top / IMG_H, 4),
-                 w=round((right - left) / IMG_W, 4), h=round((bottom - top) / IMG_H, 4))
-
-    # Cutout: object pixels on white, cropped to the mask bbox + 8% padding.
-    white = Image.new("RGB", (IMG_W, IMG_H), (255, 255, 255))
-    composite = Image.composite(room, white, mask)
-    pad_x, pad_y = (right - left) * 0.08, (bottom - top) * 0.08
-    crop_box = (
-        int(max(0, left - pad_x)), int(max(0, top - pad_y)),
-        int(min(IMG_W, right + pad_x)), int(min(IMG_H, bottom + pad_y)),
-    )
-    composite.crop(crop_box).save(HERE / "lamp_cutout.jpg", quality=90)
-
-    # Mask preview: the original with a translucent overlay on the object.
-    tinted = Image.blend(room, Image.new("RGB", room.size, (255, 60, 60)), 0.45)
-    Image.composite(tinted, room, mask).save(HERE / "lamp_mask.jpg", quality=85)
-    return tight
 
 
 # ---------- data ----------
@@ -207,39 +180,14 @@ def write(name: str, obj):
 
 
 def main():
-    tight = make_images()
+    make_images()
     raw, ranked, sims = make_products()
-
-    segmentation = Segmentation(
-        method="sam3", bbox=tight, mask_score=0.93,
-        cutout_path=f"uploads/{CAPTURE_ID}_cutout.jpg",
-        cutout_url=f"{BASE}/uploads/{CAPTURE_ID}_cutout.jpg",
-        mask_preview_url=f"{BASE}/uploads/{CAPTURE_ID}_mask.jpg",
-        latency_ms=610,
-    )
-    detect = DetectResponse(
-        capture_id=CAPTURE_ID, image_url=f"{BASE}/uploads/{CAPTURE_ID}.jpg",
-        item=ITEM, segmentation=segmentation, quick_phrase=ITEM.quick_phrase, latency_ms=2380,
-    )
     search = make_search(ranked)
-    IdentifyResponse(detect=detect, search=search)  # validate the merged shape too
 
     write("item_lamp.json", ITEM)
-    write("segmentation_lamp.json", segmentation)
     write("products_raw_lamp.json", [p.model_dump(mode="json") for p in raw])
     write("products_ranked_lamp.json", [p.model_dump(mode="json") for p in ranked])
-    write("detect_response.json", detect)
     write("search_response.json", search)
-    # Baptiste's segmentation server (POST /segment): pixel boxes [x1, y1, x2, y2] of the submitted
-    # frame, highest score first, no masks yet.
-    write("segment_service_response.json", {
-        "width": IMG_W, "height": IMG_H,
-        "objects": [{
-            "id": 0, "score": 0.93, "prompt": ITEM.category,
-            "box": [round(tight.x * IMG_W, 1), round(tight.y * IMG_H, 1),
-                    round((tight.x + tight.w) * IMG_W, 1), round((tight.y + tight.h) * IMG_H, 1)],
-        }],
-    })
     # Only products with a thumbnail are sent; similarities line up with candidate_urls.
     with_thumb = [(p, s) for p, s in zip(raw, sims) if p.image_url]
     write("embed_service_request.json", {

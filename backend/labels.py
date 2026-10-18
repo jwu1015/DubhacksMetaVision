@@ -1,8 +1,8 @@
 """Which objects SAM should look for: Claude picks them from a frame, within a category (moved here from
 the segmentation server on 18 Oct; the server now only takes labels).
 
-tracker.py asks before starting a session (the session starts once the labels are back), and segment.py
-before a one-photo session, whenever SAM_CATEGORIES is empty.
+tracker.py asks before starting a session, whenever SAM_CATEGORIES is empty; the session starts once
+the labels are back.
 
     python labels.py fixtures/lamp_room.jpg "furniture and home decor"
 """

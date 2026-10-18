@@ -10,12 +10,12 @@ import httpx
 import pytest
 from PIL import Image
 
+import crop
 import main
 import prefetch
 import rank
 import rerank
 import search
-import segment
 import stream
 import vision
 import webrtc
@@ -257,7 +257,7 @@ def fakes(monkeypatch):
         return SearchResponse(capture_id="", best_match=None, dupes=[], used=[], price_insight=insight,
                               spoken_summary="I couldn't find that one for sale.", timing_ms={})
 
-    for target, name, value in ((stream, "live", live), (main.config, "USE_FIXTURES", False), (prefetch, "seen", {}),
+    for target, name, value in ((stream, "live", live), (prefetch, "seen", {}),
                                 (vision, "detect", detect), (search, "search_all", search_all),
                                 (rerank, "rerank", passthrough), (rank, "choose", choose)):
         monkeypatch.setattr(target, name, value)
@@ -283,12 +283,12 @@ def test_a_background_look_keeps_only_what_it_found(fakes):
     assert files() == before and set(main.captures) == captures  # no capture: no photo, crop or search log
     assert fakes["events"] == []  # nothing announced
     assert look.describe.result() == CLAUDE_ITEM and results.capture_id == "" and results.spoken_summary
-    [(crop, queries, capture_id)] = fakes["search"]
+    [(cutout, queries, capture_id)] = fakes["search"]
     assert queries == CLAUDE_ITEM.search_queries and capture_id is None  # Claude's queries, not "bottle"
-    assert fakes["detect"] == [crop] and crop[:2] == b"\xff\xd8"  # Claude and the match score get the crop itself
+    assert fakes["detect"] == [cutout] and cutout[:2] == b"\xff\xd8"  # Claude and the match score get the crop itself
     track = stream.live.scene.tracks[7]
-    padded = segment.pad(track.frame_box, segment.SAM_PAD)
-    assert Image.open(io.BytesIO(crop)).size == segment.crop_image(track.frame, padded).size  # sam_crop's cutout
+    padded = crop.pad(track.frame_box, crop.SAM_PAD)
+    assert Image.open(io.BytesIO(cutout)).size == crop.crop_image(track.frame, padded).size  # sam_crop's cutout
 
 
 def test_a_pick_takes_the_finished_background_look_at_once(fakes):

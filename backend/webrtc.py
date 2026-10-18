@@ -488,7 +488,7 @@ class Phones:
         async with self.lock:
             if phone is self.current and not phone.started:
                 phone.started = True
-                await stream.live.start()  # no source: our frames are pushed
+                await stream.live.start()
 
     async def ended(self, phone: Phone):
         async with self.lock:

@@ -7,12 +7,10 @@ import json
 import unittest
 from unittest import mock
 
-import httpx
 import websockets
 from fastapi.testclient import TestClient
 from livekit import api, rtc
-from livekit.agents import Agent, ChatContext, ModelSettings, ToolError, llm
-from livekit.plugins import anthropic
+from livekit.agents import ToolError
 
 import config
 import main
@@ -120,50 +118,6 @@ class SeenTest(unittest.TestCase):
         self.assertIsNone(seen.update(look("results", "c_old", search=SEARCH)))
         self.assertNotIn("search", seen.look)
         self.assertEqual(seen.look["capture_id"], "c_new")
-
-    def test_products(self):
-        seen = picked()
-        self.assertEqual(seen.product("best_match", 1)["store"], "Wayfair")
-        self.assertEqual(seen.product("dupe", 2)["store"], "Target")
-        self.assertEqual(seen.product("used", 1)["store"], "eBay")
-        for option, number, why in (("dupe", 3, "only 2"), ("used", 0, "only 1"), ("best_match", 2, "only 1")):
-            with self.assertRaisesRegex(ToolError, why):
-                seen.product(option, number)
-        seen.update(look("detected", "c_2"))
-        with self.assertRaisesRegex(ToolError, "still loading"):
-            seen.product("best_match", 1)
-        seen.update(look("nothing", "c_3", None))
-        with self.assertRaisesRegex(ToolError, "Nothing is picked"):
-            seen.product("best_match", 1)
-
-    def test_note(self):
-        seen = voice.Seen()
-        seen.update(OBJECTS)
-        self.assertEqual(seen.note(), "No item is picked. In view: lamp, sofa, vase.")
-        seen.update(look("detected", label="lamp"))
-        self.assertIn("Current item: lamp.\nIts prices are still loading.", seen.note())
-        note = picked().note()
-        self.assertTrue(note.startswith("Current item: floor lamp.\nPrice check: Wayfair is within"), note)
-        self.assertIn("<app_data>\nDescription: Tripod floor lamp", note)  # store and image text stay in app_data
-        self.assertIn("Best match: Walnut Tripod Floor Lamp with Linen Shade, Wayfair, $230", note)
-        cut = SEARCH["dupes"][1]["title"][:voice.TITLE_CHARS]
-        self.assertIn(f"Dupes: 1. Wood Tripod Floor Lamp, Amazon, $120, save 48%; 2. {cut}, Target, $89.99, save 61%",
-                      note)
-        self.assertIn("Used: 1. Vintage Walnut Tripod Floor Lamp, eBay, $95.00, save 59%", note)
-        self.assertTrue(note.endswith("</app_data>"))
-        failed = picked()
-        failed.update(look("failed", message="nope"))
-        self.assertIn("Its prices failed to load.", failed.note())
-
-    def test_the_note_names_what_was_seen_recently(self):
-        seen = voice.Seen()
-        seen.update(scene(LAMP, CHAIR, thing(9, "rug", 0, 0.8, 1, 0.2, ago=11.6)))
-        self.assertEqual(seen.note(),
-                         "No item is picked. In view: lamp. Recently seen: chair (5 s ago), rug (12 s ago).")
-        seen.update(scene(LAMP, LEFT_LAMP, CHAIR))
-        self.assertEqual(seen.note(), "No item is picked. In view: lamp (2). Recently seen: chair (5 s ago).")
-        seen.update(scene(CHAIR))
-        self.assertEqual(seen.note(), "No item is picked. In view: nothing tracked. Recently seen: chair (5 s ago).")
 
     def test_a_reset_scene_memory_forgets_its_ids(self):  # a mode switch or a pause: ids start over
         seen = picked()
@@ -310,18 +264,8 @@ class FollowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((seen.look["capture_id"], len(seen.objects)), ("c_1", 3))
 
 
-class ToolTest(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.posts: list[str] = []
-        self.said: list[str] = []  # what the agent said exactly, from inside a tool
-        self.look_status = 200
-
-        def backend(request: httpx.Request):
-            if isinstance(self.look_status, Exception):
-                raise self.look_status
-            self.posts.append(request.url.path)
-            return httpx.Response(self.look_status, json={})
-        self.backend = httpx.AsyncClient(transport=httpx.MockTransport(backend), base_url="http://backend")
+class ActionTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
         self.local = FakeLocalParticipant()
         self.room = FakeRoom(self.local, FakeParticipant("agent-x", rtc.ParticipantKind.PARTICIPANT_KIND_AGENT),
                              FakeParticipant("phone-1", rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD))
@@ -329,156 +273,20 @@ class ToolTest(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    async def asyncTearDown(self):
-        await self.backend.aclose()
-
-    def agent(self, seen: voice.Seen) -> voice.Spotted:
-        return voice.Spotted(seen, self.backend, say=self.said.append)
-
-    async def test_look_at_looks_at_what_they_mean(self):
-        seen = voice.Seen()
-        self.assertIsNone(await self.agent(seen).look_at(None, ""))
-        self.assertEqual(self.said, ["Nothing's in view right now."])  # said as is, nothing from Claude after
-        seen.update(OBJECTS)  # an event from before scene memory
-        self.assertIsNone(await self.agent(seen).look_at(None, ""))  # the app says what it found
-        self.assertIsNone(await self.agent(seen).look_at(None, "couch"))
-        self.assertEqual(self.posts, ["/look/3", "/look/4"])
-        seen.update(scene(LAMP, CHAIR))
-        self.assertIsNone(await self.agent(seen).look_at(None, "the chair I just passed"))  # out of view
-        self.assertEqual(self.posts[-1], "/look/2")
-        self.assertIsNone(await self.agent(seen).look_at(None, "mirror"))
-        self.assertEqual(self.said[-1], "No mirror in view or seen recently.")
-        self.assertEqual(len(self.posts), 3)
-
-    async def test_when_the_look_fails(self):
-        seen = voice.Seen()
-        seen.update(scene(LAMP, CHAIR))
-        self.look_status = 404  # it left the scene memory
-        with self.assertRaisesRegex(ToolError, "Lost track"):
-            await self.agent(seen).look_at(None, "chair")
-        self.look_status = 500
-        with self.assertRaisesRegex(ToolError, "couldn't look"):
-            await self.agent(seen).look_at(None, "lamp")
-        self.look_status = httpx.ConnectError("refused")
-        with self.assertRaisesRegex(ToolError, "couldn't look"):
-            await self.agent(seen).look_at(None, "lamp")
-
-    async def test_two_lamps_ask_which_then_the_answer_picks(self):
-        seen = voice.Seen()
-        seen.update(scene(LAMP, LEFT_LAMP, CHAIR))
-        agent = self.agent(seen)
-        self.assertEqual(await agent.look_at(None, "lamp"), "The lamp on the left or the right?")
-        self.assertEqual((self.posts, seen.asked), ([], [4, 7]))
-        self.assertIsNone(await agent.look_at(None, "the left one"))
-        self.assertEqual((self.posts, seen.asked), (["/look/7"], []))
-
-    async def test_the_item_just_picked_starts_nothing(self):
-        seen = picked()
-        for target in ("", "lamp", "that floor lamp"):
-            self.assertIn("already the current item", await self.agent(seen).look_at(None, target))
-        self.assertEqual(self.posts, [])
-
-    async def test_the_other_one(self):
-        seen = voice.Seen()
-        seen.update(scene(LAMP, LEFT_LAMP, CHAIR))
-        agent = self.agent(seen)
-
-        async def say(tool, *args, track_id):  # then the app picks it, as the main server's events say
-            self.assertIsNone(await tool(None, *args))
-            self.assertEqual(self.posts[-1], f"/look/{track_id}")
-            seen.update(look("detected", f"c_{len(self.posts)}", track_id, label="lamp"))
-        await say(agent.look_at, "lamp on the right", track_id=4)
-        await say(agent.look_at_other, track_id=7)
-        await say(agent.look_at_other, track_id=4)  # they've both been tried: around again
-        await say(agent.look_at, "no, the other one", track_id=7)
-        await say(agent.look_at, "the other lamp", track_id=4)
-
-        seen.update(look("detected", "c_phone", 7, label="lamp"))  # tapped on the phone
-        await say(agent.look_at_other, track_id=4)
-
-        seen.update(scene(LAMP, CHAIR))
-        nothing = "There's no other one in view or seen recently."
-        self.assertIsNone(await agent.look_at_other(None))
-        self.assertIsNone(await self.agent(voice.Seen()).look_at_other(None))
-        self.assertEqual(self.said[-2:], [nothing, nothing])
-
-    async def test_actions_go_to_the_phone(self):
-        agent = self.agent(picked())
-        self.assertIn("Target's $89.99", await agent.add_to_cart(None, "dupe", 2))
-        await agent.save_item(None)
-        await agent.show_options(None, "used")
-        await agent.undo(None)
-        self.assertIn("Face ID", await agent.checkout(None))
-        sent = [(who, method, payload["name"]) for who, method, payload in self.local.calls]
-        self.assertEqual(sent, [("phone-1", "action", name) for name in
-                                ("add_to_cart", "save_item", "show_results", "undo_last", "start_checkout")])
-        add, _, show = (payload for _, _, payload in self.local.calls[:3])
-        self.assertEqual((add["capture_id"], add["product"]), ("c_1", SEARCH["dupes"][1]))
-        self.assertEqual((show["capture_id"], show["tab"]), ("c_1", "used"))
+    async def test_an_action_goes_to_the_phone(self):
+        self.assertEqual(await voice.phone_action("add_to_cart", capture_id="c_1"), {"ok": True})
+        self.assertEqual(self.local.calls, [("phone-1", "action", {"name": "add_to_cart", "capture_id": "c_1"})])
 
     async def test_when_the_phone_cant(self):
-        agent = self.agent(picked())
         self.local.reply = json.dumps({"ok": False, "detail": "The cart is full."})
         with self.assertRaisesRegex(ToolError, "The cart is full."):
-            await agent.add_to_cart(None, "best_match")
+            await voice.phone_action("add_to_cart")
         self.local.reply = rtc.RpcError(rtc.RpcError.ErrorCode.UNSUPPORTED_METHOD, "no such method")
         with self.assertRaisesRegex(ToolError, "couldn't do that"):
-            await agent.undo(None)
+            await voice.phone_action("undo_last")
         self.room.remote_participants.pop("phone-1")  # only the agent is left
         with self.assertRaisesRegex(ToolError, "isn't connected"):
-            await agent.checkout(None)
-        with self.assertRaisesRegex(ToolError, "Nothing is picked"):
-            await self.agent(voice.Seen()).save_item(None)
-
-    async def test_every_claude_call_gets_the_note(self):
-        ctx = ChatContext.empty()
-        ctx.add_message(role="user", content="Is that a good price?")
-        sent = []
-
-        async def default_llm_node(agent, chat_ctx, tools, model_settings):
-            sent.append(chat_ctx)
-            yield "Fair, about 230 dollars."
-        with mock.patch.object(Agent.default, "llm_node", default_llm_node):
-            chunks = [c async for c in self.agent(picked()).llm_node(ctx, [], ModelSettings())]
-        self.assertEqual(chunks, ["Fair, about 230 dollars."])
-        note = sent[0].items[-1]
-        self.assertEqual((note.role, sent[0].items[-2].text_content), ("system", "Is that a good price?"))
-        self.assertIn("Price check: Wayfair is within the typical", note.text_content)
-        self.assertEqual(len(ctx.items), 1)  # the session's own history doesn't keep old notes
-
-    async def test_what_claude_says_before_a_tool_is_dropped(self):
-        def text(s):
-            return llm.ChatChunk(id="m", delta=llm.ChoiceDelta(role="assistant", content=s))
-        call = llm.ChatChunk(id="m", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
-            llm.FunctionToolCall(name="add_to_cart", arguments='{"option": "dupe", "number": 2}', call_id="c")]))
-        usage = llm.ChatChunk(id="m", usage=llm.CompletionUsage(completion_tokens=9, prompt_tokens=900, total_tokens=909))
-
-        async def default_llm_node(agent, chat_ctx, tools, model_settings):
-            for chunk in (text("The Target one's cheapest. "), text("I'll add it."), call, usage):
-                yield chunk
-        with mock.patch.object(Agent.default, "llm_node", default_llm_node):
-            chunks = [c async for c in self.agent(picked()).llm_node(ChatContext.empty(), [], ModelSettings())]
-        self.assertEqual(chunks, [call, usage])
-
-        async def answer(agent, chat_ctx, tools, model_settings):
-            for chunk in (text("Fair price, "), usage, text("most sell for 70 to 290.")):
-                yield chunk
-        with mock.patch.object(Agent.default, "llm_node", answer):
-            chunks = [c async for c in self.agent(picked()).llm_node(ChatContext.empty(), [], ModelSettings())]
-        self.assertEqual("".join(c.delta.content for c in chunks if c.delta), "Fair price, most sell for 70 to 290.")
-
-
-class ClaudeTest(unittest.TestCase):
-    def test_thinking_off_and_low_effort(self):
-        llm = voice.Claude(model=voice.MODEL, api_key="test")
-        with mock.patch.object(anthropic.LLM, "chat", return_value="stream") as chat:
-            self.assertEqual(llm.chat(chat_ctx=ChatContext.empty()), "stream")
-            self.assertEqual(chat.call_args.kwargs["extra_kwargs"],
-                             {"thinking": {"type": "disabled"}, "output_config": {"effort": "low"}})
-            llm.chat(chat_ctx=ChatContext.empty(), extra_kwargs={"metadata": {"user_id": "u"},
-                                                                  "output_config": {"effort": "medium"}})
-            self.assertEqual(chat.call_args.kwargs["extra_kwargs"], {
-                "metadata": {"user_id": "u"}, "output_config": {"effort": "medium"}, "thinking": {"type": "disabled"}})
+            await voice.phone_action("start_checkout")
 
 
 class TokenRouteTest(unittest.TestCase):
