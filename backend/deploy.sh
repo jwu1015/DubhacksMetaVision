@@ -3,12 +3,15 @@
 # The backend reaches the segmentation server over localhost, so it skips its tunnel and Cloudflare Access.
 # Usage: ./deploy.sh [--restart]
 #   --restart  kill the existing session first (e.g. after pulling new code)
-# Attach with: tmux attach -t backend   (windows: tunnel, server; detach: Ctrl-b d)
+# Attach with: tmux attach -t backend   (windows: tunnel unless shared, server; detach: Ctrl-b d)
 #
 # Settings come from backend/.env as usual (ANTHROPIC_API_KEY, SERPAPI_KEY, ...). This script overrides
 # MODEL_SERVICE_URL and clears CF_ACCESS_CLIENT_ID/SECRET. Tunnel:
 #   BACKEND_CF_TUNNEL_TOKEN set (backend/.env) -> that named tunnel; set PUBLIC_BASE_URL to its hostname.
 #     Point its ingress at http://127.0.0.1:$BACKEND_PORT.
+#   BACKEND_TUNNEL=inference (backend/.env) -> no tunnel of its own: the segmentation server's tunnel
+#     (CF_TUNNEL_TOKEN, run_tmux.sh) also routes to http://localhost:$BACKEND_PORT. Add that route in the
+#     Cloudflare dashboard and keep Cloudflare Access off it; set PUBLIC_BASE_URL to its public URL.
 #   otherwise -> a quick tunnel (https://<random>.trycloudflare.com, new on every start), used as PUBLIC_BASE_URL.
 
 SESSION="${SESSION:-backend}"
@@ -60,13 +63,21 @@ curl -sf -m 3 "$SEG_URL/health" > /dev/null \
     || echo "warning: segmentation server not answering at $SEG_URL/health (start it with segmentation/run_tmux.sh)" >&2
 
 mkdir -p "$DIR/logs"
-tmux new-session -d -s "$SESSION" -n tunnel
-if [ -n "$(env_value "$ENV_FILE" BACKEND_CF_TUNNEL_TOKEN)" ]; then
+if [ "$(env_value "$ENV_FILE" BACKEND_TUNNEL)" = "inference" ]; then
+    PUBLIC_URL="$(env_value "$ENV_FILE" PUBLIC_BASE_URL)"
+    [ -n "$PUBLIC_URL" ] || echo "warning: BACKEND_TUNNEL=inference needs PUBLIC_BASE_URL in backend/.env" >&2
+    pgrep -f "cloudflared tunnel --no-autoupdate run" > /dev/null \
+        || echo "warning: the segmentation server's tunnel isn't running (segmentation/run_tmux.sh starts it)" >&2
+    tmux new-session -d -s "$SESSION" -n server
+    echo "Using the segmentation server's tunnel (route -> http://localhost:$BACKEND_PORT)"
+elif [ -n "$(env_value "$ENV_FILE" BACKEND_CF_TUNNEL_TOKEN)" ]; then
+    tmux new-session -d -s "$SESSION" -n tunnel
     # cloudflared reads TUNNEL_TOKEN from the environment, so the token never shows up in `ps`
     tmux send-keys -t "$SESSION:tunnel" "set -a && . '$ENV_FILE' && set +a && TUNNEL_TOKEN=\"\$BACKEND_CF_TUNNEL_TOKEN\" cloudflared tunnel --no-autoupdate run" Enter
     PUBLIC_URL="$(env_value "$ENV_FILE" PUBLIC_BASE_URL)"
     echo "Started named tunnel (ingress -> http://127.0.0.1:$BACKEND_PORT)"
 else
+    tmux new-session -d -s "$SESSION" -n tunnel
     : > "$TUNNEL_LOG"
     tmux send-keys -t "$SESSION:tunnel" "cloudflared tunnel --no-autoupdate --url http://127.0.0.1:$BACKEND_PORT 2>&1 | tee '$TUNNEL_LOG'" Enter
     for _ in $(seq 30); do
@@ -80,7 +91,7 @@ fi
 # Real environment variables win over backend/.env (storefront/config.py), so these overrides stick
 OVERRIDES="MODEL_SERVICE_URL='$SEG_URL' CF_ACCESS_CLIENT_ID= CF_ACCESS_CLIENT_SECRET="
 [ -n "$PUBLIC_URL" ] && OVERRIDES="$OVERRIDES PUBLIC_BASE_URL='$PUBLIC_URL'"
-tmux new-window -t "$SESSION" -n server
+tmux list-windows -t "$SESSION" -F '#W' | grep -qx server || tmux new-window -t "$SESSION" -n server
 tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' && ${EXTRA_ENV}$OVERRIDES uvicorn storefront.app:app --host 127.0.0.1 --port $BACKEND_PORT --timeout-graceful-shutdown 1" Enter
 
 echo "Started backend on 127.0.0.1:$BACKEND_PORT -> segmentation at $SEG_URL (attach: tmux attach -t $SESSION)"
