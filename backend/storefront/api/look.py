@@ -1,8 +1,7 @@
-"""POST /look/{track_id}: a Look on a tracked object, started from this laptop (the phone uses "select")."""
+"""POST /look/{uid}: pick a tracked object from this laptop, as a tap on its hotspot does."""
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from storefront.models import DetectResponse
-from storefront.pipeline import looks
+from storefront.models import LookMessage
 
 router = APIRouter()
 
@@ -13,9 +12,9 @@ def local_only(request: Request):
         raise HTTPException(403, "local requests only")
 
 
-@router.post("/look/{track_id}", response_model=DetectResponse, dependencies=[Depends(local_only)])
-async def look_route(track_id: int):
-    resp = await looks.look(track_id)
-    if resp is None:
-        raise HTTPException(404, f"the stream isn't tracking object {track_id}")
-    return resp
+@router.post("/look/{uid}", response_model=LookMessage, dependencies=[Depends(local_only)])
+async def look_route(uid: str, request: Request):
+    look = request.app.state.runner.select(uid)
+    if look is None:
+        raise HTTPException(404, f"the stream isn't tracking object {uid}")
+    return look.message_dict()

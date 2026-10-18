@@ -22,7 +22,7 @@ server = AgentServer(num_idle_processes=1)  # one phone at a time: one warm proc
 @server.rtc_session(agent_name=config.VOICE_AGENT)
 async def entry(ctx: agents.JobContext):
     seen = Seen()
-    follower = asyncio.create_task(seen.follow(lambda text: log.info("voice: would say %r", text)))
+    follower = asyncio.create_task(seen.follow())
     ctx.add_shutdown_callback(follower.cancel)
     await ctx.connect()
     log.info("voice: joined room %s", ctx.room.name)

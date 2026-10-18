@@ -1,161 +1,160 @@
-"""Looks: what a tracked object is and where to buy it. The crop comes from the object's best frame in
-scene memory; Claude describes it, then the stores are searched on Claude's queries. Each step goes out
-as a "look" event on the stream.
+"""Looks: what a tracked object is and where to buy it, one Look per uid.
+
+Claude describes the object's crop, then the stores are searched on Claude's queries; each step goes out
+as a "look" message (models.LookMessage). At most MAX_LOOKS run at once: the rest wait, most recent first.
+
+The crop stays in memory until the user picks the object (select): only then is it written to uploads/,
+and the Look's messages carry its URL. Google Lens needs that public URL, so a Look only searches Lens
+when the object was picked before its search started.
 """
 import asyncio
 import logging
 import time
 import uuid
-from collections.abc import Awaitable
-from contextlib import contextmanager
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from storefront import config
-from storefront.live import prefetch, stream
-from storefront.models import Capture, DetectResponse, Item, SearchResponse
-from storefront.pipeline import crop, pricing, rank, rerank, search, vision
+from storefront.models import BBox, Item, LookMessage, LookStage, SearchResponse
+from storefront.pipeline import pricing, rank, rerank, search, vision
 
 log = logging.getLogger("storefront.looks")
 
-captures: dict[str, Capture] = {}
-# capture -> the live-stream object it looked at, so the projector can highlight that box
-capture_tracks: dict[str, int] = {}
-search_tasks: dict[str, asyncio.Task] = {}
+FAILED = "Couldn't get prices for that one."
 
 
 def ms_since(t0: float) -> int:
     return round((time.perf_counter() - t0) * 1000)
 
 
-@contextmanager
-def timed(timing: dict[str, int], key: str):
-    t0 = time.perf_counter()
-    try:
-        yield
-    finally:
-        timing[key] = ms_since(t0)
-
-
-def announce(cap: Capture, step: str, **extra):
-    """Tell the projector page (and anyone following the stream) how a Look is going. Steps:
-    "detected" (label + crop), "described" (Claude's name), "results" (the cards), "failed"."""
-    stream.live.publish({"type": "look", "stage": step, "capture_id": cap.capture_id,
-                         "track_id": capture_tracks.get(cap.capture_id), **extra})
-
-
-# ---------- the Look on a tracked object ----------
-
-async def look(track_id: int) -> DetectResponse | None:
-    """The user picked a tracked object (the phone's "select" message, POST /look/{id}, or the voice
-    assistant). The crop comes from that track's best frame in scene memory (sharpest, biggest, most
-    centered), in view or not, with the box it had there; the projector follows along through the "look"
-    events. None if scene memory doesn't hold that track (any more).
-    If prefetch.py has looked at the object in the background, this Look takes that one's description and
-    results, at once if it's done."""
-    best = stream.live.scene.best(track_id)
-    if best is None:
-        log.info("look: scene memory has no object %d", track_id)
-        return None
-    t0 = time.perf_counter()
-    frame, track = best
-    frame = frame.convert("RGB")
-    capture_id = "c_" + uuid.uuid4().hex[:8]
-    capture_tracks[capture_id] = track_id
-    image_path = f"uploads/{capture_id}.jpg"
-    frame.save(config.ROOT / image_path, format="JPEG", quality=90)
-    found = crop.Found(track.frame_box, track.score, track.label)
-    segmentation = crop.sam_crop(frame, found, capture_id, t0)
-
-    label = found.label.strip()
-    item = Item(category=label or "item", bbox=found.box, search_queries=[label] if label else [],
-                quick_phrase=f"{label[:1].upper()}{label[1:]}. Finding prices." if label else "Got it. Finding prices.")
-    cap = captures[capture_id] = Capture(capture_id=capture_id, image_path=image_path,
-                                         image_url=f"{config.PUBLIC_BASE_URL}/{image_path}",
-                                         item=item, segmentation=segmentation)
-    announce(cap, "detected", label=item.category, quick_phrase=item.quick_phrase,
-             box=segmentation.bbox.model_dump(), cutout_path=segmentation.cutout_path)
-
-    background = prefetch.claim(track_id)
-    if background:
-        log.info("look %s: taking the background Look on t%d (%s)", capture_id, track_id,
-                 "done" if background.search.done() else "still running")
-        # Shielded: this Look ending early mustn't cancel the background one's work.
-        claude, searched = asyncio.shield(background.describe), asyncio.shield(background.search)
-    else:
-        claude = asyncio.create_task(vision.detect((config.ROOT / segmentation.cutout_path).read_bytes()))
-        searched = None
-    search_tasks[capture_id] = asyncio.create_task(describe_then_search(cap, claude, searched))
-    log.info("look %s on t%d: %dms", capture_id, track_id, ms_since(t0))
-    return DetectResponse(capture_id=capture_id, image_url=cap.image_url, item=item, segmentation=segmentation,
-                          quick_phrase=item.quick_phrase, latency_ms=ms_since(t0))
-
-
-async def describe_then_search(cap: Capture, claude: Awaitable[Item],
-                               searched: Awaitable[SearchResponse] | None = None) -> SearchResponse:
-    """Claude describes the crop, then the stores are searched on Claude's queries (a label like "lamp"
-    alone finds lamps, not this one). Claude failing leaves the label. searched: a background Look's
-    results for the same description, taken instead of searching again."""
-    t0 = time.perf_counter()
-    label_item = cap.item
-    try:
-        item = await claude
-        if item.category:
-            cap.item = item.model_copy(update={"bbox": label_item.bbox, "quick_phrase": label_item.quick_phrase})
-            announce(cap, "described", item=cap.item.model_dump(mode="json"))
-    except Exception as e:
-        log.warning("describe %s: Claude failed (%r); searching with SAM's label", cap.capture_id, e)
-    log.info("describe %s: %dms category=%r queries=%s", cap.capture_id, ms_since(t0),
-             cap.item.category, cap.item.search_queries)
-    try:
-        if searched is not None:
-            resp = (await searched).model_copy(update={"capture_id": cap.capture_id})
-        else:
-            resp = await search_item(cap.item, cap.segmentation.cutout_url, cap.capture_id)
-    except Exception:
-        announce(cap, "failed", message="Couldn't get prices for that one.")
-        raise
-    resp.item = cap.item
-    announce(cap, "results", search=resp.model_dump(mode="json"))
-    return resp
-
-
-async def search_item(item: Item, cutout: str | bytes, capture_id: str = "") -> SearchResponse:
-    """search -> rerank -> pricing + rank. cutout: the item's crop, by URL, or the crop itself (a background
-    Look keeps it in memory only); capture_id: "" for a background Look, which has no capture."""
+async def search_item(item: Item, cutout: str | bytes, look_id: str) -> SearchResponse:
+    """search -> rerank -> pricing + rank. cutout: the item's crop, by URL, or the crop itself."""
     t0 = time.perf_counter()
     timing: dict[str, int] = {}
-    with timed(timing, "search"):
-        products = await search.search_all(cutout, item, capture_id=capture_id or None)
-    with timed(timing, "rerank"):
-        products = await rerank.rerank(cutout, products)
-    with timed(timing, "rank"):
-        resp = await rank.choose(item, products, pricing.compute_price_insight(products))
-    resp.capture_id = capture_id
-    resp.timing_ms = timing | {"total": ms_since(t0)}
-    log.info("search %s products=%d timing=%s", capture_id or "(background)", len(products), resp.timing_ms)
+    products = await search.search_all(cutout, item, capture_id=look_id)
+    timing["search"] = ms_since(t0)
+    products = await rerank.rerank(cutout, products)
+    timing["rerank"] = ms_since(t0) - timing["search"]
+    resp = await rank.choose(item, products, pricing.compute_price_insight(products))
+    resp.capture_id = look_id
+    resp.timing_ms = timing | {"rank": ms_since(t0) - timing["search"] - timing["rerank"], "total": ms_since(t0)}
+    log.info("search %s products=%d timing=%s", look_id, len(products), resp.timing_ms)
     return resp
 
 
-def background_look(track_id: int) -> prefetch.Background | None:
-    """prefetch.py's start_look: a Look at a tracked object nobody has picked yet, in memory only. Claude
-    describes the crop of the object's best frame, then the stores are searched on Claude's queries.
-    Nothing is written to disk or announced, and the crop is dropped once both are done; look() takes the
-    results if the user picks the object. None if scene memory has no frame of it."""
-    best = stream.live.scene.best(track_id)
-    if best is None:
-        return None
-    frame, track = best
-    cutout = crop.sam_cutout(frame, track.frame_box)
-    label = track.label.strip()
-    describe = asyncio.create_task(vision.detect(cutout))
+@dataclass
+class Look:
+    uid: str
+    label: str            # SAM's prompt
+    box: BBox             # the object's box in the frame it was cropped from
+    cutout: bytes         # the crop, a JPEG in memory
+    look_id: str = field(default_factory=lambda: "l_" + uuid.uuid4().hex[:8])
+    stage: LookStage = "started"
+    item: Item | None = None
+    search: SearchResponse | None = None
+    message: str | None = None
+    selected: bool = False
+    crop_url: str | None = None
+    task: asyncio.Task | None = None
 
-    async def find() -> SearchResponse:
+    def message_dict(self) -> dict:
+        return LookMessage(uid=self.uid, look_id=self.look_id, stage=self.stage, label=self.label,
+                           box=self.box.corners(), selected=self.selected, crop_url=self.crop_url,
+                           item=self.item, search=self.search, message=self.message).model_dump(mode="json")
+
+
+class Looks:
+    def __init__(self, publish: Callable[[dict], None], max_running: int = config.MAX_LOOKS):
+        self.publish, self.max_running = publish, max_running
+        self.looks: dict[str, Look] = {}
+        self._waiting: list[Look] = []  # started after the limit was reached, oldest first
+
+    def get(self, uid: str) -> Look | None:
+        return self.looks.get(uid)
+
+    def start(self, uid: str, label: str, box: BBox, cutout: bytes) -> Look:
+        """A Look on this object, unless it has one."""
+        look = self.looks.get(uid)
+        if look:
+            return look
+        look = self.looks[uid] = Look(uid, label.strip() or "item", box, cutout)
+        self._send(look)
+        if self._running() < self.max_running:
+            self._run(look)
+        else:
+            self._waiting.append(look)
+        return look
+
+    def select(self, uid: str) -> Look | None:
+        """The user picked this object: write its crop, so its messages carry the crop's URL. None if it has
+        no Look."""
+        look = self.looks.get(uid)
+        if look is None or look.selected:
+            return look
+        path = config.UPLOADS / f"{look.look_id}.jpg"
+        path.write_bytes(look.cutout)
+        look.selected, look.crop_url = True, f"{config.PUBLIC_BASE_URL}/uploads/{path.name}"
+        if look in self._waiting:  # the user is waiting on this one now
+            self._waiting.remove(look)
+            self._run(look)
+        log.info("look %s on %s: picked", look.look_id, uid)
+        self._send(look)
+        return look
+
+    def forget(self, uid: str):
+        """The object left scene memory: stop its Look, unless the user picked it."""
+        look = self.looks.get(uid)
+        if look and not look.selected:
+            self._drop(look)
+
+    def reset(self):
+        """Tracking restarted (pause, camera switch, disconnect): stop every Look nobody picked."""
+        for look in [lk for lk in self.looks.values() if not lk.selected]:
+            self._drop(look)
+
+    def _running(self) -> int:
+        return sum(1 for lk in self.looks.values() if lk.task and not lk.task.done())
+
+    def _run(self, look: Look):
+        look.task = asyncio.create_task(self._go(look))
+        look.task.add_done_callback(lambda _: self._next())
+
+    def _next(self):
+        while self._waiting and self._running() < self.max_running:
+            self._run(self._waiting.pop())  # the most recent first
+
+    def _drop(self, look: Look):
+        del self.looks[look.uid]
+        if look in self._waiting:
+            self._waiting.remove(look)
+        if look.task:
+            look.task.cancel()
+
+    def _send(self, look: Look):
+        self.publish(look.message_dict())
+
+    async def _go(self, look: Look):
+        """Describe the crop, then search on Claude's queries; Claude failing leaves the label."""
+        t0 = time.perf_counter()
         try:
-            item = await describe
-        except Exception as e:  # as in describe_then_search: the label is searched instead
-            log.warning("background t%d: Claude failed (%r); searching with the label", track_id, e)
+            item = await vision.detect(look.cutout)
+        except Exception as e:
+            log.warning("look %s: Claude failed (%r); searching with the label", look.look_id, e)
             item = None
-        if item is None or not item.category:
-            item = Item(category=label or "item", search_queries=[label] if label else [])
-        return await search_item(item, cutout)
-
-    return prefetch.Background(describe, asyncio.create_task(find()))
+        if item is not None and item.category:
+            look.item, look.stage = item, "described"
+            self._send(look)
+        else:
+            item = Item(category=look.label, search_queries=[look.label])
+        log.info("look %s on %s: described as %r in %dms", look.look_id, look.uid, item.category, ms_since(t0))
+        try:
+            look.search = await search_item(item, look.crop_url or look.cutout, look.look_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("look %s: search failed", look.look_id)
+            look.stage, look.message = "failed", FAILED
+        else:
+            look.search.item = look.item
+            look.stage = "results"
+        self._send(look)

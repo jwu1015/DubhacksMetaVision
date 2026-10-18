@@ -1,7 +1,7 @@
 """The voice agent asks the phone app to act, through the phone's RPC method "action":
 
     payload  {"name": "add_to_cart" | "save_item" | "show_results" | "undo_last" | "start_checkout",
-              "capture_id"?, "product"? (a Product, as in SearchResponse), "tab"? ("best_match" | "dupes" | "used")}
+              "look_id"?, "product"? (a Product, as in SearchResponse), "tab"? ("best_match" | "dupes" | "used")}
     answer   {"ok": true} or {"ok": false, "detail": "why, in a few words"}
 """
 import json

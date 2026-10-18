@@ -1,6 +1,6 @@
 """Claude Haiku for the backend's quick structured calls, all through one VLM:
 - labels.py: what SAM tracks, from a stream's first frame
-- prefetch.py: a quick name and price range for a tracked object's crop
+- quick_label.py: a quick name and price range for a tracked object's crop
 - rank.py: the best match, dupes and used options among the search results
 
 ask() sends a system prompt and a user message (text, or a list of content blocks; image() makes one
