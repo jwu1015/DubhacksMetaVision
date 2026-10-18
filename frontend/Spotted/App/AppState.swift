@@ -313,26 +313,16 @@ final class AppState {
     // MARK: - Meta glasses
 
     /// Starts the DAT SDK's glasses tracking, so the start screen knows whether glasses are there.
-    /// Glasses dropping out while they're the source switches back to the phone camera.
     func startGlasses() {
         guard glasses == nil, GlassesManager.configure() else { return }
-        let manager = GlassesManager()
-        manager.onAvailabilityChange = { [weak self] available in
-            guard let self else { return }
-            if !available, captureMode == .glasses {
-                setCaptureMode(.phone)
-                showToast("Glasses disconnected. Using your phone camera.", canUndo: false)
-            }
-            updateVideoSource()
-        }
-        glasses = manager
+        glasses = GlassesManager()
     }
 
-    /// Glasses video only in glasses mode with the glasses connected and the camera not paused;
-    /// otherwise the phone camera.
+    /// The glasses in glasses mode, unless the camera is paused; otherwise the phone camera. Glasses that
+    /// drop out stay the source: their session waits for them and reconnects (see GlassesManager).
     private func updateVideoSource() {
         guard let live else { return }
-        if captureMode == .glasses, let glasses, glasses.hasGlasses, !isCameraPaused {
+        if captureMode == .glasses, let glasses, !isCameraPaused {
             live.use(.glasses)
             glasses.startCamera(into: live.glassesCapturer)
         } else {

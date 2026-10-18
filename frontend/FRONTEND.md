@@ -61,7 +61,7 @@ The app has **two camera sources and one pipeline**. The user picks the source o
 **Switching:**
 - **Start screen:** "Phone camera" or "Meta glasses" (inert, with "No glasses found", until glasses connect; a link opens the Meta AI app to connect them).
 - **Mid-stream:** Profile → "Stream from the glasses".
-- **Glasses disconnect** while they're the source → the phone camera, with a toast: "Glasses disconnected. Using your phone camera."
+- **Glasses drop out** while they're the source → they stay the source: the DAT session waits and reconnects (a new session starts 2 s after one stops), and the status pill says "Connecting to glasses…" or, after a touchpad tap paused the stream, "Tap your glasses to resume". Switch to the phone camera in Profile.
 - **One track:** both capturers feed the same LiveKit video track, so switching never republishes. The phone sends the `mode` RPC and the backend restarts tracking with new uids.
 
 ### Glasses mode: voice (when the agent returns)

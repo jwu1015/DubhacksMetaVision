@@ -5,6 +5,8 @@ struct StatusPill: View {
     let connection: AppState.Connection
     let isPaused: Bool
     var isGlassesMode = false
+    /// Why the glasses aren't sending frames yet, e.g. "Connecting to glasses…".
+    var glassesNote: String?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -21,10 +23,11 @@ struct StatusPill: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var isLive: Bool { connection == .live && !isPaused }
+    private var isLive: Bool { connection == .live && !isPaused && glassesNote == nil }
 
     private var text: String {
         if isPaused { return "Camera paused" }
+        if let glassesNote { return glassesNote }
         switch connection {
         case .live: return isGlassesMode ? "Glasses · Live" : "Phone camera · Live"
         case .reconnecting: return "Reconnecting…"

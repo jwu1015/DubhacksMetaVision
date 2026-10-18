@@ -66,6 +66,17 @@ struct LiveView: View {
         }
     }
 
+    /// In glasses mode, why no frames are coming in.
+    private var glassesNote: String? {
+        guard app.captureMode == .glasses, let camera = app.glasses?.camera else { return nil }
+        switch camera {
+        case .streaming: return nil
+        case .paused: return "Tap your glasses to resume"
+        case .failed: return "Glasses camera failed"
+        case .idle, .connecting: return "Connecting to glasses…"
+        }
+    }
+
     private var dimsFeed: Bool {
         app.isListening || app.isCameraPaused
     }
@@ -75,7 +86,7 @@ struct LiveView: View {
     @ViewBuilder private var topBar: some View {
         HStack(alignment: .top) {
             StatusPill(connection: app.connection, isPaused: app.isCameraPaused,
-                       isGlassesMode: app.captureMode == .glasses)
+                       isGlassesMode: app.captureMode == .glasses, glassesNote: glassesNote)
             Spacer()
             GlassIconButton(icon: "icon-pause", iconSize: 18,
                             label: app.isCameraPaused ? "Resume camera" : "Pause camera") {
