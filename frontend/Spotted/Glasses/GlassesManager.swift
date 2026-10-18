@@ -124,7 +124,12 @@ final class GlassesManager {
         Task { [weak self] in
             guard let self else { return }
             do {
-                guard try await wearables.checkPermissionStatus(.camera) == .granted else {
+                var permission = try await wearables.checkPermissionStatus(.camera)
+                if permission != .granted {
+                    // Switches to the Meta AI app, and back once the user answers.
+                    permission = try await wearables.requestPermission(.camera)
+                }
+                guard permission == .granted else {
                     camera = .failed("Allow camera access for Spotted in the Meta AI app.")
                     return
                 }

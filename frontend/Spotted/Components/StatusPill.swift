@@ -15,6 +15,7 @@ struct StatusPill: View {
             Text(text)
                 .font(.spottedFootnote.weight(.semibold))
                 .foregroundStyle(.labelPrimary)
+                .lineLimit(3)
         }
         .padding(.leading, 12)
         .padding(.trailing, 14)

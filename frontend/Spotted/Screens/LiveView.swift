@@ -72,8 +72,8 @@ struct LiveView: View {
         switch camera {
         case .streaming: return nil
         case .paused: return "Tap your glasses to resume"
-        case .failed: return "Glasses camera failed"
-        case .idle, .connecting: return "Connecting to glasses…"
+        case let .failed(message): return message
+        case .idle, .connecting: return app.glasses?.errorMessage ?? "Connecting to glasses…"
         }
     }
 
