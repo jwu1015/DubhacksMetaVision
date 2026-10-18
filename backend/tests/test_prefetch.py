@@ -1,5 +1,6 @@
 """pytest tests/test_prefetch.py  (from backend/). No network: Claude, the stores and the tracker are faked."""
 import asyncio
+import io
 import json
 import time
 
@@ -11,11 +12,11 @@ import prefetch
 import rank
 import rerank
 import search
+import segment
 import stream
 import vision
 import webrtc
 from models import BBox, Item, SearchResponse
-from scene import Scene
 from tracker import TrackedObject, TrackResult
 
 FRAME = Image.new("RGB", (640, 480), "gray")
@@ -130,13 +131,20 @@ def test_label_reaches_the_projector_and_the_phone():
 
 # ---------- background Looks ----------
 
+def background(item=None, results=None) -> prefetch.Background:
+    """A finished background Look: its tasks give item and results. Call it with the loop running."""
+    async def value(v):
+        return v
+    return prefetch.Background(asyncio.create_task(value(item)), asyncio.create_task(value(results)))
+
+
 def test_background_looks_for_the_three_in_view_longest(clock, monkeypatch):
     fake_label(monkeypatch)
-    started = []
+    started = {}
 
-    async def start_look(track_id):
-        started.append(track_id)
-        return type("Detect", (), {"capture_id": f"c_{track_id}"})()
+    def start_look(track_id):
+        started[track_id] = background()
+        return started[track_id]
 
     monkeypatch.setattr(prefetch, "start_look", start_look)
     everyone = [(i, "bottle") for i in range(5)]
@@ -147,72 +155,188 @@ def test_background_looks_for_the_three_in_view_longest(clock, monkeypatch):
             prefetch.observe(result(*everyone[:i + 1]), FRAME)
         clock[0] = 1.9
         prefetch.observe(result(*everyone), FRAME)
-        await asyncio.sleep(0)
-        assert started == []  # nobody in view for 2s yet
+        assert list(started) == []  # nobody in view for 2s yet
         clock[0] = 2.5
         prefetch.observe(result(*everyone), FRAME)
-        await asyncio.sleep(0)
-        assert started == [0, 1, 2]  # the three in view the longest
+        assert list(started) == [0, 1, 2]  # the three in view the longest
         prefetch.observe(result(*everyone), FRAME)
-        await asyncio.sleep(0)
-        assert started == [0, 1, 2]  # no more while those three are in view
+        assert list(started) == [0, 1, 2]  # no more while those three are in view
         prefetch.observe(result(*everyone[1:]), FRAME)  # object 0 left the view
+        assert list(started) == [0, 1, 2, 3]
         await asyncio.sleep(0)
-        assert started == [0, 1, 2, 3]
+        assert prefetch.claim(1) is started[1] and started[1].claimed
+        assert prefetch.claim(4) is None  # never looked at
+
+    asyncio.run(go())
+
+
+def test_forgetting_and_reset_stop_only_the_looks_nobody_picked(clock, monkeypatch):
+    fake_label(monkeypatch)
+    started = {}
+
+    def start_look(track_id):
+        async def forever():
+            await asyncio.sleep(3600)
+        started[track_id] = prefetch.Background(asyncio.create_task(forever()), asyncio.create_task(forever()))
+        return started[track_id]
+
+    monkeypatch.setattr(prefetch, "start_look", start_look)
+
+    async def go():
+        prefetch.observe(result((1, "bottle"), (2, "shoe")), FRAME)
+        clock[0] = 2.5
+        prefetch.observe(result((1, "bottle"), (2, "shoe"), (3, "lamp")), FRAME)
+        assert list(started) == [1, 2]
+        prefetch.claim(2)  # the user picked the shoe: their Look awaits its tasks now
+        clock[0] = 2.6 + prefetch.FORGET_S
+        prefetch.observe(result((3, "lamp")), FRAME)  # the bottle and the shoe left the view long ago
         await asyncio.sleep(0)
-        return prefetch.claim(1), prefetch.claim(4)
+        assert set(prefetch.seen) == {3} and list(started) == [1, 2, 3]
+        assert started[1].describe.cancelled() and started[1].search.cancelled()
+        assert not started[2].search.done()
+        prefetch.reset()  # a purge: pause, camera switch, disconnect
+        await asyncio.sleep(0)
+        assert prefetch.seen == {} and started[3].search.cancelled()
+        assert not started[2].search.done()  # still the picked Look's
 
-    assert asyncio.run(go()) == ("c_1", None)
+    asyncio.run(go())
 
 
-def test_quiet_background_look_uses_claudes_queries_then_replays_on_tap(monkeypatch):
-    events = []
-    monkeypatch.setattr(main.stream.live, "publish", events.append)
-    monkeypatch.setattr(main.config, "USE_FIXTURES", False)
-    claude_item = Item(category="insulated water bottle", description="Green Owala FreeSip, lime spout cover.",
-                       search_queries=["Owala FreeSip 24 oz green"])
-    searched = []
+def test_a_purge_forgets_everything_prefetch_knows():
+    assert main.stream.live.on_purge is prefetch.reset  # main.py's wiring
+    s = stream.Stream(tracker=object())
+    purged = []
+    s.on_purge = lambda: purged.append(True)
+    s._purge()  # what stop() (pause, disconnect) and reset() (camera switch) do
+    assert purged == [True]
+
+
+# ---------- background Looks through main.py ----------
+
+CLAUDE_ITEM = Item(category="insulated water bottle", description="Green Owala FreeSip, lime spout cover.",
+                   search_queries=["Owala FreeSip 24 oz green"])
+
+
+def files() -> set:
+    """Everything under uploads/ and logs/."""
+    return {p for folder in (main.config.UPLOADS, main.config.LOGS) if folder.exists() for p in folder.rglob("*")}
+
+
+@pytest.fixture
+def fakes(monkeypatch):
+    """main.py's Looks on a fresh live stream with Claude and the stores faked; object 7, a bottle, is in
+    scene memory. Yields what the fakes were given, the "look" events, and the stores' gate: clear it to
+    hold their answer. "fail": the next search fails."""
+    calls = {"detect": [], "search": [], "events": [], "fail": False, "gate": asyncio.Event()}
+    calls["gate"].set()
+    live = stream.Stream(tracker=object())
+    live.publish = calls["events"].append
+    # scene memory forgets a track 15 s after it was seen
+    live.scene.update(result((7, "bottle")).model_copy(update={"captured_at": time.time()}),
+                      Image.new("RGB", (640, 480), "green"))
 
     async def detect(data, hint=None):
-        return claude_item
+        calls["detect"].append(data)
+        return CLAUDE_ITEM
 
-    async def search_all(cutout_url, item, capture_id=None):
-        searched.append(item.search_queries)
+    async def search_all(cutout, item, capture_id=None):
+        calls["search"].append((cutout, item.search_queries, capture_id))
+        await calls["gate"].wait()
+        if calls["fail"]:
+            calls["fail"] = False
+            raise RuntimeError("stores down")
         return []
 
-    async def passthrough(cutout_url, products):
+    async def passthrough(cutout, products):
         return products
 
     async def choose(item, products, insight):
         return SearchResponse(capture_id="", best_match=None, dupes=[], used=[], price_insight=insight,
                               spoken_summary="I couldn't find that one for sale.", timing_ms={})
 
-    monkeypatch.setattr(vision, "detect", detect)
-    monkeypatch.setattr(search, "search_all", search_all)
-    monkeypatch.setattr(rerank, "rerank", passthrough)
-    monkeypatch.setattr(rank, "choose", choose)
-    # look() takes the object's best frame from scene memory, which forgets a track 15 s after it was seen
-    monkeypatch.setattr(main.stream.live, "scene", Scene())
-    main.stream.live.scene.update(result((7, "bottle")).model_copy(update={"captured_at": time.time()}),
-                                  Image.new("RGB", (640, 480), "green"))
+    for target, name, value in ((stream, "live", live), (main.config, "USE_FIXTURES", False), (prefetch, "seen", {}),
+                                (vision, "detect", detect), (search, "search_all", search_all),
+                                (rerank, "rerank", passthrough), (rank, "choose", choose)):
+        monkeypatch.setattr(target, name, value)
+    yield calls
+    for cid in {e["capture_id"] for e in calls["events"]}:
+        for path in main.config.UPLOADS.glob(f"{cid}*"):
+            path.unlink()
+
+
+def seen_with(look: prefetch.Background) -> prefetch.Background:
+    prefetch.seen[7] = prefetch.Seen(category="bottle", first=0.0, last=0.0, look=look)
+    return look
+
+
+def test_a_background_look_keeps_only_what_it_found(fakes):
+    before, captures = files(), set(main.captures)
 
     async def go():
-        resp = await main.look(7, quiet=True)  # what prefetch.start_look runs
-        cid = resp.capture_id
-        assert cid in main.quiet_captures
-        await main.search_tasks[cid]
-        assert events == []  # nothing announced while nobody has tapped it
-        assert searched == [claude_item.search_queries]  # Claude's queries, not the tracker's "bottle"
-        monkeypatch.setattr(main.prefetch, "claim", lambda track_id: cid if track_id == 7 else None)
-        tapped = await main.look(7)  # the user taps the object
-        assert tapped.capture_id == cid and cid not in main.quiet_captures
-        return cid
+        look = main.background_look(7)
+        return look, await look.search
 
-    cid = asyncio.run(go())
-    try:
-        assert [e["stage"] for e in events] == ["detected", "described", "results"]
-        assert all(e["capture_id"] == cid and e["track_id"] == 7 for e in events)
-        assert events[1]["item"]["description"] == claude_item.description
-    finally:
-        for f in main.config.UPLOADS.glob(f"{cid}*"):
-            f.unlink()
+    look, results = asyncio.run(go())
+    assert files() == before and set(main.captures) == captures  # no capture: no photo, crop or search log
+    assert fakes["events"] == []  # nothing announced
+    assert look.describe.result() == CLAUDE_ITEM and results.capture_id == "" and results.spoken_summary
+    [(crop, queries, capture_id)] = fakes["search"]
+    assert queries == CLAUDE_ITEM.search_queries and capture_id is None  # Claude's queries, not "bottle"
+    assert fakes["detect"] == [crop] and crop[:2] == b"\xff\xd8"  # Claude and the match score get the crop itself
+    track = stream.live.scene.tracks[7]
+    padded = segment.pad(track.frame_box, segment.SAM_PAD)
+    assert Image.open(io.BytesIO(crop)).size == segment.crop_image(track.frame, padded).size  # sam_crop's cutout
+
+
+def test_a_pick_takes_the_finished_background_look_at_once(fakes):
+    async def go():
+        await seen_with(main.background_look(7)).search
+        resp = await main.look(7)  # the user taps the object
+        return resp, await main.search_tasks[resp.capture_id]
+
+    resp, found = asyncio.run(go())
+    cid, events = resp.capture_id, fakes["events"]
+    assert [e["stage"] for e in events] == ["detected", "described", "results"]
+    assert all(e["capture_id"] == cid and e["track_id"] == 7 for e in events)
+    assert events[1]["item"]["description"] == CLAUDE_ITEM.description
+    assert found.capture_id == cid and found.item.description == CLAUDE_ITEM.description
+    assert events[2]["search"] == found.model_dump(mode="json")
+    assert len(fakes["detect"]) == len(fakes["search"]) == 1  # neither Claude nor the stores asked again
+    assert (main.config.UPLOADS / f"{cid}_cutout.jpg").exists()  # picked: now it's a capture
+    assert prefetch.seen[7].look.claimed
+
+
+def test_a_pick_while_the_background_look_still_searches(fakes):
+    fakes["gate"].clear()  # the stores answer when the test says so
+
+    async def go():
+        await seen_with(main.background_look(7)).describe
+        resp = await main.look(7)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        so_far = [e["stage"] for e in fakes["events"]]
+        fakes["gate"].set()
+        return so_far, await main.search_tasks[resp.capture_id]
+
+    so_far, found = asyncio.run(go())
+    assert so_far == ["detected", "described"]  # Claude's description at once; the results when they come
+    assert [e["stage"] for e in fakes["events"]] == ["detected", "described", "results"]
+    assert found.capture_id == fakes["events"][0]["capture_id"]
+    assert len(fakes["search"]) == 1
+
+
+def test_after_a_failed_background_search_a_pick_looks_again(fakes):
+    fakes["fail"] = True
+
+    async def go():
+        look = seen_with(main.background_look(7))
+        with pytest.raises(RuntimeError):
+            await look.search
+        assert prefetch.claim(7) is None
+        resp = await main.look(7)
+        return await main.search_tasks[resp.capture_id]
+
+    found = asyncio.run(go())
+    assert [e["stage"] for e in fakes["events"]] == ["detected", "described", "results"]
+    assert found.capture_id == fakes["events"][0]["capture_id"]
+    assert len(fakes["detect"]) == len(fakes["search"]) == 2  # a fresh Look: Claude and the stores again

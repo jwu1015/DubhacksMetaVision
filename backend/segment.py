@@ -215,6 +215,23 @@ async def sam_box(image: Image.Image, item: Item) -> Found | None:
     return pick if pick.box.w * pick.box.h >= SAM_MIN_AREA else None
 
 
+def crop_image(image: Image.Image, crop: BBox) -> Image.Image:
+    """The cutout: the photo cut to crop (normalized), at most MAX_EDGE px on its longest side."""
+    W, H = image.size
+    cutout = image.crop((round(crop.x * W), round(crop.y * H), round((crop.x + crop.w) * W),
+                         round((crop.y + crop.h) * H)))
+    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
+    return cutout
+
+
+def sam_cutout(image: Image.Image, box: BBox) -> bytes:
+    """The cutout sam_crop saves for a SAM box, as a JPEG kept in memory: nothing is written (prefetch.py's
+    background Looks)."""
+    buf = io.BytesIO()
+    crop_image(image, pad(box, SAM_PAD)).convert("RGB").save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
 def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tuple[BBox, tuple]]) -> tuple[str, str]:
     """Write the cutout and the preview (photo with boxes drawn); return their uploads/ paths."""
     W, H = image.size
@@ -222,10 +239,8 @@ def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tupl
     def px(b: BBox):
         return round(b.x * W), round(b.y * H), round((b.x + b.w) * W), round((b.y + b.h) * H)
 
-    cutout = image.crop(px(crop))
-    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
     cutout_path = f"uploads/{capture_id}_cutout.jpg"
-    cutout.save(config.ROOT / cutout_path, quality=90)
+    crop_image(image, crop).save(config.ROOT / cutout_path, quality=90)
 
     preview = image.copy()
     preview.thumbnail((MAX_EDGE, MAX_EDGE))

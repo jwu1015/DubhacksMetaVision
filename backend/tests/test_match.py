@@ -93,6 +93,25 @@ def test_no_photos_skips_claude(monkeypatch):
     assert seen == []
 
 
+def test_a_crop_in_memory_is_used_as_is(monkeypatch):
+    """A background Look passes its crop itself: nothing to read from disk or download."""
+    seen = []
+    crop, real_fetch = jpeg(), match.fetch
+
+    async def fetch(url):
+        return await real_fetch(url) if isinstance(url, bytes) else jpeg()  # the listings' photos are faked
+
+    async def call_model(content):
+        seen.append(content)
+        return json.dumps({"scores": [{"id": 1, "score": 90}]})
+
+    monkeypatch.setattr(match, "fetch", fetch)
+    monkeypatch.setattr(match, "call_model", call_model)
+    out = asyncio.run(match.score(crop, ITEM, [product(0)]))
+    assert out[0].match_score == 90
+    assert seen[0][1]["source"]["data"] == match.jpeg_b64(crop, match.CROP_EDGE)  # image 0 is that crop
+
+
 def test_fetch_reads_our_uploads_from_disk_and_nothing_else(tmp_path, monkeypatch):
     class NoNetwork:
         async def get(self, url, timeout):

@@ -152,6 +152,17 @@ class RerankTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([p.url for p in out[2:-1]], [p.url for p in scored if p.match_score is None])
         self.assertEqual(out[-1].match_score, 30)  # under MIN_SCORE: last, not dropped
 
+    async def test_a_crop_in_memory_keeps_scores_search_set(self):
+        # a background Look's crop (bytes) has no URL the CLIP service could fetch: as if there were none
+        scores = [55, None, 30, 90] + [None] * (len(RAW) - 4)
+        scored = [p.model_copy(update={"match_score": s}) for p, s in zip(RAW, scores)]
+        sent = []
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: sent.append(request))) as client:
+            out = await rerank.rerank(b"\xff\xd8 a jpeg", scored, client=client)
+        self.assertEqual(sent, [])
+        self.assertEqual([p.match_score for p in out[:2]], [90, 55])
+        self.assertEqual(out[-1].match_score, 30)
+
     async def test_no_thumbnails_or_no_products(self):
         no_thumbs = [p.model_copy(update={"image_url": None}) for p in RAW]
         self.assertEqual(dump(await self.rerank(no_thumbs, lambda r: 1 / 0)), dump(no_thumbs))

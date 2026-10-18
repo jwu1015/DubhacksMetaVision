@@ -9,10 +9,12 @@ The phone's offer has one video track (sendonly, H.264 or VP8) and a data channe
 
     {"type": "detections", "ts": <ms since epoch>,
      "objects": [{"track_id": "t3", "box": [x1, y1, x2, y2], "label": "sofa", "score": 0.93,   (box normalized 0-1)
-                  "in_view": true, "centered": 0.82, "seconds_viewed": 3.4, "first_seen_ts", "last_seen_ts"}]}
+                  "in_view": true, "centered": 0.82, "seconds_viewed": 3.4, "first_seen_ts", "last_seen_ts",
+                  "name": "gray linen sofa", "price_low": 800, "price_high": 1500}]}
 
 listing every object scene memory holds (scene.py): those that left the view in the last 15 s too, with
-in_view false. The phone's control messages on the same channel:
+in_view false. name, price_low and price_high are prefetch.py's quick label, there once an object has been in
+view half a second. The phone's control messages on the same channel:
 
     {"type": "mode", "mode": "glasses" | "phone"}   on connect and on every camera switch: forget what was tracked
     {"type": "pause", "paused": true | false}       stop tracking and purge it / start again
