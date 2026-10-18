@@ -1,3 +1,9 @@
-// Copy to Config.xcconfig (git-ignored) and set the backend's current ngrok URL.
-// "//" starts a comment in xcconfig files, so write the scheme as https:/$()/
-API_BASE_URL = https:/$()/your-subdomain.ngrok-free.app
+// Copy to Config.xcconfig (git-ignored) and fill in. Everything here overrides Spotted.xcconfig.
+
+// The Cloudflare Access service token for the tunnel in front of the backend
+// (Cloudflare Zero Trust > Access > Service Auth).
+CF_ACCESS_CLIENT_ID = your-client-id.access
+CF_ACCESS_CLIENT_SECRET = your-client-secret
+
+// Optional: another backend. "//" starts a comment in xcconfig files, so write the scheme as https:/$()/
+// API_BASE_URL = https:/$()/your-subdomain.ngrok-free.app

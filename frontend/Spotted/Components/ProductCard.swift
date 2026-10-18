@@ -50,13 +50,13 @@ struct ProductCard: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ProductThumbnail(source: search.bestMatch?.imageURL ?? look.cutoutURL ?? "")
+            ProductThumbnail(source: search.bestMatch?.imageURL ?? look.cropURL ?? "")
             VStack(alignment: .leading, spacing: 2) {
                 // Claude's name for the item (SearchResponse.item), not the store's listing title.
                 Text(look.name.sentenceCased)
                     .font(.spottedHeadline)
                     .foregroundStyle(.labelPrimary)
-                Text(search.bestMatch.map { "\($0.store) · \(search.storeCount) stores" } ?? "No exact match for sale")
+                Text(search.bestMatch.map { "\($0.store) · \(ProductSource.searchable.count) stores" } ?? "No exact match for sale")
                     .font(.spottedFootnote)
                     .foregroundStyle(.labelSecondary)
             }
@@ -72,18 +72,17 @@ struct ProductCard: View {
     }
 }
 
-/// 01b · After /detect: cutout, quick phrase and skeleton prices while /search runs.
+/// 01b · While the Look runs: its crop, quick phrase and skeleton prices.
 struct SearchingCard: View {
     let look: Look
-    let finishedSources: Set<ProductSource>
     let isSaved: Bool
     let onSave: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                // The cutout is a crop of the photo, so it keeps the default surface background.
-                ProductThumbnail(source: look.cutoutURL ?? "")
+                // The crop is part of the frame, so it keeps the default surface background.
+                ProductThumbnail(source: look.cropURL ?? "")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(look.name.sentenceCased)
                         .font(.spottedHeadline)
@@ -109,12 +108,11 @@ struct SearchingCard: View {
                     Spacer(minLength: 8)
                     HStack(spacing: 10) {
                         ForEach(ProductSource.searchable, id: \.self) { source in
-                            let isDone = finishedSources.contains(source)
                             HStack(spacing: 4) {
-                                Icon(name: isDone ? "dot-done" : "dot-checking", size: 6)
+                                Icon(name: "dot-checking", size: 6)
                                 Text(source.shortName)
                                     .font(.spottedCaption)
-                                    .foregroundStyle(isDone ? Color.labelSecondary : Color.labelTertiary)
+                                    .foregroundStyle(.labelTertiary)
                             }
                         }
                     }

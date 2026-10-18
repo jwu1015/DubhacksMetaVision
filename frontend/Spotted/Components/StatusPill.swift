@@ -1,18 +1,21 @@
 import SwiftUI
 
-/// "● Glasses · Live" in the top-left of the Live view.
+/// "● Glasses · Live" or "● Phone camera · Live" in the top-left of the Live view.
 struct StatusPill: View {
     let connection: AppState.Connection
     let isPaused: Bool
     var isGlassesMode = false
+    /// Why the glasses aren't sending frames yet, e.g. "Connecting to glasses…".
+    var glassesNote: String?
 
     var body: some View {
         HStack(spacing: 8) {
             Icon(name: isLive ? "dot-live" : "dot-warning", size: 8)
-            Icon(name: "icon-glasses", size: 18)
+            Icon(name: isGlassesMode ? "icon-glasses" : "icon-camera", size: 18)
             Text(text)
                 .font(.spottedFootnote.weight(.semibold))
                 .foregroundStyle(.labelPrimary)
+                .lineLimit(3)
         }
         .padding(.leading, 12)
         .padding(.trailing, 14)
@@ -21,12 +24,13 @@ struct StatusPill: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var isLive: Bool { connection == .live && !isPaused }
+    private var isLive: Bool { connection == .live && !isPaused && glassesNote == nil }
 
     private var text: String {
         if isPaused { return "Camera paused" }
+        if let glassesNote { return glassesNote }
         switch connection {
-        case .live: return isGlassesMode ? "Glasses · Connected" : "Glasses · Live"
+        case .live: return isGlassesMode ? "Glasses · Live" : "Phone camera · Live"
         case .reconnecting: return "Reconnecting…"
         }
     }

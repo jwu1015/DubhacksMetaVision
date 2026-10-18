@@ -1,19 +1,13 @@
-// Models.swift — the Get the Look backend's API, exactly as the server sends it.
-//
-// Matches backend/models.py on the backend-skeleton branch (17 Oct 2026). Every type here was
-// checked by decoding real responses from the running server, including the null cases.
+// Models.swift — the backend's API, exactly as the server sends it. Mirrors backend/storefront/models.py;
+// change them together.
 //
 // Decode with a plain JSONDecoder(): every key is mapped explicitly in CodingKeys, so don't set
 // keyDecodingStrategy. Optionals really can be null at runtime; don't force-unwrap them.
 //
-// Endpoints (base URL = the backend's ngrok HTTPS URL):
-//   POST   /detect             multipart form field "image" (JPEG)   -> DetectResponse
-//                              optional fields "hint_box" (the object the user tapped: JSON
-//                              {"x","y","w","h"} or [x1,y1,x2,y2], normalized) and "hint_label"
-//   POST   /search/{captureID}  no body                               -> SearchResponse (404 if unknown id)
-//   GET    /ice-servers                                              -> {"iceServers": [...]} (WebRTC)
-//   POST   /offer              SessionDescription (the offer)        -> SessionDescription (the answer)
-//   POST   /voice/token        VoiceTokenRequest (JSON, optional)    -> VoiceToken (LiveKit voice assistant)
+//   POST /session/token   TokenRequest (JSON, optional)  -> TokenResponse: a new LiveKit room with the backend
+//                                                            ("vision") in it
+//   The room, topic "updates": "objects", "label" and "status" as data packets, "look" as text streams (Update)
+//   RPCs to "vision": select {uid}, mode {mode}, pause {paused}, voice {on}; each answers an RPCReply
 // Errors come back as {"detail": "..."} (APIError).
 
 import CoreGraphics
@@ -34,7 +28,7 @@ struct BBox: Codable, Hashable {
 }
 
 extension BBox {
-    /// From a detections-channel box [x1, y1, x2, y2], e.g. a tapped hotspot.
+    /// From a live message's box [x1, y1, x2, y2].
     init(corners b: [Double]) {
         self.init(x: b[0], y: b[1], w: b[2] - b[0], h: b[3] - b[1])
     }
@@ -87,22 +81,7 @@ enum PriceVerdict: String, Codable, Hashable {
     }
 }
 
-enum SegmentationMethod: String, Codable, Hashable {
-    case sam3
-    case roboflowSam3 = "roboflow_sam3"
-    case bboxFallback = "bbox_fallback"
-    case unknown
-
-    init(from decoder: Decoder) throws {
-        self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
-    }
-}
-
-// MARK: - POST /detect
-
-/// What the backend saw. With SAM first (the normal case), /detect answers in ~1.5 s with SAM's
-/// short label ("lamp"), and Claude's description arrives on the server side before /search runs,
-/// so description, style, brandGuess and searchQueries are often empty here.
+/// Claude's description of an object, from a Look's "described" stage on.
 struct Item: Codable, Hashable {
     let category: String?        // nil = nothing shoppable in view
     let description: String?
@@ -110,9 +89,9 @@ struct Item: Codable, Hashable {
     let colors: [String]
     let materials: [String]
     let brandGuess: String?
-    let confidence: Double       // 0–1; 0 when SAM answered first
+    let confidence: Double       // 0–1
     let searchQueries: [String]
-    let bbox: BBox?              // where the item is in the photo
+    let bbox: BBox?              // Claude's rough box
     let quickPhrase: String
 
     enum CodingKeys: String, CodingKey {
@@ -123,47 +102,7 @@ struct Item: Codable, Hashable {
     }
 }
 
-/// The cutout sent to the store search.
-struct Segmentation: Codable, Hashable {
-    let method: SegmentationMethod
-    let bbox: BBox               // the item's box: SAM's tight box, or Claude's padded box on fallback
-    let maskScore: Double?       // SAM's confidence; nil on the fallback crop
-    let cutoutPath: String       // server-side path; use cutoutURL
-    let cutoutURL: String        // a JPEG crop of the item (not on a white background)
-    let maskPreviewURL: String?  // the photo with the crop drawn on it; for debugging
-    let latencyMS: Int
-
-    enum CodingKeys: String, CodingKey {
-        case method, bbox
-        case maskScore = "mask_score"
-        case cutoutPath = "cutout_path"
-        case cutoutURL = "cutout_url"
-        case maskPreviewURL = "mask_preview_url"
-        case latencyMS = "latency_ms"
-    }
-}
-
-struct DetectResponse: Codable, Hashable, Identifiable {
-    let captureID: String        // pass to /search/{captureID}; ignore responses for older ids
-    let imageURL: String
-    let item: Item
-    let segmentation: Segmentation?  // nil when nothing was found
-    let quickPhrase: String      // speak right away, e.g. "Lamp. Finding prices."
-    let latencyMS: Int
-
-    var id: String { captureID }
-    var foundSomething: Bool { item.category != nil && segmentation != nil }
-
-    enum CodingKeys: String, CodingKey {
-        case item, segmentation
-        case captureID = "capture_id"
-        case imageURL = "image_url"
-        case quickPhrase = "quick_phrase"
-        case latencyMS = "latency_ms"
-    }
-}
-
-// MARK: - POST /search/{captureID}
+// MARK: - Search results
 
 struct Product: Codable, Hashable, Identifiable {
     let title: String
@@ -213,17 +152,14 @@ struct PriceInsight: Codable, Hashable {
 }
 
 struct SearchResponse: Codable, Hashable, Identifiable {
-    let captureID: String
+    let captureID: String        // the Look's id
     let bestMatch: Product?      // nil when nothing was found for sale
     let dupes: [Product]         // cheaper lookalikes, cheapest savings first; can be empty
     let used: [Product]          // pre-owned listings; can be empty
     let priceInsight: PriceInsight
     let spokenSummary: String    // speak when the cards appear
     let timingMS: [String: Int]  // per-step timings, for debugging
-    let sourcesOK: [ProductSource]?  // coming soon: which stores answered; nil until the backend sends it
-    let item: Item?              // the finished item: Claude's name ("tripod floor lamp" where /detect
-                                 // said "lamp"), description and style; show this name on the results.
-                                 // nil only from an older backend
+    let item: Item?              // the finished item: Claude's name, description and style
 
     var id: String { captureID }
 
@@ -234,15 +170,18 @@ struct SearchResponse: Codable, Hashable, Identifiable {
         case priceInsight = "price_insight"
         case spokenSummary = "spoken_summary"
         case timingMS = "timing_ms"
-        case sourcesOK = "sources_ok"
     }
 }
 
 // MARK: - Errors
 
-/// Any non-2xx response: 400 (not an image), 404 (unknown capture id), 422 (bad request body), 500.
+/// A failed request or RPC: a non-2xx response's {"detail": "..."}, or an RPC answering ok: false.
 struct APIError: Decodable, Error, Hashable {
     let detail: String
+
+    init(detail: String) {
+        self.detail = detail
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -253,130 +192,104 @@ struct APIError: Decodable, Error, Hashable {
     enum CodingKeys: String, CodingKey { case detail }
 }
 
-// MARK: - Live stream (WebRTC): the "detections" data channel carries every message below.
+// MARK: - Live messages: the backend -> the phone, on topic "updates"
 
-/// POST /offer body and response.
-struct SessionDescription: Codable, Hashable {
-    let sdp: String
-    let type: String             // "offer" from the phone, "answer" from the backend
-}
-
-/// One object on the "detections" data channel (backend -> phone): every object scene memory holds,
-/// including ones that left the view in the last 15 s (inView false: not a hotspot, but voice can name it).
-struct Detection: Codable, Identifiable, Hashable {
-    let trackID: String          // stable while the object is remembered (ids survive ~6 s unseen)
-    let box: [Double]            // normalized x1, y1, x2, y2; the last one seen
-    let label: String
+/// One object the backend tracks. Objects that left the view in the last 15 s are still listed (inView false).
+struct LiveObject: Codable, Identifiable, Hashable {
+    let uid: String              // never repeats within a session; opaque, don't parse it
+    let box: [Double]            // [x1, y1, x2, y2], the last one seen
+    let prompt: String           // SAM's prompt that matched, e.g. "lamp"
     let score: Double
-    // Arrive ~1–3 s after the object appears; nil until the backend has them. `var` with defaults so
-    // the mock detections can leave them out; decoding is the same.
-    var name: String? = nil      // quick label, e.g. "black insulated water bottle"
-    var priceLow: Int? = nil     // whole dollars, a rough estimate
-    var priceHigh: Int? = nil
-    // Scene memory; `var` with defaults like the quick label. nil from an older backend.
-    var inView: Bool? = nil          // in the latest frame (nil: treat as true)
-    var centered: Double? = nil      // 0–1, how close to the view's center it was, weighted by time in view
-    var secondsViewed: Double? = nil // time in view within the last 15 s
-    var firstSeenTs: Int64? = nil    // ms since epoch
-    var lastSeenTs: Int64? = nil
+    let inView: Bool
+    let lastSeenTs: Int64        // ms since epoch
 
-    var id: String { trackID }
+    var id: String { uid }
     var bbox: BBox { BBox(corners: box) }
-    /// Draw a hotspot only for objects in view; the others are only remembered.
-    var isHotspot: Bool { inView ?? true }
-    /// "$60–150" once the quick label is in.
-    var priceText: String? {
-        guard let low = priceLow, let high = priceHigh else { return nil }
-        return low == high ? "$\(low)" : "$\(low)–\(high)"
-    }
 
     enum CodingKeys: String, CodingKey {
-        case box, label, score, name, centered
-        case trackID = "track_id"
-        case priceLow = "price_low"
-        case priceHigh = "price_high"
+        case uid, box, prompt, score
         case inView = "in_view"
-        case secondsViewed = "seconds_viewed"
-        case firstSeenTs = "first_seen_ts"
         case lastSeenTs = "last_seen_ts"
     }
 }
 
-struct DetectionsMessage: Codable, Hashable {
-    let type: String             // "detections"
-    let ts: Int64                // ms; ignore messages older than the last one you applied
-    let objects: [Detection]
-}
-
-/// Optional, phone -> backend on the same channel: the user picked this object.
-struct SelectMessage: Codable, Hashable {
-    var type = "select"
-    let trackID: String
+/// Every tracking result: the objects to draw, replacing the last message's.
+struct ObjectsMessage: Codable, Hashable {
+    let session: Int             // goes up when tracking restarts and uids start over
+    let ageMS: Int               // how old the frame behind these boxes is
+    let objects: [LiveObject]    // in view first
 
     enum CodingKeys: String, CodingKey {
-        case type
-        case trackID = "track_id"
+        case session, objects
+        case ageMS = "age_ms"
     }
 }
 
-/// Phone -> backend on the detections channel, on connect and on every camera switch: the backend forgets
-/// what it tracked (new tracking session, ids restart) and starts over with the new camera.
-struct ModeMessage: Codable, Hashable {
-    var type = "mode"
-    let mode: Mode
-
-    enum Mode: String, Codable, Hashable { case glasses, phone }
-}
-
-/// Phone -> backend: the user paused (or resumed) the camera. Paused: tracking stops and everything it
-/// held is purged (scene memory, the latest frame, the tracking server's session).
-struct PauseMessage: Codable, Hashable {
-    var type = "pause"
-    let paused: Bool
-}
-
-/// Backend -> phone, after a select: the steps of that "Look", in order. Follow the "detected" whose
-/// trackID is the one you selected, then only messages with its captureID.
-///   detected:  label, quickPhrase (speak it), box, cutoutPath   at once
-///   described: item (Claude's name and description)           ~2–3s later
-///   results:   search, the same answer as POST /search/{id}    ~8–11s after the select
-///   failed:    message
-/// For an object the backend already looked at in the background (one of the 3 in view longest), all
-/// three arrive at once.
-struct LookMessage: Codable, Hashable {
-    let type: String             // "look"
-    let stage: LookStage
-    let captureID: String        // the same id POST /search/{captureID} takes
-    let trackID: String?         // the selected object, "t3"
-    let label: String?           // detected: a short label, e.g. "lamp"
-    let quickPhrase: String?     // detected: e.g. "Lamp. Finding prices."
-    let box: BBox?               // detected: where it is in the frame
-    let cutoutPath: String?      // detected: the crop, at <base URL>/<cutoutPath>
-    let item: Item?              // described: Claude's item ("floor lamp", description, style)
-    let search: SearchResponse?  // results: best match, dupes, used, price insight, item
-    let message: String?         // failed: why, in a short sentence
+/// Once per object, soon after it appears: a quick name and a rough price.
+struct LabelMessage: Codable, Hashable {
+    let uid: String
+    let box: [Double]
+    let name: String             // e.g. "black insulated water bottle"
+    let priceLow: Int            // whole dollars
+    let priceHigh: Int
 
     enum CodingKeys: String, CodingKey {
-        case type, stage, label, box, item, search, message
-        case captureID = "capture_id"
-        case trackID = "track_id"
-        case quickPhrase = "quick_phrase"
-        case cutoutPath = "cutout_path"
+        case uid, box, name
+        case priceLow = "price_low"
+        case priceHigh = "price_high"
     }
 }
 
 enum LookStage: String, Codable, Hashable {
-    case detected, described, results, failed, nothing, unknown
+    case started, described, results, failed, unknown
 
     init(from decoder: Decoder) throws {
         self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
     }
 }
 
-/// Any message on the "detections" channel: decode each one with this, then switch on it.
-enum ChannelMessage: Decodable, Hashable {
-    case detections(DetectionsMessage)
-    case look(LookMessage)
+/// One step of an object's Look: what it is and where to buy it. The backend runs one Look per object;
+/// each step arrives as a "look" message with the Look's latest state.
+struct Look: Codable, Hashable {
+    let uid: String
+    let lookID: String
+    let stage: LookStage
+    let label: String            // SAM's prompt, until Claude's item names it
+    let box: [Double]
+    let selected: Bool           // the user picked this object
+    let cropURL: String?         // the crop, once the user picked the object
+    let item: Item?              // from "described" on
+    let search: SearchResponse?  // "results"
+    let message: String?         // "failed": why, in a short sentence
+
+    enum CodingKeys: String, CodingKey {
+        case uid, stage, label, box, selected, item, search, message
+        case lookID = "look_id"
+        case cropURL = "crop_url"
+    }
+}
+
+/// When tracking, its category or its prompts change.
+struct StatusMessage: Codable, Hashable {
+    enum Tracking: String, Codable, Hashable {
+        case stopped, starting, ok, offline, unknown
+
+        init(from decoder: Decoder) throws {
+            self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+        }
+    }
+
+    let tracking: Tracking
+    let category: String
+    let prompts: [String]
+}
+
+/// Any message on topic "updates": decode each one with this, then switch on it.
+enum Update: Decodable, Hashable {
+    case objects(ObjectsMessage)
+    case label(LabelMessage)
+    case look(Look)
+    case status(StatusMessage)
     case other(String)           // a type this app doesn't know: ignore it
 
     private enum Key: String, CodingKey { case type }
@@ -384,31 +297,38 @@ enum ChannelMessage: Decodable, Hashable {
     init(from decoder: Decoder) throws {
         let type = try decoder.container(keyedBy: Key.self).decode(String.self, forKey: .type)
         switch type {
-        case "detections": self = .detections(try DetectionsMessage(from: decoder))
-        case "look": self = .look(try LookMessage(from: decoder))
+        case "objects": self = .objects(try ObjectsMessage(from: decoder))
+        case "label": self = .label(try LabelMessage(from: decoder))
+        case "look": self = .look(try Look(from: decoder))
+        case "status": self = .status(try StatusMessage(from: decoder))
         default: self = .other(type)
         }
     }
 }
 
-// MARK: - Voice assistant (LiveKit)
-//
-// Mirrors backend/models.py (VoiceTokenRequest, VoiceTokenResponse) and backend/voice.py (the phone's
-// RPC method "action"). The video stays on our WebRTC; LiveKit carries only the voice.
+/// Every RPC to "vision" answers this. select's answer carries the object's Look.
+struct RPCReply: Decodable, Hashable {
+    let ok: Bool
+    let detail: String?
+    let look: Look?
+}
 
-/// POST /voice/token body. Every field is optional; the body can be left out entirely.
-struct VoiceTokenRequest: Codable, Hashable {
+// MARK: - Session token
+
+/// POST /session/token body. The backend makes sure the identity starts with "phone-".
+struct TokenRequest: Codable, Hashable {
     var participantIdentity: String?
-    var participantName: String?
+    /// What to track, e.g. "electronics": SAM's labels are picked within it from the first frame.
+    /// nil: the backend's default ("small things to buy").
+    var category: String?
 
     enum CodingKeys: String, CodingKey {
+        case category
         case participantIdentity = "participant_identity"
-        case participantName = "participant_name"
     }
 }
 
-/// Each token opens a fresh room with the assistant already in it.
-struct VoiceToken: Codable, Hashable {
+struct TokenResponse: Codable, Hashable {
     let serverURL: String
     let participantToken: String
 
@@ -417,6 +337,8 @@ struct VoiceToken: Codable, Hashable {
         case participantToken = "participant_token"
     }
 }
+
+// MARK: - Voice assistant: its RPC "action" to the phone
 
 /// The results tab the assistant asks for.
 enum ResultsTab: String, Codable, Hashable {

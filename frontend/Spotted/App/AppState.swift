@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
+import LiveKit
 import Observation
-import WebRTC
 
 @MainActor
 @Observable
@@ -19,7 +19,9 @@ final class AppState {
     }
 
     var tab: Tab = .live
-    var connection: Connection = .live
+    var connection: Connection {
+        isConnected && status?.tracking != .offline ? .live : .reconnecting
+    }
     var isCameraPaused = false {
         didSet {
             live?.setPaused(isCameraPaused)
@@ -27,30 +29,29 @@ final class AppState {
         }
     }
 
-    // Live view
-    var detections: [Detection] = MockData.detections
+    // Live view: what the server last sent. It tracks every object and runs every Look; the app only
+    // keeps what's on screen.
+    var objects: [LiveObject] = []
+    /// The quick labels of the objects in `objects`.
+    var labels: [String: LabelMessage] = [:]
     var scan: ScanState = .idle {
         didSet { scanChanged(from: oldValue) }
     }
-    var selectedTrackID: String?
-    /// Sources that have answered while /search runs.
-    var finishedSources: Set<ProductSource> = []
+    var selectedUID: String?
     var currentRoom = "Maya’s apartment"
 
-    // Glasses mode (G1–G7)
+    /// Where the video comes from, picked on the start screen.
     var captureMode: CaptureMode = .phone {
         didSet {
             guard captureMode != oldValue else { return }
-            live?.setMode(captureMode == .glasses ? .glasses : .phone)
-            // The backend restarts tracking (new ids) for the new camera.
-            if live != nil { detections = [] }
+            live?.setMode(captureMode)
+            // The backend restarts tracking (new uids) for the new camera.
+            if live != nil { clearObjects() }
             updateVideoSource()
         }
     }
     /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
     private(set) var glasses: GlassesManager?
-    /// "Glasses connected. Say “Spotted” to capture." on Glasses Home for a few seconds.
-    var modeBanner: String?
     /// Every Look the user asked for: Spotted Today and the room recap.
     var captures: [Capture] = []
     var isShowingRoomRecap = false
@@ -70,8 +71,8 @@ final class AppState {
 
     static let taxRate = 0.1035
 
-    var selectedDetection: Detection? {
-        detections.first { $0.trackID == selectedTrackID }
+    var selectedObject: LiveObject? {
+        objects.first { $0.uid == selectedUID }
     }
 
     var currentSearch: SearchResponse? {
@@ -88,47 +89,30 @@ final class AppState {
 
     // MARK: - Scanning
 
-    /// Live: sends select on the channel and follows that Look (see handle(_:)).
-    /// Mock: fakes detected → results with the latency budget from FRONTEND.md.
-    func select(_ detection: Detection) {
-        selectedTrackID = detection.trackID
-        finishedSources = []
-        currentCaptureID = nil
+    /// Picks an object. The server already runs its Look (or starts it now): show the Look as it stands,
+    /// then follow its updates.
+    func select(_ object: LiveObject) {
+        selectedUID = object.uid
         scan = .looking
-        if let live {
-            isAwaitingLook = true
-            live.select(trackID: detection.trackID)
-            return
-        }
-        let isLamp = detection.label == "lamp"
-        let (mockDetect, mockSearch) = isLamp ? (MockData.lampDetect, MockData.lampSearch) : (MockData.detect, MockData.search)
         Task {
-            try? await Task.sleep(for: .seconds(0.8))
-            guard scan == .looking, selectedTrackID == detection.trackID else { return }
-            scan = .detected(Look(mockDetect))
-
-            try? await Task.sleep(for: .seconds(0.9))
-            guard case .detected = scan, selectedTrackID == detection.trackID else { return }
-            finishedSources.insert(.shopping)
-
-            try? await Task.sleep(for: .seconds(1.6))
-            guard case let .detected(look) = scan, selectedTrackID == detection.trackID else { return }
-            finishedSources = Set(ProductSource.searchable)
-            scan = .matched(look.finished(with: mockSearch), mockSearch)
+            do {
+                let look = try await source.select(uid: object.uid)
+                if selectedUID == object.uid { show(look) }
+            } catch {
+                guard selectedUID == object.uid else { return }
+                scan = .failed((error as? APIError)?.detail ?? "Couldn't tell. Try again closer.")
+            }
         }
     }
 
     func clearScan() {
         scan = .idle
-        selectedTrackID = nil
-        finishedSources = []
-        currentCaptureID = nil
-        isAwaitingLook = false
+        selectedUID = nil
     }
 
     func retry() {
-        if let detection = selectedDetection ?? detections.first {
-            select(detection)
+        if let object = selectedObject ?? objects.first {
+            select(object)
         }
     }
 
@@ -154,7 +138,7 @@ final class AppState {
         guard !isSaved(title) else { return }
         let match = currentSearch?.bestMatch
         let item = SavedItem(id: UUID().uuidString, title: title, store: match?.store ?? look.item?.brandGuess ?? "",
-                             price: match?.price ?? 0, image: match?.imageURL ?? look.cutoutURL ?? "",
+                             price: match?.price ?? 0, image: match?.imageURL ?? look.cropURL ?? "",
                              room: currentRoom)
         saved.insert(item, at: 0)
         undoStack.append(.saved(itemID: item.id))
@@ -184,7 +168,7 @@ final class AppState {
             let item = CartItem(id: UUID().uuidString, title: product.title,
                                 shortTitle: short.isEmpty ? product.title : short, store: product.store,
                                 room: currentRoom, price: product.price, quantity: 1,
-                                image: product.imageURL ?? currentLook?.cutoutURL ?? "")
+                                image: product.imageURL ?? currentLook?.cropURL ?? "")
             cart.append(item)
             id = item.id
         }
@@ -258,20 +242,26 @@ final class AppState {
         return values.filter { seen.insert($0).inserted }
     }
 
-    // MARK: - Live stream (WebRTC)
+    // MARK: - Live session (LiveKit)
 
-    /// Set when Config.xcconfig has a backend URL. Nil runs everything on mock data.
-    private var live: WebRTCPublisher?
-    /// True from a select until its "detected" (or "failed") arrives.
-    private var isAwaitingLook = false
-    /// The Look being followed. Messages with any other captureID are stale and ignored.
-    private var currentCaptureID: String?
-    private var lastDetectionsTS: Int64 = 0
+    /// Set when Config.xcconfig has a backend URL. Nil runs everything on MockSession.
+    private var live: LiveSession?
+    private var source: UpdateSource
+    private var isConnected = true
+    /// The backend's last tracking status: its state, category and SAM's prompts.
+    private var status: StatusMessage?
     private let speaker = Speaker()
+
+    init() {
+        let mock = MockSession()
+        source = mock
+        mock.onUpdate = { [weak self] in self?.handle($0) }
+        mock.start()
+    }
 
     /// The camera track to preview on a device. Nil in mock mode and in the Simulator, which shows
     /// (and streams) the mock room instead.
-    var liveVideoTrack: RTCVideoTrack? {
+    var liveVideoTrack: LocalVideoTrack? {
         #if targetEnvironment(simulator)
         nil
         #else
@@ -282,48 +272,69 @@ final class AppState {
     /// Width ÷ height of the previewed camera frames, for mapping boxes through aspect-fill.
     var previewAspect: CGFloat? { liveVideoTrack == nil ? nil : 9.0 / 16.0 }
 
-    func startLive() {
+    /// False until the start screen's button: nothing streams before that.
+    private(set) var isStreaming = false
+
+    /// What the backend tracks, picked on the start screen.
+    private(set) var category = TrackingCategory.default.value
+
+    /// Streaming, but the backend hasn't picked SAM's labels from the first frame yet: no object can
+    /// show up until it has.
+    var isFindingLabels: Bool {
+        isStreaming && !isCameraPaused && (status?.prompts.isEmpty ?? true)
+    }
+
+    /// The start screen's button: join the session and stream from the chosen camera, tracking `category`.
+    func startStreaming(from mode: CaptureMode, category: String) {
+        guard !isStreaming else { return }
+        captureMode = mode
+        self.category = category
+        isStreaming = true
+        startLive()
+    }
+
+    private func startLive() {
         guard live == nil, let baseURL = AppConfig.baseURL else { return }
-        let api = APIClient(baseURL: baseURL)
-        self.api = api
-        let voice = VoiceAssistant(api: api)
-        voice.perform = { [weak self] action in
-            await self?.perform(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
+        clearObjects()
+        status = nil
+        isConnected = false
+        Task { [weak self, category] in
+            let session = await LiveSession.make(api: APIClient(baseURL: baseURL), category: category)
+            guard let self else { return }
+            session.onUpdate = { [weak self] in self?.handle($0) }
+            session.onConnectionChange = { [weak self] connected in
+                self?.isConnected = connected
+                // Joining sends the current state again.
+                if connected { self?.clearObjects() }
+            }
+            let voice = VoiceAssistant(session: session)
+            voice.perform = { [weak self] action in
+                await self?.perform(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
+            }
+            self.voice = voice
+            live = session
+            source = session
+            session.setMode(captureMode)
+            session.setPaused(isCameraPaused)
+            // Pick the source before starting, so the phone camera never starts in glasses mode.
+            updateVideoSource()
+            session.start()
         }
-        self.voice = voice
-        let publisher = WebRTCPublisher(api: api)
-        publisher.onMessage = { [weak self] in self?.handle($0) }
-        publisher.onStateChange = { [weak self] state in
-            self?.connection = state == .connected ? .live : .reconnecting
-        }
-        live = publisher
-        detections = []
-        connection = .reconnecting
-        publisher.setMode(captureMode == .glasses ? .glasses : .phone)
-        publisher.start()
-        updateVideoSource()
     }
 
     // MARK: - Meta glasses
 
-    /// Starts the DAT SDK's glasses tracking. Glasses connecting switches to glasses mode and video;
-    /// disconnecting switches back to the phone camera.
+    /// Starts the DAT SDK's glasses tracking, so the start screen knows whether glasses are there.
     func startGlasses() {
         guard glasses == nil, GlassesManager.configure() else { return }
-        let manager = GlassesManager()
-        manager.onAvailabilityChange = { [weak self] available in
-            self?.setCaptureMode(available ? .glasses : .phone)
-            self?.updateVideoSource()
-        }
-        glasses = manager
-        if manager.hasGlasses { setCaptureMode(.glasses) }
+        glasses = GlassesManager()
     }
 
-    /// Glasses video only in glasses mode with real glasses connected and the camera not paused;
-    /// otherwise the phone camera (so "simulate glasses" without hardware still streams something).
+    /// The glasses in glasses mode, unless the camera is paused; otherwise the phone camera. Glasses that
+    /// drop out stay the source: their session waits for them and reconnects (see GlassesManager).
     private func updateVideoSource() {
         guard let live else { return }
-        if captureMode == .glasses, let glasses, glasses.hasGlasses, !isCameraPaused {
+        if captureMode == .glasses, let glasses, !isCameraPaused {
             live.use(.glasses)
             glasses.startCamera(into: live.glassesCapturer)
         } else {
@@ -332,78 +343,69 @@ final class AppState {
         }
     }
 
-    private func handle(_ message: ChannelMessage) {
-        switch message {
-        case let .detections(update):
-            guard update.ts >= lastDetectionsTS else { return }
-            lastDetectionsTS = update.ts
-            detections = update.objects
+    private func handle(_ update: Update) {
+        switch update {
+        case let .objects(message):
+            objects = message.objects
+            let uids = Set(objects.map(\.uid))
+            labels = labels.filter { uids.contains($0.key) }
+        case let .label(label):
+            labels[label.uid] = label
         case let .look(look):
-            handle(look)
+            if look.uid == selectedUID { show(look) }
+        case let .status(status):
+            self.status = status
         case .other:
             break
         }
     }
 
-    /// Follows the "detected" whose trackID is the selected one, then only that captureID.
-    private func handle(_ message: LookMessage) {
-        if message.stage == .detected {
-            guard isAwaitingLook, message.trackID == selectedTrackID else { return }
-            isAwaitingLook = false
-            currentCaptureID = message.captureID
-            let look = Look(captureID: message.captureID,
-                            label: message.label ?? selectedDetection?.label ?? "item",
-                            quickPhrase: message.quickPhrase ?? "",
-                            cutoutURL: message.cutoutPath.flatMap(AppConfig.url(for:))?.absoluteString,
-                            item: nil)
+    /// Spoken feedback, through the phone camera's mode only. With the glasses as the source the audio
+    /// would play on them over the Bluetooth link their camera streams on, which can drop the stream.
+    private func say(_ text: String) {
+        guard captureMode == .phone else { return }
+        speaker.say(text)
+    }
+
+    private func clearObjects() {
+        objects = []
+        labels = [:]
+    }
+
+    /// The selected object's Look, at its latest step.
+    private func show(_ look: Look) {
+        let previous = currentLook?.lookID == look.lookID ? currentLook : nil
+        // The select's answer can arrive after a later step of the same Look.
+        if let previous, previous.stage == .results, look.stage != .results { return }
+        switch look.stage {
+        case .started, .described:
             scan = .detected(look)
-            say(look.quickPhrase)
-            return
-        }
-
-        // A failure can arrive before "detected", so also accept it for the pending select.
-        let isCurrent = message.captureID == currentCaptureID
-            || (isAwaitingLook && message.trackID == selectedTrackID)
-        guard isCurrent else { return }
-
-        switch message.stage {
-        case .described:
-            if case var .detected(look) = scan, let item = message.item {
-                look.item = item
-                scan = .detected(look)
-            }
+            if previous == nil { say(look.quickPhrase) }
         case .results:
-            guard let search = message.search, let look = currentLook else { return }
-            finishedSources = Set(ProductSource.searchable)
-            scan = .matched(look.finished(with: search), search)
-            say(search.spokenSummary)
-        case .failed, .nothing:
-            isAwaitingLook = false
-            let line = message.message ?? "Couldn't tell. Try again closer."
+            guard let search = look.search else { return }
+            scan = .matched(look, search)
+            if previous?.stage != .results { say(search.spokenSummary) }
+        case .failed:
+            let line = look.message ?? "Couldn't tell. Try again closer."
             scan = .failed(line)
             say(line)
-        case .detected, .unknown:
+        case .unknown:
             break
         }
     }
 
-    /// The app's own speech, only when the voice assistant isn't connected (it speaks the Look itself).
-    private func say(_ text: String) {
-        guard voice?.isConnected != true else { return }
-        speaker.say(text)
-    }
-
     // MARK: - Voice assistant (LiveKit)
 
-    private var api: APIClient?
     private(set) var voice: VoiceAssistant?
 
     /// Connect only while voice is in use: the app is in front and the Live view, the assistant
     /// sheet, results or the pay sheet is up. The mic is transcribed the whole time it's connected.
+    /// Never with the glasses as the source: their mic would open a Bluetooth audio link next to the
+    /// camera stream, which can drop it.
     func updateVoice(appIsActive: Bool) {
         guard let voice else { return }
         let inUse = tab == .live || isListening || isShowingDetail || isShowingCheckout || isShowingRoomRecap
-        appIsActive && inUse ? voice.connect() : voice.disconnect()
+        appIsActive && inUse && captureMode == .phone ? voice.connect() : voice.disconnect()
     }
 
     /// One action the assistant asks for through the "action" RPC. It waits at most 15 s for the reply.
@@ -415,7 +417,7 @@ final class AppState {
             }
             return await add(product)
         case .saveItem:
-            guard let look = currentLook, action.captureID == nil || action.captureID == look.captureID else {
+            guard let look = currentLook, action.captureID == nil || action.captureID == look.lookID else {
                 return VoiceActionReply(ok: false, detail: "That item isn't on screen anymore.")
             }
             save(look)
@@ -449,37 +451,12 @@ final class AppState {
 
     // MARK: - Glasses mode
 
-    /// Switches modes from the glasses' connection state, with the toast from FRONTEND.md.
+    /// Switches the camera mid-stream. The backend starts tracking over for the new camera.
     func setCaptureMode(_ mode: CaptureMode) {
         guard mode != captureMode else { return }
         captureMode = mode
         clearScan()
-        switch mode {
-        case .glasses:
-            showModeBanner()
-        case .phone:
-            lookActivity.end()
-            showToast("Glasses disconnected. Using your phone camera.", canUndo: false)
-        }
-    }
-
-    private func showModeBanner() {
-        let text = "Glasses connected. Say “Spotted” to capture."
-        modeBanner = text
-        Task {
-            try? await Task.sleep(for: .seconds(6))
-            if modeBanner == text { modeBanner = nil }
-        }
-    }
-
-    /// The next-best object for "Not this one" (G3): the most confident one that isn't selected.
-    var nextBestDetection: Detection? {
-        detections.filter { $0.trackID != selectedTrackID }.max { $0.score < $1.score }
-    }
-
-    func notThisOne() {
-        guard let next = nextBestDetection else { return clearScan() }
-        select(next)
+        if mode == .phone { lookActivity.end() }
     }
 
     /// Live Activities can only start while the app is in front, so re-sync when it becomes active.
@@ -488,10 +465,10 @@ final class AppState {
     }
 
     private func scanChanged(from old: ScanState) {
-        if case let .matched(look, search) = scan, !captures.contains(where: { $0.id == look.captureID }) {
-            captures.insert(Capture(id: look.captureID, title: look.name.sentenceCased, price: search.bestMatch?.price,
+        if case let .matched(look, search) = scan, !captures.contains(where: { $0.id == look.lookID }) {
+            captures.insert(Capture(id: look.lookID, title: look.name.sentenceCased, price: search.bestMatch?.price,
                                     verdict: search.bestMatch == nil ? nil : search.priceInsight.bestMatchVerdict,
-                                    image: search.bestMatch?.imageURL ?? look.cutoutURL ?? "", room: currentRoom,
+                                    image: search.bestMatch?.imageURL ?? look.cropURL ?? "", room: currentRoom,
                                     date: .now, product: search.bestMatch), at: 0)
         }
         if captureMode == .glasses {
@@ -533,7 +510,7 @@ final class AppState {
         guard url.scheme == "spotted" else { return }
         let captureID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "capture" }?.value
-        let isCurrent = captureID == nil || captureID == currentLook?.captureID
+        let isCurrent = captureID == nil || captureID == currentLook?.lookID
         let capture = captures.first { $0.id == captureID }
         switch url.host() {
         case "talk":

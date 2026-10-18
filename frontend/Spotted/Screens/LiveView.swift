@@ -1,3 +1,4 @@
+import LiveKit
 import SwiftUI
 
 /// 01 · Live: the glasses' feed with hotspots, the selected object's brackets and the product card.
@@ -5,7 +6,6 @@ import SwiftUI
 struct LiveView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var focusedTrackID: String?
 
     var body: some View {
         ZStack {
@@ -19,6 +19,7 @@ struct LiveView: View {
                         Color.black.opacity(0.35)
                     }
                     markers(in: geo.size)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.labels.count)
                 }
             }
             .ignoresSafeArea()
@@ -34,13 +35,14 @@ struct LiveView: View {
             .padding(.bottom, 74)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.scan)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.isFindingLabels)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.connection)
         .accessibilityAction(.escape, dismissSelection)
     }
 
     @ViewBuilder private var feed: some View {
         if let track = app.liveVideoTrack {
-            LiveFeedView(track: track)
+            SwiftUIVideoView(track, layoutMode: .fill, mirrorMode: .off)
         } else {
             MockCameraFeed()
         }
@@ -59,10 +61,20 @@ struct LiveView: View {
 
     /// Back to the hotspots: clears the product, searching or couldn't-tell card and any open tag.
     private func dismissSelection() {
-        focusedTrackID = nil
         switch app.scan {
         case .looking, .detected, .matched, .failed: app.clearScan()
         case .idle: break
+        }
+    }
+
+    /// In glasses mode, why no frames are coming in.
+    private var glassesNote: String? {
+        guard app.captureMode == .glasses, let camera = app.glasses?.camera else { return nil }
+        switch camera {
+        case .streaming: return nil
+        case .paused: return "Tap your glasses to resume"
+        case let .failed(message): return message
+        case .idle, .connecting: return app.glasses?.errorMessage ?? "Connecting to glasses…"
         }
     }
 
@@ -74,7 +86,8 @@ struct LiveView: View {
 
     @ViewBuilder private var topBar: some View {
         HStack(alignment: .top) {
-            StatusPill(connection: app.connection, isPaused: app.isCameraPaused)
+            StatusPill(connection: app.connection, isPaused: app.isCameraPaused,
+                       isGlassesMode: app.captureMode == .glasses, glassesNote: glassesNote)
             Spacer()
             GlassIconButton(icon: "icon-pause", iconSize: 18,
                             label: app.isCameraPaused ? "Resume camera" : "Pause camera") {
@@ -91,43 +104,28 @@ struct LiveView: View {
         if app.isCameraPaused {
             EmptyView()
         } else {
-            // Detections also list objects that left the view in the last 15 s (for voice); only
-            // the ones in view get a hotspot.
-            ForEach(app.detections.filter { $0.isHotspot && $0.score >= 0.6 }) { detection in
-                marker(for: detection, in: size)
+            // Objects that left the view in the last 15 s are still listed (for voice); only the ones in
+            // view get a hotspot.
+            ForEach(app.objects.filter(\.inView)) { object in
+                marker(for: object, in: size)
             }
         }
     }
 
+    /// The object's quick label at the center of its box, once the backend has named it.
     @ViewBuilder
-    private func marker(for detection: Detection, in size: CGSize) -> some View {
-        let rect = feedRect(detection.bbox, in: size)
-        if detection.trackID == app.selectedTrackID, isSelecting {
-            DetectionBrackets()
-                .frame(width: rect.width, height: rect.height)
-                // A tap on the selected object itself keeps it selected.
-                .contentShape(Rectangle())
-                .onTapGesture {}
-                .offset(x: rect.minX, y: rect.minY)
-            if let look = app.currentLook {
-                DetectionTag(item: look.name.sentenceCased)
-                    .fixedSize()
-                    .offset(x: rect.minX, y: rect.minY - 32)
+    private func marker(for object: LiveObject, in size: CGSize) -> some View {
+        if let label = app.labels[object.uid] {
+            let rect = feedRect(object.bbox, in: size)
+            let isSelected = object.uid == app.selectedUID && isSelecting
+            ClampedPosition(center: CGPoint(x: rect.midX, y: rect.midY)) {
+                Hotspot(item: label.name.sentenceCased, priceEstimate: label.priceEstimate, isSelected: isSelected)
+                    .opacity(hotspotOpacity)
+                    // A tap on the selected object itself keeps it selected.
+                    .onTapGesture { if !isSelected { app.select(object) } }
+                    .accessibilityAction { app.select(object) }
             }
-        } else {
-            Hotspot(item: detection.displayName, priceEstimate: detection.priceEstimate,
-                    isFocused: focusedTrackID == detection.trackID)
-                .opacity(hotspotOpacity)
-                .offset(x: rect.midX - 32, y: rect.midY - 32)
-                .onTapGesture {
-                    focusedTrackID = nil
-                    app.select(detection)
-                }
-                // Press-and-hold stands in for Figma's Hover state on touch.
-                .onLongPressGesture(minimumDuration: 0.4) {
-                    focusedTrackID = detection.trackID
-                }
-                .accessibilityAction { app.select(detection) }
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -147,8 +145,12 @@ struct LiveView: View {
 
     @ViewBuilder private var bottomContent: some View {
         switch app.scan {
+        case .idle where app.isFindingLabels:
+            LabelsLoader(category: app.category)
+                .padding(.bottom, 12)
+                .transition(.opacity)
         case .idle:
-            HintPill(text: "Tap the \(app.detections.first?.label ?? "item") or say “What’s this?”")
+            HintPill(text: "Tap the \(app.objects.first?.prompt ?? "item") or say “What’s this?”")
                 .padding(.bottom, 12)
                 .transition(.opacity)
         case .looking:
@@ -156,8 +158,7 @@ struct LiveView: View {
                 .padding(.bottom, 12)
                 .transition(.opacity)
         case let .detected(look):
-            SearchingCard(look: look, finishedSources: app.finishedSources,
-                          isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
+            SearchingCard(look: look, isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         case let .matched(look, search):
@@ -177,10 +178,54 @@ struct LiveView: View {
     }
 }
 
+/// While the backend picks what to track from the first frame: no label can show up before that.
+private struct LabelsLoader: View {
+    let category: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.labelPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Finding \(category) in view…")
+                    .font(.spottedSubhead)
+                    .foregroundStyle(.labelPrimary)
+                Text("Picking what to look for from the first frame")
+                    .font(.spottedFootnote)
+                    .foregroundStyle(.labelSecondary)
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 20)
+        .padding(.vertical, 12)
+        .glass(in: Capsule(), tint: 0.62)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Centers its one subview on `center`, nudged to stay inside the bounds: a label on an object at the
+/// edge of the frame stays readable.
+private struct ClampedPosition: Layout {
+    let center: CGPoint
+    var margin: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let view = subviews.first else { return }
+        let size = view.sizeThatFits(.unspecified)
+        let x = min(max(center.x, size.width / 2 + margin), bounds.width - size.width / 2 - margin)
+        let y = min(max(center.y, size.height / 2 + margin), bounds.height - size.height / 2 - margin)
+        view.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .center, proposal: .unspecified)
+    }
+}
+
 #Preview("01 · Live View") {
     let app = AppState()
-    app.selectedTrackID = MockData.chair.trackID
-    app.scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.search)
+    app.selectedUID = MockData.chair.uid
+    app.scan = .matched(MockData.chairResults, MockData.search)
     return RootView().environment(app)
 }
 
@@ -190,7 +235,7 @@ struct LiveView: View {
 
 #Preview("01b · Searching") {
     let app = AppState()
-    app.selectedTrackID = MockData.chair.trackID
-    app.scan = .detected(Look(MockData.detect))
+    app.selectedUID = MockData.chair.uid
+    app.scan = .detected(MockData.chairDescribed)
     return RootView().environment(app)
 }
