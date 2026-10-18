@@ -12,8 +12,11 @@ TIMEOUT_S = 6.0
 EDGE = 512  # longest side of the crop sent
 
 SYSTEM = """You label one product in a photo for a shopping app. Reply with:
-- name: 2-5 words, lowercase: the color and kind of item, plus the brand only if a logo is clearly
-  visible (e.g. "black insulated water bottle", "adidas long sleeve shirt", "fuzzy slippers")
+- name: 2-5 words, lowercase. Say what it is as specifically as the photo allows: the brand and product
+  when a printed name, a logo or recognizable packaging shows it, even partly (e.g. "sony wh-1000xm5
+  headphones", "adidas long sleeve shirt"); otherwise the color and kind of item ("black insulated
+  water bottle", "fuzzy slippers"). Don't invent a brand nothing in the photo shows. Use the item's
+  everyday name ("can", "mug", "lamp"), never a shape ("cylinder", "box", "object").
 - price_low, price_high: the usual price of a new one in US dollars, whole numbers
 You are told what the user is looking for (a category, e.g. "electronics") and what the tracker took
 this object for. Label the object in that category that the crop shows: in "electronics", the phone,

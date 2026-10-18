@@ -39,7 +39,8 @@ Fill in these fields:
   "streetwear", "industrial"), else null
 - colors: 1-3 colors
 - materials: 1-3 materials
-- brand_guess: brand if there is a visible logo or very distinctive design, else null
+- brand_guess: the brand when a printed name or logo shows it, even partly, or its packaging or design is
+  recognizable; null when nothing in the photo shows it
 - confidence: 0-1, how sure you are of the category and description
 - search_queries: 3 shopping search queries, most specific to most generic.
   If the brand or model is visible or recognizable, the first query names it
