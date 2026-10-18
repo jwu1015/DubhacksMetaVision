@@ -433,6 +433,28 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await anext(fresh))["objects"], event["objects"])
         await fresh.aclose()
 
+    async def test_the_latest_look_is_replayed_to_new_subscribers(self):
+        def look(stage, capture_id):
+            return {"type": "look", "stage": stage, "capture_id": capture_id, "track_id": 4}
+        sent = [look("detected", "c_a"), look("described", "c_a"), look("detected", "c_b"),
+                look("results", "c_a"),  # the older Look finishing late
+                look("results", "c_b")]
+        await next_event(self.events, "status")  # subscribed from here on
+        for event in sent:
+            self.stream.publish(event)
+        self.assertEqual([await anext(self.events) for _ in sent], sent)  # listening: everything, once
+
+        fresh = self.stream.subscribe()
+        self.assertEqual(await anext(fresh), {"type": "status", "tracking": "stopped"})
+        self.assertEqual([await anext(fresh), await anext(fresh)], [look("detected", "c_b"), look("results", "c_b")])
+        await fresh.aclose()
+
+        self.stream.publish(look("nothing", "c_c"))  # a photo with nothing to buy is a new Look too
+        fresh = self.stream.subscribe()
+        self.assertEqual([await anext(fresh), await anext(fresh)],
+                         [{"type": "status", "tracking": "stopped"}, look("nothing", "c_c")])
+        await fresh.aclose()
+
     async def test_stop_deletes_the_session_and_clears_the_boxes(self):
         await self.stream.start()
         self.stream.push_frame(image(300))
