@@ -276,6 +276,7 @@ final class AppState {
 
     /// The start screen's button: join the session and stream from the chosen camera.
     func startStreaming(from mode: CaptureMode) {
+        guard !isStreaming else { return }
         captureMode = mode
         isStreaming = true
         startLive()
@@ -303,8 +304,9 @@ final class AppState {
             source = session
             session.setMode(captureMode)
             session.setPaused(isCameraPaused)
-            session.start()
+            // Pick the source before starting, so the phone camera never starts in glasses mode.
             updateVideoSource()
+            session.start()
         }
     }
 

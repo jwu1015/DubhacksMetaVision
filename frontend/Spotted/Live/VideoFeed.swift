@@ -56,12 +56,18 @@ final class GlassesCapturer: FeedCapturer, @unchecked Sendable {
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let timeStampNs = time.isValid ? Int64(CMTimeGetSeconds(time) * 1_000_000_000)
                                        : Int64(CACurrentMediaTime() * 1_000_000_000)
-        // Raw frames carry a decoded pixel buffer; fall back to the SDK's image if one doesn't.
-        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+        // LiveKit drops frames in a pixel format WebRTC can't take (no preview, nothing streamed), so
+        // redraw those, and frames without a pixel buffer, from the SDK's image.
+        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer), Self.isSupported(pixelBuffer) {
             send(pixelBuffer, timeStampNs: timeStampNs)
         } else if let image = frame.makeUIImage()?.cgImage, let pixelBuffer = Self.pixelBuffer(from: image) {
             send(pixelBuffer, timeStampNs: timeStampNs)
         }
+    }
+
+    private static func isSupported(_ pixelBuffer: CVPixelBuffer) -> Bool {
+        let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        return VideoCapturer.supportedPixelFormats.contains { $0.uint32Value == format }
     }
 }
 
@@ -70,11 +76,16 @@ final class CameraCapturer: FeedCapturer, AVCaptureVideoDataOutputSampleBufferDe
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "spotted.camera")
     private var isConfigured = false
+    /// What start() and stop() last asked for, on `queue`. Camera access is granted asynchronously, so a
+    /// stop() can arrive before its start() takes effect; this keeps the camera off then.
+    private var isWanted = false
 
     override func start() {
+        queue.async { [self] in isWanted = true }
         AVCaptureDevice.requestAccess(for: .video) { [self] granted in
             guard granted else { return }
             queue.async { [self] in
+                guard isWanted else { return }
                 if !isConfigured { configure() }
                 if !session.isRunning { session.startRunning() }
             }
@@ -82,7 +93,10 @@ final class CameraCapturer: FeedCapturer, AVCaptureVideoDataOutputSampleBufferDe
     }
 
     override func stop() {
-        queue.async { [self] in session.stopRunning() }
+        queue.async { [self] in
+            isWanted = false
+            session.stopRunning()
+        }
     }
 
     private func configure() {

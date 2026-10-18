@@ -58,8 +58,9 @@ final class LiveSession: NSObject, UpdateSource {
         room.add(delegate: self)
     }
 
+    /// Joins the room. Only the active source's capturer runs, so the track carries one camera's frames.
     func start() {
-        capturer.start()
+        if activeSource == .phone, !isPaused { capturer.start() }
         Task { [weak self, room] in
             do {
                 try await room.registerTextStreamHandler(for: updatesTopic) { [weak self] reader, _ in
@@ -117,8 +118,11 @@ final class LiveSession: NSObject, UpdateSource {
             do {
                 let token = try await api.sessionToken(identity: identity.stringValue)
                 try await room.connect(url: token.serverURL, token: token.participantToken)
-                try await room.localParticipant.publish(videoTrack: videoTrack,
-                                                        options: VideoPublishOptions(simulcast: false))
+                // One video track per session: a rejoin publishes it again only if the room dropped it.
+                if room.localParticipant.localVideoTracks.isEmpty {
+                    try await room.localParticipant.publish(videoTrack: videoTrack,
+                                                            options: VideoPublishOptions(simulcast: false))
+                }
                 // The backend's state for this room starts now: tell it ours.
                 send("mode", ["mode": Self.name(of: mode)])
                 if isPaused { send("pause", ["paused": true]) }
