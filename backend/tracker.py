@@ -5,6 +5,10 @@ frame (Stream does this), so frames that arrive meanwhile are skipped, never que
 stay the same for the life of a session; when the server expires it (404) a new one starts and
 the ids restart. send() never raises: on failure it waits out a backoff and returns None.
 
+What a session tracks: SAM_CATEGORIES, or with that empty, labels Claude picks (labels.py) within
+SAM_AUTO_CATEGORY from the session's first frame. The session isn't created until those labels are
+back, and that frame is then its first.
+
     python tracker.py fixtures/lamp_room.jpg [more.jpg ...]   # one session, these frames, then delete it
 """
 import asyncio
@@ -18,6 +22,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 import config
+import labels
 import net
 from models import BBox
 
@@ -87,7 +92,7 @@ class Tracker:
     def __init__(self, base_url: str | None = None, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep,
                  categories: str | None = None):
         self.base_url = (config.MODEL_SERVICE_URL if base_url is None else base_url).rstrip("/")
-        self.categories = config.SAM_CATEGORIES if categories is None else categories  # "": the server's own
+        self.categories = config.SAM_CATEGORIES if categories is None else categories  # "": Claude picks them
         self.client = client  # None: the shared net.client()
         self.sleep = sleep
         self.session_id: str | None = None
@@ -110,16 +115,14 @@ class Tracker:
                            "CF_ACCESS_CLIENT_ID/SECRET and the server's access policy")
         return r
 
-    async def _create(self):
-        # The server needs to be told what to track (17 Oct): our categories, or /session/auto, where its
-        # Claude picks labels within SAM_AUTO_CATEGORY from the first frame.
-        if self.categories:
-            r = await self._request("POST", "/session", json={"prompt": self.categories})
-        else:
-            r = await self._request("POST", "/session/auto", json={"category": config.SAM_AUTO_CATEGORY})
+    async def _create(self, image: Image.Image | None = None):
+        """Start a session tracking our categories, or with none, the labels Claude picks from `image`
+        (the session's first frame): the session starts only once they are back."""
+        prompt = self.categories or await labels.labels_or_fallback(image, config.SAM_AUTO_CATEGORY)
+        r = await self._request("POST", "/session", json={"prompt": prompt})
         r.raise_for_status()
         self.session_id = r.json()["session_id"]
-        log.info("tracker: session %s started", self.session_id[:8])
+        log.info("tracker: session %s started for %s", self.session_id[:8], prompt)
 
     async def _frame_request(self, jpeg: bytes) -> httpx.Response:
         try:
@@ -130,14 +133,14 @@ class Tracker:
             await self.stop()
             raise
 
-    async def _post_frame(self, jpeg: bytes) -> httpx.Response:
+    async def _post_frame(self, jpeg: bytes, image: Image.Image) -> httpx.Response:
         if not self.session_id:
-            await self._create()
+            await self._create(image)
         r = await self._frame_request(jpeg)
         if r.status_code == 404:  # expired (120s idle) or the server restarted
             log.info("tracker: session %s expired; starting a new one (ids restart)", self.session_id[:8])
             self.session_id = None
-            await self._create()
+            await self._create(image)
             r = await self._frame_request(jpeg)
             if r.status_code == 404:
                 self.session_id = None
@@ -145,8 +148,9 @@ class Tracker:
         return r
 
     async def start(self) -> bool:
-        """Create the session now so the first frame is fast; send() retries if this fails. Never raises."""
-        if self.session_id:
+        """Create the session now so the first frame is fast; send() retries if this fails. Never raises.
+        Without categories there is nothing to do yet: the labels come from the first frame."""
+        if self.session_id or not self.categories:
             return True
         try:
             await self._create()
@@ -162,7 +166,7 @@ class Tracker:
             t0 = time.perf_counter()
             try:
                 jpeg = await asyncio.to_thread(encode, image)
-                r = await self._post_frame(jpeg)
+                r = await self._post_frame(jpeg, image)
                 result = parse(r.json(), ms_since(t0), captured_at)
             except Exception as e:  # rejected, unreachable, slow, error status, unexpected JSON
                 await self.sleep(self._note(e, ms_since(t0)))

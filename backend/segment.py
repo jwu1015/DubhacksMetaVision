@@ -24,6 +24,7 @@ from typing import NamedTuple
 from PIL import Image, ImageDraw, ImageOps
 
 import config
+import labels
 import net
 from models import BBox, Item, Segmentation
 
@@ -43,7 +44,7 @@ SAM_FIRST_TIMEOUT = 2.5  # seconds, SAM first: about Claude's own time, so a bus
                          # slow is no slower than going through Claude
 # SAM first asks only about these: the server checks each category separately, so its full default
 # list took ~1.9s per photo against ~0.8s for these 12 (17 Oct). Anything else falls back to Claude,
-# which then asks SAM about its exact category. SAM_CATEGORIES="" uses the server's own list.
+# which then asks SAM about its exact category. SAM_CATEGORIES="" has Claude pick labels from the photo (labels.py).
 SAM_CATEGORIES = config.SAM_CATEGORIES
 SAM_EDGE = 640       # the server resizes internally, so bigger photos only cost upload time
 MAX_EDGE = 1024      # saved images are capped at this size
@@ -96,16 +97,14 @@ async def _delete_session(sid: str):
         log.info("sam: deleting one-frame session %s failed: %r", sid[:8], e)
 
 
-async def _segment(jpeg: bytes, prompt: str | None, timeout: float):
-    """The server's answer for one photo. Since 18 Oct its /segment only takes a category, and its Claude
-    picks the labels (2-4.5s); a one-frame tracking session takes our labels as given and answers as fast
-    as /segment used to (~0.3s). Without a prompt: /segment with SAM_AUTO_CATEGORY."""
+async def _segment(image: Image.Image, jpeg: bytes, prompt: str | None, timeout: float):
+    """The server's answer for one photo, from a one-frame tracking session (the server only takes
+    sessions, ~0.3s). Without a prompt, Claude first picks labels within SAM_AUTO_CATEGORY (labels.py, 2-4.5s)."""
     base, auth = config.MODEL_SERVICE_URL, config.segmentation_headers()
     image_headers = {"Content-Type": "image/jpeg", **auth}
-    # No redirects: without a valid token Cloudflare redirects to a login page.
     if not prompt:
-        return await net.client().post(f"{base}/segment", params={"category": config.SAM_AUTO_CATEGORY},
-                                       content=jpeg, headers=image_headers, timeout=timeout, follow_redirects=False)
+        prompt = ",".join(await labels.labels_or_fallback(image, config.SAM_AUTO_CATEGORY))
+    # No redirects: without a valid token Cloudflare redirects to a login page.
     r = await net.client().post(f"{base}/session", json={"prompt": prompt}, headers=auth, timeout=timeout,
                                 follow_redirects=False)
     if r.status_code != 200:
@@ -121,8 +120,8 @@ async def _segment(jpeg: bytes, prompt: str | None, timeout: float):
 
 
 async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = SAM_TIMEOUT) -> list[Found] | None:
-    """Every object SAM finds for prompt (comma-separated labels; None: labels the server's Claude picks
-    for SAM_AUTO_CATEGORY), highest score first; None if the call failed. Never raises."""
+    """Every object SAM finds for prompt (comma-separated labels; None: labels Claude picks from this
+    photo within SAM_AUTO_CATEGORY), highest score first; None if the call failed. Never raises."""
     if not config.MODEL_SERVICE_URL:
         return None
     small = image.copy()
@@ -132,7 +131,7 @@ async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = S
     t0 = time.perf_counter()
     try:
         # wait_for makes the timeout a hard cap; httpx's timeout only bounds each wait for data.
-        r = await asyncio.wait_for(_segment(buf.getvalue(), prompt, timeout), timeout)
+        r = await asyncio.wait_for(_segment(small, buf.getvalue(), prompt, timeout), timeout)
         if r.status_code in (302, 401, 403):
             log.warning("sam: Cloudflare Access rejected the request (%d); check CF_ACCESS_CLIENT_ID/SECRET "
                         "and the server's access policy", r.status_code)
@@ -146,7 +145,7 @@ async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = S
     except Exception as e:  # unreachable, too slow, error status, unexpected JSON
         log.warning("sam failed after %dms: %r", ms_since(t0), e)
         return None
-    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "the server's labels")
+    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "Claude's labels")
     return sorted(found, key=lambda f: -f.score)
 
 

@@ -1,25 +1,20 @@
 """SAM 3.x streaming segmentation + tracking API server.
 
 Tracking is stateful: create a session, then post frames in order. Object ids stay stable across
-the frames of a session. A session's labels (its SAM prompts) are either given when it is created,
-or picked by Claude (LABEL_MODEL, up to MAX_LABELS) from its first frame, limited to a category the
-caller gives (e.g. "kitchen utensils"). Either way the labels stay fixed for the whole session.
+the frames of a session. A session's labels (its SAM prompts) are given when it is created and stay
+fixed for the whole session (the backend picks them, with Claude, from the first frame: backend/labels.py).
 
-  POST   /labels?category=...  raw JPEG body -> {"labels": [...]}  (Claude only, no segmentation)
   POST   /session              {"prompt": "cup, laptop"} or {"prompt": ["cup", "laptop"]} -> {"session_id", "labels"}
-  POST   /session/auto         {"category": "electronics"} -> {"session_id"}; Claude picks labels from the first frame
   POST   /session/{id}/frame   raw JPEG body -> {"frame_idx", "width", "height", "labels", "objects": [{"id", "score", "box", "prompt"}]}
                                 409 if a newer frame for the session arrived while this one waited (it was skipped)
   DELETE /session/{id}
-  POST   /segment?category=... raw JPEG body -> one-shot, no tracking (ids are per-frame); labels picked from this image
   GET    /health
 
 Boxes are [x1, y1, x2, y2] in pixels of the submitted frame.
-Config via env vars: ANTHROPIC_API_KEY, MAX_LABELS, SAM_MODEL, SAM_THRESHOLD, MERGE_IOU, NEST_FRACTION, MAX_SESSIONS,
+Config via env vars: SAM_MODEL, SAM_THRESHOLD, MERGE_IOU, NEST_FRACTION, MAX_SESSIONS,
 SESSION_TTL, KEEP_FRAMES, LOST_FRAMES, MAX_OBJECTS, SAM_DTYPE, BATCH_PROMPTS, HOST, PORT, ROOT_PATH.
 Run: python server.py
 """
-import base64
 import io
 import logging
 import os
@@ -28,25 +23,17 @@ import time
 import types
 import uuid
 
-import anthropic
 import torch
 import uvicorn
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel
 from transformers import Sam3VideoConfig, Sam3VideoModel, Sam3VideoProcessor
 from transformers.models.sam3_video.modeling_sam3_video import nms_masks
 
 MODEL_ID = os.environ.get("SAM_MODEL", "facebook/sam3.1")
 log = logging.getLogger("uvicorn.error")  # uvicorn's logger, so messages show in the server output
 
-# Most labels Claude may pick per session. Each label is one SAM text prompt, so more labels = slower frames.
-MAX_LABELS = int(os.environ.get("MAX_LABELS", "12"))
-if MAX_LABELS < 1:
-    raise SystemExit("MAX_LABELS must be at least 1")
-LABEL_MODEL = "claude-haiku-5-5"
-MAX_CATEGORY_CHARS = 100
 THRESHOLD = float(os.environ.get("SAM_THRESHOLD", "0.5"))
 # Boxes overlapping at least this much (IoU) are treated as one object matched by several
 # prompts (e.g. "sofa" and "furniture"); only the highest-scoring one is kept.
@@ -87,106 +74,6 @@ logging.getLogger("transformers.models.sam3_video.modeling_sam3_video").addFilte
 )
 processor = Sam3VideoProcessor.from_pretrained(MODEL_ID)
 model = Sam3VideoModel.from_pretrained(MODEL_ID, config=config, dtype=DTYPE).to(device).eval()
-
-
-LABEL_SYSTEM = f"""\
-You pick text prompts for an open-vocabulary segmentation model (SAM 3) that will track objects
-in a video from smart glasses. You see only the first frame, but the wearer will look around and
-move through this place, so the labels must cover what they are likely to see next, not just now.
-
-The user gives a category (e.g. "electronics", "kitchen utensils", "things to buy"). Every label
-must be a kind of object in that category; leave out everything else in the scene, however prominent.
-
-Return one label per kind of object (not per instance), up to {MAX_LABELS}, in two groups:
-1. every kind of object in the category visible in the image, most prominent first
-2. then objects in the category you would expect in this kind of place (an office, kitchen, living
-   room, street, store...) that are not on screen yet: e.g. for "electronics", a desk with a monitor
-   suggests keyboard, mouse, headphones, phone, cable
-Give as many labels as the place plausibly holds, up to {MAX_LABELS}; return fewer only when the
-category itself is narrow.
-
-Every label:
-- exactly one word: a very general, lowercase, singular noun ("lamp", "phone", "cable", "cup",
-  "bottle"), never a compound or a description ("desk lamp", "cell phone", "phone charger",
-  "water bottle", "blue mug")
-- a concrete, physical object that can be outlined in an image; not terrain (snow, grass) or markings
-- not a person or body part
-- not a wall, floor, ceiling, window, door or other part of the building
-- no duplicates or synonyms of another label ("tv" and "television")"""
-
-
-class LabelsOut(BaseModel):
-    labels: list[str]
-
-
-_claude = None
-
-
-class LabelError(Exception):
-    pass
-
-
-def generate_labels(image: Image.Image, category: str) -> list[str]:
-    """Ask Claude which kinds of objects in `category` are (or are likely) in this scene.
-    Raises LabelError if it can't answer."""
-    global _claude
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise LabelError("ANTHROPIC_API_KEY not set")
-    if _claude is None:
-        # The first frame waits on this call, so fail fast instead of the SDK's 10 min default.
-        _claude = anthropic.Anthropic(timeout=10.0, max_retries=1)
-    small = image.copy()
-    small.thumbnail((512, 512))  # enough to name objects, and a smaller upload answers faster
-    buf = io.BytesIO()
-    small.save(buf, "JPEG", quality=85)
-    t0 = time.perf_counter()
-    try:
-        resp = _claude.messages.parse(
-            model=LABEL_MODEL,
-            max_tokens=1024,
-            system=LABEL_SYSTEM,
-            messages=[{"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                                             "data": base64.standard_b64encode(buf.getvalue()).decode()}},
-                {"type": "text", "text": f"Category: {category}\nWhich objects in this category should be tracked here?"},
-            ]}],
-            output_format=LabelsOut,
-        )
-        out = resp.parsed_output
-    except Exception as e:  # network, auth, rate limit or unparseable output
-        raise LabelError(str(e).splitlines()[0] if str(e) else type(e).__name__) from e
-    labels = []
-    for label in (out.labels if out else []):
-        # One general word per label: "desk lamp" -> "lamp" if the model slips.
-        words = label.lower().split()
-        label = words[-1] if words else ""
-        if label and label not in labels:
-            labels.append(label)
-    labels = labels[:MAX_LABELS]
-    log.info("labels from %s in %dms: %s", LABEL_MODEL, (time.perf_counter() - t0) * 1000, labels)
-    if not labels:
-        raise LabelError("no labels returned")
-    return labels
-
-
-def labels_or_fallback(image: Image.Image, category: str) -> list[str]:
-    """For streams: a Claude failure must not stop tracking, so fall back to the category itself as
-    the one SAM prompt (SAM takes noun phrases, so "kitchen utensils" still finds something)."""
-    try:
-        return generate_labels(image, category)
-    except LabelError as e:
-        log.warning("label generation failed (%s); using the category as the label", e)
-        return [category.lower()]
-
-
-def parse_category(value) -> str:
-    """The category Claude picks labels from; 400 if missing or not a short string."""
-    if not isinstance(value, str) or not value.strip():
-        raise HTTPException(400, 'category is required, e.g. "electronics" or "kitchen utensils"')
-    value = " ".join(value.split())
-    if len(value) > MAX_CATEGORY_CHARS:
-        raise HTTPException(400, f"category must be at most {MAX_CATEGORY_CHARS} characters")
-    return value
 
 
 def parse_labels(prompt) -> list[str]:
@@ -269,16 +156,14 @@ sessions_lock = threading.Lock()
 
 
 class Session:
-    def __init__(self, labels=None, category=None, max_objects=MAX_OBJECTS):
+    def __init__(self, labels, max_objects=MAX_OBJECTS):
         self.inference = processor.init_video_session(
             inference_device=device, processing_device="cpu", video_storage_device="cpu", dtype=DTYPE
         )
         self.max_objects = max_objects
         self.arrived = 0  # frames received so far; a frame waiting behind a newer one is skipped
-        self.labels = labels  # SAM prompts; None = picked by Claude from the first frame
-        self.category = category  # what Claude picks labels from (auto sessions only)
-        if labels:
-            processor.add_text_prompt(inference_session=self.inference, text=labels)
+        self.labels = labels  # SAM prompts, fixed for the session
+        processor.add_text_prompt(inference_session=self.inference, text=labels)
         self.lock = threading.Lock()  # frames of one session must be processed in order
         self.last_seen = {}  # obj id -> last frame where the detector confirmed it
         self.shown = set()  # ids returned on the previous frame, preferred when merging duplicates
@@ -396,11 +281,6 @@ def process_frame(session: Session, image: Image.Image, seq=None):
         if seq is not None and seq != session.arrived:
             # Frames arrive faster than we process them: only the newest waiting one is worth tracking.
             raise HTTPException(409, "skipped: a newer frame arrived; send one frame at a time")
-        if session.labels is None:
-            # Outside model_lock: other sessions keep running while Claude answers. Frames for this
-            # session that arrive meanwhile are skipped (409) by the check above.
-            session.labels = labels_or_fallback(image, session.category)
-            processor.add_text_prompt(inference_session=session.inference, text=session.labels)
         with model_lock, torch.inference_mode():
             model.max_num_objects = session.max_objects  # per session; safe under model_lock
             inputs = processor(images=image, device=device, return_tensors="pt").to(model.device)
@@ -445,23 +325,13 @@ def health():
     return {"status": "ok", "model": MODEL_ID, "device": device, "sessions": len(sessions)}
 
 
-@app.post("/labels")
-async def labels(request: Request, category: str | None = None):
-    category = parse_category(category)
-    image = decode(await request.body())
-    try:
-        return {"labels": await run_in_threadpool(generate_labels, image, category)}
-    except LabelError as e:
-        raise HTTPException(502, f"label generation failed: {e}")
-
-
-def add_session(labels, category=None):
+def add_session(labels):
     evict_expired()
     with sessions_lock:
         if len(sessions) >= MAX_SESSIONS:
             raise HTTPException(503, f"too many sessions (max {MAX_SESSIONS}); delete one or wait for expiry")
         sid = uuid.uuid4().hex
-        sessions[sid] = Session(labels, category)
+        sessions[sid] = Session(labels)
     return sid
 
 
@@ -469,14 +339,8 @@ def add_session(labels, category=None):
 def create_session(body: dict = Body(...)):
     labels = parse_labels(body.get("prompt"))
     if labels is None:
-        raise HTTPException(400, 'prompt is required: "cup, laptop" or ["cup", "laptop"] (or use /session/auto)')
+        raise HTTPException(400, 'prompt is required: "cup, laptop" or ["cup", "laptop"]')
     return {"session_id": add_session(labels), "labels": labels}
-
-
-@app.post("/session/auto")
-def create_auto_session(body: dict = Body(default={})):
-    category = parse_category(body.get("category"))
-    return {"session_id": add_session(None, category), "category": category}
 
 
 @app.post("/session/{sid}/frame")
@@ -495,16 +359,6 @@ def delete_session(sid: str):
         if sessions.pop(sid, None) is None:
             raise HTTPException(404, "unknown or expired session")
     return {"deleted": sid}
-
-
-@app.post("/segment")
-async def segment(request: Request, category: str | None = None):
-    category = parse_category(category)
-    image = decode(await request.body())
-    # No object cap here: one-shot callers (the backend) want every object in view to pick from.
-    result = await run_in_threadpool(lambda: process_frame(Session(category=category, max_objects=10000), image))
-    result.pop("frame_idx")
-    return result
 
 
 if __name__ == "__main__":
