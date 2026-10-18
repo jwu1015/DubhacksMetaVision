@@ -97,8 +97,16 @@ def fake_server(latency: float = 0.0, max_sessions: int = 4) -> FastAPI:
     async def health():
         return {"status": "ok", "model": "fake", "device": "cpu", "sessions": len(sessions)}
 
+    @app.post("/session/auto")
+    async def create_auto(body: dict = Body(default={})):
+        if not body.get("category"):  # like the real server since 18 Oct
+            raise HTTPException(400, 'category is required, e.g. "electronics"')
+        return await create({"prompt": ", ".join(o[1] for o in FAKE_OBJECTS)})
+
     @app.post("/session")
     async def create(body: dict = Body(default={})):
+        if not body.get("prompt"):  # like the real server since 17 Oct
+            raise HTTPException(400, 'prompt is required: "cup, laptop" or ["cup", "laptop"] (or use /session/auto)')
         if len(sessions) >= max_sessions:
             raise HTTPException(503, f"too many sessions (max {max_sessions}); delete one or wait for expiry")
         sid = uuid.uuid4().hex
@@ -146,9 +154,15 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         """Baptiste's API: sessions s1, s2, ...; frames answered from self.replies, else one box."""
         self.requests.append(request)
         path = request.url.path.removeprefix("/inference")
-        if request.method == "POST" and path == "/session":
+        if request.method == "POST" and path in ("/session", "/session/auto"):
+            body = json.loads(request.content or b"{}")
+            if path == "/session" and not body.get("prompt"):
+                return httpx.Response(400, json={"detail": 'prompt is required: "cup, laptop" or ["cup", "laptop"] '
+                                                           "(or use /session/auto)"})
+            if path == "/session/auto" and not body.get("category"):
+                return httpx.Response(400, json={"detail": 'category is required, e.g. "electronics"'})
             self.sessions += 1
-            return httpx.Response(200, json={"session_id": f"s{self.sessions}", "prompt": ["sofa"]})
+            return httpx.Response(200, json={"session_id": f"s{self.sessions}", "labels": ["sofa"]})
         if request.method == "DELETE":
             return httpx.Response(200, json={"deleted": path.rsplit("/", 1)[1]})
         reply = self.replies.pop(0) if self.replies else 200
@@ -180,9 +194,17 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await t.start())
         self.assertEqual(t.session_id, "s1")
         self.assertEqual(str(self.requests[0].url), f"{BASE}/session")
-        self.assertEqual(json.loads(self.requests[0].content), {})  # {}: the server's default categories
+        self.assertEqual(json.loads(self.requests[0].content), {"prompt": config.SAM_CATEGORIES})  # ours, as /detect
         self.assertTrue(await t.start())  # already has one
         self.assertEqual(self.calls(), ["POST /session"])
+
+    async def test_no_categories_means_the_servers_own_list(self):
+        client = httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
+        self.addAsyncCleanup(client.aclose)
+        t = Tracker(base_url=BASE, client=client, categories="")
+        self.assertTrue(await t.start())
+        self.assertEqual(self.calls(), ["POST /session/auto"])
+        self.assertEqual(json.loads(self.requests[0].content), {"category": config.SAM_AUTO_CATEGORY})
 
     async def test_send_creates_the_session_if_needed(self):
         t = self.tracker()
@@ -444,15 +466,19 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
             self.stream.publish(event)
         self.assertEqual([await anext(self.events) for _ in sent], sent)  # listening: everything, once
 
+        def replayed(event):
+            return {**event, "replay": True}
         fresh = self.stream.subscribe()
         self.assertEqual(await anext(fresh), {"type": "status", "tracking": "stopped"})
-        self.assertEqual([await anext(fresh), await anext(fresh)], [look("detected", "c_b"), look("results", "c_b")])
+        self.assertEqual([await anext(fresh), await anext(fresh)],
+                         [replayed(look("detected", "c_b")), replayed(look("results", "c_b"))])
         await fresh.aclose()
+        self.assertNotIn("replay", self.stream._look[0])  # the marker is only on what's replayed
 
         self.stream.publish(look("nothing", "c_c"))  # a photo with nothing to buy is a new Look too
         fresh = self.stream.subscribe()
         self.assertEqual([await anext(fresh), await anext(fresh)],
-                         [{"type": "status", "tracking": "stopped"}, look("nothing", "c_c")])
+                         [{"type": "status", "tracking": "stopped"}, replayed(look("nothing", "c_c"))])
         await fresh.aclose()
 
     async def test_stop_deletes_the_session_and_clears_the_boxes(self):

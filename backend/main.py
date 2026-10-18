@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager, contextmanager
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from livekit import api as livekit_api
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 import cart
@@ -32,7 +33,8 @@ import stream
 import webrtc
 from models import (
     BBox, Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
-    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
+    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation, VoiceTokenRequest,
+    VoiceTokenResponse,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -248,22 +250,12 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
     return resp
 
 
-def start_search(cap: Capture) -> asyncio.Task | None:
-    """Start the store search now, if the search stage exists. It needs only the crop and a label:
-    Lens on the crop, then Shopping and eBay from Lens's titles."""
-    search = stage("search")
-    if search is None:
-        return None
-    return asyncio.create_task(search.search_all(cap.segmentation.cutout_url, cap.item, capture_id=cap.capture_id))
-
-
 async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False) -> SearchResponse:
-    """The object is known (SAM first, or the user picked it): the store search starts right away on
-    its crop and label, while Claude describes it for ranking. on_crop: Claude was asked about the crop
-    itself; otherwise about the whole photo, and then about the crop if it looked at a different
-    object. Claude failing leaves the label."""
+    """The object is known (SAM first, or the user picked it): Claude describes it, then the store
+    search runs on Claude's queries (a label like "lamp" alone finds lamps, not this one). on_crop:
+    Claude was asked about the crop itself; otherwise about the whole photo, and then about the crop if
+    it looked at a different object. Claude failing leaves the label."""
     t0 = time.perf_counter()
-    products = start_search(cap)
     vision, segment = stage("vision"), stage("segment")
     sam_item = cap.item
     try:
@@ -279,7 +271,7 @@ async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool
         log.warning("describe %s: Claude failed (%r); searching with SAM's label", cap.capture_id, e)
     log.info("describe %s: %dms category=%r queries=%s", cap.capture_id, ms_since(t0),
              cap.item.category, cap.item.search_queries)
-    return await compute_search(cap, products)
+    return await compute_search(cap)
 
 
 async def run_search(capture_id: str) -> SearchResponse:
@@ -305,12 +297,11 @@ async def run_search(capture_id: str) -> SearchResponse:
     return await compute_search(cap)
 
 
-async def compute_search(cap: Capture, products_task: asyncio.Task | None = None) -> SearchResponse:
+async def compute_search(cap: Capture) -> SearchResponse:
     """search -> rerank -> pricing + rank for one capture, with the finished item attached and the
-    result announced to the projector. products_task: a search already started (timing_ms["search"]
-    is then only the time left to wait for it)."""
+    result announced to the projector."""
     try:
-        resp = await search_pipeline(cap, products_task)
+        resp = await search_pipeline(cap)
     except Exception:
         announce(cap, "failed", message="Couldn't get prices for that one.")
         raise
@@ -319,7 +310,7 @@ async def compute_search(cap: Capture, products_task: asyncio.Task | None = None
     return resp
 
 
-async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> SearchResponse:
+async def search_pipeline(cap: Capture) -> SearchResponse:
     t0 = time.perf_counter()
     capture_id = cap.capture_id
     timing: dict[str, int] = {}
@@ -327,9 +318,7 @@ async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> S
 
     search = stage("search")
     with timed(timing, "search"):
-        if products_task is not None:
-            products = await products_task
-        elif search:
+        if search:
             products = await search.search_all(cutout_url, cap.item, capture_id=capture_id)
         else:
             products = [Product.model_validate(p) for p in fixture("products_raw_lamp.json")]
@@ -454,6 +443,25 @@ async def look_route(track_id: int):
     if resp is None:
         raise HTTPException(404, f"the stream isn't tracking object {track_id}")
     return resp
+
+
+@app.post("/voice/token", response_model=VoiceTokenResponse, status_code=201)
+async def voice_token_route(req: VoiceTokenRequest | None = None):
+    """The phone's ticket to the voice assistant (voice.py), in LiveKit's standard token-endpoint format,
+    so the app can use its SDK's endpoint token source. Every call opens a new room: LiveKit dispatches
+    the agent when a room is created."""
+    if not (config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET):
+        raise HTTPException(503, "voice isn't set up: LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are unset")
+    req = req or VoiceTokenRequest()
+    room = "spotted-" + uuid.uuid4().hex[:8]
+    token = (livekit_api.AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
+             .with_identity(req.participant_identity or "phone-" + uuid.uuid4().hex[:6])
+             .with_name(req.participant_name or "Spotted user")
+             .with_grants(livekit_api.VideoGrants(room_join=True, room=room))
+             .with_room_config(livekit_api.RoomConfiguration(
+                 agents=[livekit_api.RoomAgentDispatch(agent_name=config.VOICE_AGENT)])))
+    log.info("voice: token for room %s", room)
+    return VoiceTokenResponse(server_url=config.LIVEKIT_URL, participant_token=token.to_jwt())
 
 
 @app.get("/health", response_model=HealthResponse)

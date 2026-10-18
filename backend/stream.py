@@ -14,6 +14,8 @@ and the "look" events main.py publishes as a picked item is identified and price
     {"type": "look", "stage": "detected" | "nothing" | "described" | "results" | "failed",
      "capture_id", "track_id" (the tracked object, or null for a photo), ...}
 
+A client that connects mid-Look gets that Look's events so far first, marked "replay": true.
+
     python stream.py --video test_media/room.mp4 [--port 8002]   # then open http://localhost:8002/stream/viewer
     python stream.py --webcam
 """
@@ -182,7 +184,7 @@ class Stream:
             if self._result:
                 yield self._objects_event()
             for event in look:
-                yield event
+                yield {**event, "replay": True}  # happened before this client subscribed
             while True:
                 yield await q.get()
         finally:

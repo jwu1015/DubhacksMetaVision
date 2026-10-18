@@ -18,6 +18,12 @@ MODEL_SERVICE_TOKEN = os.getenv("MODEL_SERVICE_TOKEN", "")  # bearer token for t
 # The segmentation server sits behind Cloudflare Access: every request needs this service token.
 CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", "")
 CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", "")
+# What SAM looks for, in photos (segment.py) and live tracking (tracker.py), comma-separated; empty = the
+# segmentation server's own list
+SAM_CATEGORIES = os.getenv(
+    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
+# With SAM_CATEGORIES empty, the server's Claude picks labels within this category instead (slower)
+SAM_AUTO_CATEGORY = os.getenv("SAM_AUTO_CATEGORY", "furniture and home decor").strip()
 
 
 def segmentation_headers() -> dict[str, str]:
@@ -33,6 +39,11 @@ ANTHROPIC_HEADERS = {"anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID} if ANTHRO
 USE_FIXTURES = _flag("USE_FIXTURES")
 DEMO_MODE = _flag("DEMO_MODE")
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast
+# LiveKit Cloud, for the voice assistant (voice.py) and the phone's token for it (POST /voice/token)
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+VOICE_AGENT = "spotted"  # the voice agent's dispatch name: tokens from /voice/token bring it into the room
 
 UPLOADS = ROOT / "uploads"
 LOGS = ROOT / "logs"
