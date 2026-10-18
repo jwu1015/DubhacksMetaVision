@@ -15,7 +15,7 @@ caller gives (e.g. "kitchen utensils"). Either way the labels stay fixed for the
   GET    /health
 
 Boxes are [x1, y1, x2, y2] in pixels of the submitted frame.
-Config via env vars: ANTHROPIC_API_KEY, MAX_LABELS, SAM_MODEL, SAM_THRESHOLD, MERGE_IOU, MAX_SESSIONS,
+Config via env vars: ANTHROPIC_API_KEY, MAX_LABELS, SAM_MODEL, SAM_THRESHOLD, MERGE_IOU, NEST_FRACTION, MAX_SESSIONS,
 SESSION_TTL, KEEP_FRAMES, LOST_FRAMES, MAX_OBJECTS, SAM_DTYPE, BATCH_PROMPTS, HOST, PORT, ROOT_PATH.
 Run: python server.py
 """
@@ -51,6 +51,9 @@ THRESHOLD = float(os.environ.get("SAM_THRESHOLD", "0.5"))
 # Boxes overlapping at least this much (IoU) are treated as one object matched by several
 # prompts (e.g. "sofa" and "furniture"); only the highest-scoring one is kept.
 MERGE_IOU = float(os.environ.get("MERGE_IOU", "0.7"))
+# A box lying at least this much (by its own area) inside a bigger box is left out of the response,
+# e.g. a "keyboard" box inside the "laptop" box. 1 or more = never.
+NEST_FRACTION = float(os.environ.get("NEST_FRACTION", "0.9"))
 MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "4"))
 SESSION_TTL = float(os.environ.get("SESSION_TTL", "120"))  # seconds idle before a session is evicted
 # Per-frame state older than this many frames is dropped. The tracker's mask memory reads the last
@@ -300,6 +303,25 @@ def iou(a, b):
     return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter)
 
 
+def area(b):
+    return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+
+
+def drop_nested(objects):
+    """Leave out boxes that lie mostly (NEST_FRACTION of their area) inside a bigger box."""
+    def nested(obj):
+        a = area(obj["box"])
+        for other in objects:
+            if other is obj or area(other["box"]) <= a:
+                continue
+            w = min(obj["box"][2], other["box"][2]) - max(obj["box"][0], other["box"][0])
+            h = min(obj["box"][3], other["box"][3]) - max(obj["box"][1], other["box"][1])
+            if a > 0 and w > 0 and h > 0 and w * h / a >= NEST_FRACTION:
+                return True
+        return False
+    return [o for o in objects if not nested(o)]
+
+
 def merge_duplicates(objects, prefer=()):
     """Keep one box per physical object. Ids returned last frame win, so the id doesn't flip between
     overlapping tracks (e.g. "sofa" vs "furniture") as their scores fluctuate."""
@@ -402,6 +424,9 @@ def process_frame(session: Session, image: Image.Image, seq=None):
             for obj_id in set(ids) - session.shown:
                 stop_tracking(session, obj_id)
             drop_lost_objects(session, frame_idx, session.shown)
+            # Nested boxes are only hidden, not untracked: the detector keeps finding them, so a
+            # removed track would come back as a new object on the next frame.
+            objects = drop_nested(objects)
             prune_old_frames(session.inference, frame_idx)
         session.last_used = time.monotonic()
     return {"frame_idx": frame_idx, "width": image.width, "height": image.height,
