@@ -11,7 +11,7 @@ struct LiveView: View {
         ZStack {
             GeometryReader { geo in
                 ZStack(alignment: .topLeading) {
-                    MockCameraFeed()
+                    feed
                         .opacity(app.connection == .disconnected ? 0.35 : 1)
                     if dimsFeed {
                         Color.black.opacity(0.35)
@@ -36,6 +36,25 @@ struct LiveView: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.scan)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.connection)
+    }
+
+    @ViewBuilder private var feed: some View {
+        if let track = app.liveVideoTrack {
+            LiveFeedView(track: track)
+        } else {
+            MockCameraFeed()
+        }
+    }
+
+    /// Normalized frame box → screen. The camera preview is aspect-filled, so map through the crop;
+    /// the mock feed is stretched to the screen, so it maps directly.
+    private func feedRect(_ box: BBox, in size: CGSize) -> CGRect {
+        guard let aspect = app.previewAspect else { return box.rect(in: size) }
+        let height = max(size.height, size.width / aspect)
+        let width = height * aspect
+        let origin = CGPoint(x: (size.width - width) / 2, y: (size.height - height) / 2)
+        return CGRect(x: origin.x + box.x * width, y: origin.y + box.y * height,
+                      width: box.w * width, height: box.h * height)
     }
 
     private var dimsFeed: Bool {
@@ -70,7 +89,7 @@ struct LiveView: View {
             EmptyView()
         } else if case let .ambiguous(candidates) = app.scan {
             ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
-                let rect = candidate.detection.rect(in: size)
+                let rect = feedRect(candidate.detection.bbox, in: size)
                 DetectionBrackets(style: .white)
                     .frame(width: rect.width, height: rect.height)
                     .contentShape(Rectangle())
@@ -88,13 +107,13 @@ struct LiveView: View {
 
     @ViewBuilder
     private func marker(for detection: Detection, in size: CGSize) -> some View {
-        let rect = detection.rect(in: size)
+        let rect = feedRect(detection.bbox, in: size)
         if detection.trackID == app.selectedTrackID, isSelecting {
             DetectionBrackets()
                 .frame(width: rect.width, height: rect.height)
                 .offset(x: rect.minX, y: rect.minY)
-            if let detect = app.currentDetect {
-                DetectionTag(item: detect.category.sentenceCased)
+            if let look = app.currentLook {
+                DetectionTag(item: look.name.sentenceCased)
                     .fixedSize()
                     .offset(x: rect.minX, y: rect.minY - 32)
             }
@@ -138,14 +157,14 @@ struct LiveView: View {
             HintPill(icon: "icon-glasses", text: "Looking…")
                 .padding(.bottom, 12)
                 .transition(.opacity)
-        case let .detected(detect):
-            SearchingCard(detect: detect, finishedSources: app.finishedSources,
-                          isSaved: app.isSaved(detect.category.sentenceCased), onSave: app.toggleSaveCurrent)
+        case let .detected(look):
+            SearchingCard(look: look, finishedSources: app.finishedSources,
+                          isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-        case let .matched(detect, search):
-            ProductCard(detect: detect, search: search,
-                        isSaved: app.isSaved(search.bestMatch?.title ?? detect.category.sentenceCased),
+        case let .matched(look, search):
+            ProductCard(look: look, search: search,
+                        isSaved: app.isSaved(look.name.sentenceCased),
                         onOpen: { app.isShowingDetail = true },
                         onSave: app.toggleSaveCurrent,
                         onAdd: app.addCurrentToCart)

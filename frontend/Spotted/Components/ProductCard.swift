@@ -4,7 +4,7 @@ private let cardShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
 
 /// 01 · Matched product card: best match, price, verdict and actions.
 struct ProductCard: View {
-    let detect: DetectResponse
+    let look: Look
     let search: SearchResponse
     let isSaved: Bool
     let onOpen: () -> Void
@@ -48,9 +48,10 @@ struct ProductCard: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ProductThumbnail(source: search.bestMatch?.imageURL ?? detect.cutoutURL ?? "")
+            ProductThumbnail(source: search.bestMatch?.imageURL ?? look.cutoutURL ?? "")
             VStack(alignment: .leading, spacing: 2) {
-                Text(search.bestMatch?.title ?? detect.category.sentenceCased)
+                // Claude's name for the item (SearchResponse.item), not the store's listing title.
+                Text(look.name.sentenceCased)
                     .font(.spottedHeadline)
                     .foregroundStyle(.labelPrimary)
                 Text(search.bestMatch.map { "\($0.store) · \(search.storeCount) stores" } ?? "No exact match for sale")
@@ -71,7 +72,7 @@ struct ProductCard: View {
 
 /// 01b · After /detect: cutout, quick phrase and skeleton prices while /search runs.
 struct SearchingCard: View {
-    let detect: DetectResponse
+    let look: Look
     let finishedSources: Set<ProductSource>
     let isSaved: Bool
     let onSave: () -> Void
@@ -80,13 +81,13 @@ struct SearchingCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 // The cutout is a crop of the photo, so it keeps the default surface background.
-                ProductThumbnail(source: detect.cutoutURL ?? "")
+                ProductThumbnail(source: look.cutoutURL ?? "")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(detect.category.sentenceCased)
+                    Text(look.name.sentenceCased)
                         .font(.spottedHeadline)
                         .foregroundStyle(.labelPrimary)
-                    // Description and style are usually empty at /detect time; Claude fills them in server-side.
-                    Text(detect.item.description.flatMap { $0.isEmpty ? nil : $0 } ?? "Finding prices")
+                    // Empty until the Look's "described" stage arrives with Claude's item.
+                    Text(look.item?.description.flatMap { $0.isEmpty ? nil : $0 } ?? "Finding prices")
                         .font(.spottedFootnote)
                         .foregroundStyle(.labelSecondary)
                 }
@@ -94,7 +95,7 @@ struct SearchingCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            GlassesSaidRow(text: detect.quickPhrase)
+            GlassesSaidRow(text: look.quickPhrase)
 
             VStack(spacing: 6) {
                 skeletonRow(store: 150, meta: 88)

@@ -21,6 +21,15 @@ enum MockData {
         latencyMS: 1500
     )
 
+    /// The finished item that results carry in SearchResponse.item: Claude's name and description.
+    static let finishedItem = Item(
+        category: "walnut lounge chair",
+        description: "Mid-century lounge chair with a walnut shell and black leather cushions",
+        style: "mid-century", colors: ["walnut", "black"], materials: ["walnut", "leather"],
+        brandGuess: "Article", confidence: 0.86, searchQueries: [], bbox: chair.bbox,
+        quickPhrase: "Lounge chair. Finding prices."
+    )
+
     private static func product(_ title: String, store: String, price: Double, url: String,
                                 source: ProductSource, tier: Tier, rank: Int, savings: Int? = nil,
                                 reason: String? = nil) -> Product {
@@ -53,14 +62,15 @@ enum MockData {
                                    verdictText: "Article is within the typical $899–$1,349 range."),
         spokenSummary: "Article has it for $1,299. Fair price. Used from $640.",
         timingMS: [:],
-        sourcesOK: nil
+        sourcesOK: nil,
+        item: finishedItem
     )
 
     /// 03b: Google Shopping timed out.
     static let searchShoppingTimeout = SearchResponse(
         captureID: search.captureID, bestMatch: search.bestMatch, dupes: [], used: search.used,
         priceInsight: search.priceInsight, spokenSummary: search.spokenSummary, timingMS: [:],
-        sourcesOK: [.lens, .ebay]
+        sourcesOK: [.lens, .ebay], item: finishedItem
     )
 
     /// 07 uses tighter boxes than the stream so both options clear the taller card.

@@ -8,8 +8,12 @@
 //
 // Endpoints (base URL = the backend's ngrok HTTPS URL):
 //   POST   /detect             multipart form field "image" (JPEG)   -> DetectResponse
+//                              optional fields "hint_box" (the object the user tapped: JSON
+//                              {"x","y","w","h"} or [x1,y1,x2,y2], normalized) and "hint_label"
 //   POST   /search/{captureID}  no body                               -> SearchResponse (404 if unknown id)
-//   POST   /identify           multipart "image"                     -> IdentifyResponse (/detect + /search)
+//   POST   /identify           multipart "image" (+ the same hints)  -> IdentifyResponse (/detect + /search)
+//   GET    /ice-servers                                              -> {"iceServers": [...]} (WebRTC)
+//   POST   /offer              SessionDescription (the offer)        -> SessionDescription (the answer)
 //   POST   /checkout           CheckoutRequest (JSON)                -> CheckoutResponse
 //   GET    /health                                                   -> HealthResponse
 //   Cart (in the search/cart PR, not on the live server yet):
@@ -222,11 +226,14 @@ struct SearchResponse: Codable, Hashable, Identifiable {
     let spokenSummary: String    // speak when the cards appear
     let timingMS: [String: Int]  // per-step timings, for debugging
     let sourcesOK: [ProductSource]?  // coming soon: which stores answered; nil until the backend sends it
+    let item: Item?              // the finished item: Claude's name ("tripod floor lamp" where /detect
+                                 // said "lamp"), description and style; show this name on the results.
+                                 // nil only from an older backend
 
     var id: String { captureID }
 
     enum CodingKeys: String, CodingKey {
-        case dupes, used
+        case dupes, used, item
         case captureID = "capture_id"
         case bestMatch = "best_match"
         case priceInsight = "price_insight"
@@ -313,7 +320,7 @@ struct APIError: Decodable, Error, Hashable {
     enum CodingKeys: String, CodingKey { case detail }
 }
 
-// MARK: - Live stream (WebRTC). Not live yet; the backend will use exactly these messages.
+// MARK: - Live stream (WebRTC): the "detections" data channel carries every message below.
 
 /// POST /offer body and response.
 struct SessionDescription: Codable, Hashable {
@@ -351,5 +358,59 @@ struct SelectMessage: Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case type
         case trackID = "track_id"
+    }
+}
+
+/// Backend -> phone, after a select: the steps of that "Look", in order. Follow the "detected" whose
+/// trackID is the one you selected, then only messages with its captureID.
+///   detected:  label, quickPhrase (speak it), box, cutoutPath   at once
+///   described: item (Claude's name and description)           ~2s later
+///   results:   search, the same answer as POST /search/{id}    ~4–5s after the select
+///   failed:    message
+struct LookMessage: Codable, Hashable {
+    let type: String             // "look"
+    let stage: LookStage
+    let captureID: String        // the same id POST /search/{captureID} takes
+    let trackID: String?         // the selected object, "t3"
+    let label: String?           // detected: a short label, e.g. "lamp"
+    let quickPhrase: String?     // detected: e.g. "Lamp. Finding prices."
+    let box: BBox?               // detected: where it is in the frame
+    let cutoutPath: String?      // detected: the crop, at <base URL>/<cutoutPath>
+    let item: Item?              // described: Claude's item ("floor lamp", description, style)
+    let search: SearchResponse?  // results: best match, dupes, used, price insight, item
+    let message: String?         // failed: why, in a short sentence
+
+    enum CodingKeys: String, CodingKey {
+        case type, stage, label, box, item, search, message
+        case captureID = "capture_id"
+        case trackID = "track_id"
+        case quickPhrase = "quick_phrase"
+        case cutoutPath = "cutout_path"
+    }
+}
+
+enum LookStage: String, Codable, Hashable {
+    case detected, described, results, failed, nothing, unknown
+
+    init(from decoder: Decoder) throws {
+        self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+    }
+}
+
+/// Any message on the "detections" channel: decode each one with this, then switch on it.
+enum ChannelMessage: Decodable, Hashable {
+    case detections(DetectionsMessage)
+    case look(LookMessage)
+    case other(String)           // a type this app doesn't know: ignore it
+
+    private enum Key: String, CodingKey { case type }
+
+    init(from decoder: Decoder) throws {
+        let type = try decoder.container(keyedBy: Key.self).decode(String.self, forKey: .type)
+        switch type {
+        case "detections": self = .detections(try DetectionsMessage(from: decoder))
+        case "look": self = .look(try LookMessage(from: decoder))
+        default: self = .other(type)
+        }
     }
 }
