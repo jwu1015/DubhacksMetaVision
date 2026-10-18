@@ -11,6 +11,8 @@
     --ink: #0a0a0c;
     --surface: #16161a;
     --surface-raised: #222228;
+    --separator: #2c2c32;
+    --on-accent: #0a0a0c;
     --label: #ffffff;
     --label-secondary: #a1a1aa;
     --accent: #c8ff3d;
@@ -21,59 +23,77 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--label); font: 15px/1.3 var(--font); }
-  #video, #overlay { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #app { position: fixed; inset: 0; display: flex; }
+  #stage { position: relative; flex: 1 1 auto; min-width: 0; }
+  #video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
   #video { object-fit: contain; }
   #overlay { pointer-events: none; }
   .glass {
     background: rgba(22, 22, 26, 0.62); border: 1px solid rgba(255, 255, 255, 0.18);
     -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
   }
-  #waiting { position: fixed; inset: 0; display: grid; place-items: center; color: var(--label-secondary); }
+  #waiting { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-secondary); }
   #status {
-    position: fixed; top: 16px; left: 16px; display: flex; align-items: center; gap: 8px;
+    position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 8px;
     padding: 10px 14px 10px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   }
   #status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
   #status.live .dot { background: var(--accent); }
-  #card {
-    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(420px, calc(100% - 32px));
-    padding: 16px; border-radius: 32px; display: flex; flex-direction: column; gap: 12px;
+  /* The item the user picked, and where to buy it. */
+  #look {
+    flex: 0 0 min(34vw, 420px); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;
+    background: var(--surface); border-left: 1px solid var(--separator);
   }
-  .row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  #thumb { width: 56px; height: 56px; flex: none; border-radius: 14px; background: var(--surface-raised) center / cover; }
-  #info { flex: 1; min-width: 0; }
-  #name { font-size: 17px; font-weight: 600; }
-  #sub, #typical { color: var(--label-secondary); font-size: 13px; }
-  #name, #sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #sub.busy { animation: pulse 1.4s ease-in-out infinite; }
-  #price { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  #verdict { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
-             background: rgba(255, 255, 255, 0.12); font-size: 12px; font-weight: 500; }
-  #verdict .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-secondary); }
-  #verdict.low .dot { background: var(--success); }
-  #verdict.high .dot { background: var(--warning); }
+  #crop { aspect-ratio: 4 / 3; border-radius: 20px; background: var(--ink) center / contain no-repeat; }
+  #name { font-size: 22px; font-weight: 700; line-height: 1.15; }
+  #desc, #look-status, .sub { color: var(--label-secondary); font-size: 13px; }
+  #desc { margin-top: 4px; }
+  #look-status.busy { animation: pulse 1.4s ease-in-out infinite; }
+  #look-status.error { color: var(--warning); }
+  .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+          background: rgba(255, 255, 255, 0.1); font-size: 12px; font-weight: 500; }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-secondary); }
+  .chip.low .dot { background: var(--success); }
+  .chip.high .dot { background: var(--warning); }
+  .chip.exact { background: var(--accent); color: var(--on-accent); }
+  .tag { margin-bottom: 6px; }
+  .product { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .best { padding: 12px; border-radius: 20px; background: var(--surface-raised); }
+  .thumb { width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--surface-raised) center / cover; }
+  .best .thumb { width: 56px; height: 56px; border-radius: 14px; background-color: var(--ink); }
+  .info { flex: 1; min-width: 0; }
+  .title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .best .price { font-size: 22px; }
+  .save { color: var(--success); }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--label-secondary); }
+  .group { display: flex; flex-direction: column; gap: 10px; }
   @keyframes pulse { 50% { opacity: 0.4; } }
 </style>
 </head>
 <body>
-<video id="video" autoplay muted playsinline></video>
-<canvas id="overlay"></canvas>
-<div id="waiting">Waiting for video…</div>
-<div id="status" class="glass"><span class="dot"></span><span id="status-text">Connecting…</span></div>
-<section id="card" class="glass" hidden aria-live="polite">
-  <div class="row">
-    <div id="thumb"></div>
-    <div id="info"><div id="name"></div><div id="sub"></div></div>
-    <div id="price"></div>
-  </div>
-  <div class="row" id="insight"><span id="verdict"><span class="dot"></span><span id="verdict-text"></span></span><span id="typical"></span></div>
-</section>
+<div id="app">
+  <main id="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div id="waiting">Waiting for video…</div>
+    <div id="status" class="glass"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+  </main>
+  <aside id="look" hidden aria-live="polite">
+    <div id="crop"></div>
+    <div><div id="name"></div><div id="desc"></div></div>
+    <div id="look-status"></div>
+    <div id="results" class="group"></div>
+  </aside>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.js"></script>
 <script>
 "use strict";
 const video = document.getElementById("video");
 const canvas = document.getElementById("overlay");
 const ctx = canvas.getContext("2d");
+const stage = document.getElementById("stage");
 const waiting = document.getElementById("waiting");
 const statusEl = document.getElementById("status");
 const statusText = document.getElementById("status-text");
@@ -146,44 +166,89 @@ function handle(ev) {
   }
 }
 
-// ---------- the card: the item the user picked, and its best price ----------
+// ---------- the sidebar: the item the user picked, and where to buy it ----------
 
 const $ = (id) => document.getElementById(id);
 const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
-let look = null;          // the picked Look on the card: {look_id, uid, name, price}
-const picks = new Set();  // look_ids of every pick so far: the newest one is on the card
+const EXACT = 85;         // match_score from here up is an "Exact match", as in the app
+let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price}
+const picks = new Set();  // look_ids of every pick so far: the newest one is in the sidebar
 
-// Each "look" message carries the whole Look so far, so the card is drawn from it alone.
+// Each "look" message carries the whole Look so far, so the sidebar is drawn from it alone.
 function showLook(ev) {
-  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the card
+  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the sidebar
   else if (!look || ev.look_id !== look.look_id) return; // an older pick, already replaced
   const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
   look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
            price: best ? money(best.price, best.currency) : null };
-  $("card").hidden = false;
-  setThumb((best && best.image_url) || ev.crop_url);
+  $("look").hidden = false;
+  $("crop").hidden = !ev.crop_url;
+  $("crop").style.backgroundImage = cssUrl(ev.crop_url);
   $("name").textContent = look.name;
-  $("price").textContent = look.price || "";
-  const sub = $("sub");
-  sub.className = ev.stage === "started" || ev.stage === "described" ? "busy" : "";
-  sub.textContent = ev.stage === "failed" ? ev.message || "Couldn't get prices."
-    : !s ? "Finding prices…" : best ? best.store : "No exact match for sale";
-  const pi = s && s.price_insight;
-  $("insight").hidden = !best;
-  if (best) {
-    $("verdict").className = pi.best_match_verdict;
-    $("verdict-text").textContent = VERDICT[pi.best_match_verdict] || "Price";
-    $("typical").textContent = pi.typical_low != null && pi.typical_high != null
-      ? "typical " + money(pi.typical_low) + "–" + money(pi.typical_high) : "";
-  }
+  $("desc").textContent = (ev.item && ev.item.description) || "";
+  const st = $("look-status");
+  st.className = ev.stage === "failed" ? "error" : s ? "" : "busy";
+  st.textContent = ev.stage === "failed" ? ev.message || "Couldn't get prices." : s ? "" : "Finding prices…";
+  st.hidden = !st.textContent;
+  $("results").replaceChildren(...(s ? results(s) : []));
 }
 
-// Store data comes from the web: images only from http(s) URLs.
-function setThumb(src) {
+function results(s) {
+  const parts = [];
+  if (s.best_match) {
+    const pi = s.price_insight, chips = el("div", "chips");
+    const verdict = el("span", "chip " + pi.best_match_verdict);
+    verdict.append(el("span", "dot"), VERDICT[pi.best_match_verdict] || "Price");
+    chips.append(verdict);
+    if (pi.typical_low != null && pi.typical_high != null) {
+      chips.append(el("span", "sub", "typical " + money(pi.typical_low) + "–" + money(pi.typical_high)));
+    }
+    parts.push(chips, product(s.best_match, true));
+  } else {
+    parts.push(el("div", "sub", s.spoken_summary || "No exact match for sale."));
+  }
+  if (s.dupes.length) parts.push(group("Cheaper dupes", s.dupes));
+  if (s.used.length) parts.push(group("Used", s.used));
+  return parts;
+}
+
+function product(p, best) {
+  const info = el("div", "info");
+  if (best) {
+    const exact = p.match_score != null && p.match_score >= EXACT;
+    const tag = el("div", "chips tag");
+    tag.append(el("span", "chip" + (exact ? " exact" : ""), exact ? "Exact match" : "Similar"));
+    info.append(tag);
+  }
+  const sub = el("div", "sub", p.store);
+  if (!best && p.savings_pct) sub.append(" · ", el("span", "save", "Save " + p.savings_pct + "%"));
+  info.append(el("div", "title", p.title), sub);
+  const thumb = el("div", "thumb");
+  thumb.style.backgroundImage = cssUrl(p.image_url);
+  const row = el("div", "product" + (best ? " best" : ""));
+  row.append(thumb, info, el("div", "price", money(p.price, p.currency)));
+  return row;
+}
+
+function group(name, products) {
+  const g = el("section", "group");
+  g.append(el("h2", "", name), ...products.slice(0, 2).map((p) => product(p, false)));
+  return g;
+}
+
+// Store data comes from the web: it only ever goes in as text, and images only from http(s) URLs.
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function cssUrl(src) {
   let url = null;
   try { url = src ? new URL(src, location.href) : null; } catch (err) { /* no picture */ }
   const ok = url && (url.protocol === "https:" || url.protocol === "http:");
-  $("thumb").style.backgroundImage = ok ? 'url("' + url.href.replace(/"/g, "%22") + '")' : "";
+  return ok ? 'url("' + url.href.replace(/"/g, "%22") + '")' : "";
 }
 
 function money(value, currency) {
@@ -204,7 +269,7 @@ function estimate(q) { // "~$30–50", as the app's hotspots say it
 let cw = 0, ch = 0, dpr = 0;
 
 function resize() {
-  const w = innerWidth, h = innerHeight, r = devicePixelRatio || 1;
+  const w = stage.clientWidth, h = stage.clientHeight, r = devicePixelRatio || 1;
   if (w === cw && h === ch && r === dpr) return;
   cw = w; ch = h; dpr = r;
   canvas.width = Math.round(w * r);
