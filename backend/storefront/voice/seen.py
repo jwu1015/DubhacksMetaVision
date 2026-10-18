@@ -19,6 +19,7 @@ AIM_R = 0.5    # a box whose middle is this far from the center of the view isn'
 HOLD_S = 1.0   # aiming counts over about this long: what they keep pointing at beats what passes by
 MIN_AREA = 0.003  # boxes under this share of the view (about 37x37 px of the phone's 504x896) come last
 AMBIGUOUS = 0.08  # two objects in front that score this close: the agent asks which one they mean
+LEFT_OUT_S = 60.0  # an item the user said is the wrong one isn't "this" for this long, unless they pick it again
 
 
 def aim(o: dict) -> float:
@@ -53,6 +54,7 @@ class Seen:
         self.agent_picked: set[str] = set()  # uids the assistant picked itself, to start their Looks: not taps
         self.held: dict[str, float] = {}     # uid -> its aim, averaged over about the last HOLD_S seconds
         self.held_at: float | None = None    # when the held aims were last brought up to date, by self.clock
+        self.left_out: dict[str, float] = {}  # uid -> when the user said it's not the item they mean
         self.ranked: list[str] = []          # the uids the last resolve found, best first
         self.tried: list[str] = []           # those looked at since, the latest last
         self.asked: list[str] = []           # the two its question was about, until it's answered
@@ -61,7 +63,7 @@ class Seen:
         """Tracking restarted (a mode switch, a pause, a new category): the old uids mean nothing now."""
         self.objects, self.labels, self.looks, self.described = [], {}, {}, {}
         self.ranked, self.tried, self.asked = [], [], []
-        self.picked, self.agent_picked = None, set()
+        self.picked, self.agent_picked, self.left_out = None, set(), {}
         self.held, self.held_at = {}, None
         if self.look:
             self.look = {**self.look, "uid": None}
@@ -94,6 +96,7 @@ class Seen:
                 # before the agent joined (the catch-up when it does), and the assistant's own picks aren't taps.
                 if before is not None and not before.get("selected") and uid not in self.agent_picked:
                     self.picked, self.picked_at = uid, self.clock()
+                    self.left_out.pop(uid, None)
 
     def hold(self):
         """Fold the latest objects into each one's held aim: its aim, averaged over about the last HOLD_S."""
@@ -112,8 +115,9 @@ class Seen:
 
     def in_front(self) -> list[dict]:
         """The objects in front of the camera, those in view whose box covers the center of the view or comes
-        within NEAR of it, best first: by score, boxes under MIN_AREA last."""
-        near = [o for o in self.objects if in_view(o) and distance(o) <= NEAR]
+        within NEAR of it and that the user hasn't just said are the wrong one, best first: by score, boxes under
+        MIN_AREA last."""
+        near = [o for o in self.objects if in_view(o) and distance(o) <= NEAR and not self.is_left_out(o["uid"])]
         return sorted(near, key=lambda o: (area(o) < MIN_AREA, -self.score(o)))
 
     def current(self) -> dict | None:
@@ -140,6 +144,17 @@ class Seen:
     def pick(self, uid: str):
         """The user picked this object by voice: it's what "this" means now, as a tap makes it."""
         self.picked, self.picked_at = uid, self.clock()
+        self.left_out.pop(uid, None)
+
+    def leave_out(self, uid: str):
+        """The user said this isn't the item they mean: it isn't "this" for LEFT_OUT_S, unless they pick it again."""
+        self.left_out[uid] = self.clock()
+        if self.picked == uid:
+            self.picked = None
+
+    def is_left_out(self, uid: str) -> bool:
+        t = self.left_out.get(uid)
+        return t is not None and self.clock() - t <= LEFT_OUT_S
 
     def resolve(self, target: str, exclude=()) -> Resolved:
         return resolve(self.objects, target, exclude, self.asked, self.described, self.prompts)

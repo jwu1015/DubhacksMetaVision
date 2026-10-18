@@ -196,6 +196,17 @@ class FocusTest(unittest.TestCase):
         self.clock.now += seen_module.PICK_S + 1
         self.assertEqual(self.seen.focus(), (MUG, "in_front"))
 
+    def test_an_item_said_to_be_wrong_isnt_this_for_a_minute(self):
+        self.seen.leave_out("1.1")  # the mug at the center: the sofa behind it is next
+        self.assertEqual(self.seen.focus(), (SOFA, "in_front"))
+        self.clock.now += seen_module.LEFT_OUT_S + 1
+        self.assertEqual(self.seen.focus(), (MUG, "in_front"))
+
+    def test_tapping_a_left_out_item_brings_it_back(self):
+        self.seen.leave_out("1.2")
+        self.tap("1.2")
+        self.assertEqual(self.seen.focus(), (LAMP, "picked"))
+
 
 class AssistantTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -383,3 +394,48 @@ class PickByVoiceTest(AssistantTest):
         with self.assertRaisesRegex(ToolError, "isn't tracked anymore"):
             await self.agent.select_object(None, "9.9")
         self.assertEqual(self.rpcs("action"), [])
+
+
+def blocks(said: str) -> list:
+    """Each <app_data> block of what a tool said."""
+    return [json.loads(b.split("</app_data>")[0]) for b in said.split("<app_data>")[1:]]
+
+
+class CorrectionsTest(AssistantTest):
+    async def test_the_wrong_item_moves_on_to_the_next_in_front(self):
+        self.seen.update(look("1.1", "results"))
+        self.assertEqual(app_data(await self.agent.get_current_object(None))["tracked_as"], "mug")
+        left, now = blocks(await self.agent.wrong_item(None))
+        self.assertEqual((left, now["tracked_as"], now["why"]), ({"left_out": "white ceramic mug"}, "sofa", "in_front"))
+        self.assertEqual(self.agent.discussed, "1.0")
+
+    async def test_nothing_else_in_front_says_whats_in_view(self):
+        self.seen.update(objects(MUG, LAMP, VASE))
+        self.seen.update(look("1.1", "results"))
+        await self.agent.get_current_object(None)
+        left, now = blocks(await self.agent.wrong_item(None))
+        self.assertEqual(now, {"at_center": "nothing", "in_view": [{"name": "white ceramic mug", "where": "center"},
+                                                                   {"name": "lamp", "where": "top right"},
+                                                                   {"name": "vase", "where": "left"}]})
+
+    async def test_a_wrong_pick_by_voice_is_undone(self):
+        self.seen.update(look("1.2", "results"))
+        await self.agent.select_object(None, "1.2")
+        _, now = blocks(await self.agent.wrong_item(None))
+        self.assertEqual((now["tracked_as"], self.seen.picked), ("mug", None))  # back to what's in front
+
+    async def test_never_mind_drops_the_price_announcement(self):
+        self.seen.update(look("1.1", "described"))
+        with mock.patch.object(assistant, "POLL_S", 0.01):
+            await self.agent.get_current_object(None)
+            self.assertEqual(await self.agent.never_mind(None), "Dropped.")
+            self.seen.update(look("1.1", "results", selected=True))
+            await asyncio.sleep(0.1)
+        self.session.generate_reply.assert_not_called()
+        self.assertIsNone(self.agent.discussed)
+
+    async def test_nothing_to_correct(self):
+        self.seen.update(objects(LAMP, VASE))
+        with self.assertRaisesRegex(ToolError, "No item"):
+            await self.agent.wrong_item(None)
+        self.assertEqual(await self.agent.never_mind(None), "Dropped.")

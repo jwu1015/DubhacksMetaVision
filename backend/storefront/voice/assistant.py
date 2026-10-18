@@ -35,6 +35,11 @@ the things in front of their camera.
   ("Busch Light can", not "grey can"). Reading the label isn't guessing, and a generic name from the tool doesn't
   mean it has no brand. Only name a brand the tool gives or you can see.
 - Prices and stores come only from the tool: never guess them.
+- If they say it's the wrong item ("no, not that one", "wrong one"), call wrong_item: it drops that item and gives
+  the next one in front, or what's in view. Say which item you have now, or ask which one they mean. If they name
+  the one they mean ("no, the speaker"), call whats_here and select_object instead.
+- If they call off what they asked ("never mind", "cancel", "forget it"), call never_mind and drop the subject.
+  An item already added to the cart stays: undo_last takes it out.
 - "why" says how the tool chose it: "picked" (they tapped it in the app, or picked it by voice) or "in_front" (it's
   at the center of the camera). If they seem to mean something else, ask them to tap it in the app or point the
   camera at it.
@@ -184,6 +189,38 @@ class Assistant(Agent):
             self.unopened.add(object_id)
             log.info("voice: the app didn't open %s (%s)", object_id, e)
         return await self.get_current_object(context)
+
+    # ---------- corrections ----------
+
+    @function_tool()
+    async def wrong_item(self, context: RunContext) -> str:
+        """They say the item you're talking about isn't the one they mean ("no, not that one", "wrong one"). Drops
+        it: it isn't "this" for a minute, and its prices won't be announced. Then answers like get_current_object,
+        about the next item in front, or says what's in view."""
+        uid = self.discussed or (self.seen.focus()[0] or {}).get("uid")
+        if uid is None:
+            raise ToolError("No item is being talked about.")
+        wrong = self.call(uid)
+        self.drop(uid)
+        self.seen.leave_out(uid)
+        log.info("voice: %s (%r) is the wrong item", uid, wrong)
+        return app_data({"left_out": wrong}) + "\n" + await self.get_current_object(context)
+
+    @function_tool()
+    async def never_mind(self, context: RunContext) -> str:
+        """They call off what they asked ("never mind", "cancel", "forget it"): drops the item being talked about,
+        and its prices won't be announced. An item already added to the cart stays: undo_last takes it out."""
+        if self.discussed is not None:
+            log.info("voice: never mind %s", self.discussed)
+            self.drop(self.discussed)
+        return "Dropped."
+
+    def drop(self, uid: str):
+        """Stop talking about this item: the action tools no longer act on it, and its prices won't be announced."""
+        if self._prices and self._prices_uid == uid:
+            self._prices.cancel()
+        if self.discussed == uid:
+            self.discussed = None
 
     # ---------- prices as they come in ----------
 
