@@ -39,11 +39,51 @@
   #badge .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--off); }
   #badge[data-state="ok"] .dot { background: var(--ok); }
   #badge[data-state="stale"] .dot, #badge[data-state="offline"] .dot { background: var(--warn); }
-  /* Product cards for the item being looked at; filled from "look" events later. */
+  /* The item the user picked, and where to buy it: filled from "look" events. */
+  #look, #look-results { display: flex; flex-direction: column; gap: 1.4vh; }
   #look {
-    flex: 0 0 min(34vw, 560px); padding: 3vh 2vw; overflow: hidden;
-    background: #141418; border-left: 1px solid #26262b; font-size: clamp(18px, 2.8vh, 32px);
+    flex: 0 0 min(34vw, 560px); padding: 2.5vh 2vw; overflow: hidden;
+    background: #141418; border-left: 1px solid #26262b; font-size: clamp(16px, 2.5vh, 30px);
   }
+  .thumb { overflow: hidden; border-radius: 0.35em; background: #26262b; }
+  .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  #look-crop { flex: 0 1 26vh; min-height: 0; background: #0a0a0c; }
+  #look-crop img { object-fit: contain; }
+  #look-name { font-size: 1.3em; font-weight: 800; line-height: 1.1; }
+  #look-desc, #look-status, .verdict, .store, .reason, .summary { color: var(--muted); font-weight: 500; }
+  #look-desc, .verdict, .reason { font-size: 0.68em; }
+  #look-desc, .ptitle, .reason {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
+  #look-status { font-size: 0.8em; }
+  #look-status.busy { animation: pulse 1.4s ease-in-out infinite; }
+  #look-status.error { color: var(--warn); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .chip {
+    display: inline-block; margin-right: 0.5em; padding: 0.1em 0.55em; border-radius: 999px;
+    background: #e4e4e7; color: #0a0a0c; font-weight: 800;
+  }
+  .chip.low { background: var(--ok); }
+  .chip.high { background: #f87171; }
+  .best, .row { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6em; align-items: center; }
+  .best { padding: 0.5em; border-radius: 0.5em; background: #1c1c22; border: 1px solid #2e2e35; }
+  .best .thumb { width: 3.6em; height: 3.6em; }
+  .row { padding: 0.2em 0; }
+  .row .thumb { width: 2em; height: 2em; }
+  .info { min-width: 0; }
+  .tag { font-size: 0.55em; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ok); }
+  .ptitle { font-size: 0.75em; }
+  .row .ptitle { -webkit-line-clamp: 1; }
+  .store { font-size: 0.6em; }
+  .save { color: var(--ok); font-weight: 800; }
+  .price { font-size: 1.05em; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .best .price { font-size: 1.35em; }
+  .reason { margin-top: 0.2em; font-size: 0.6em; }
+  .group h2 {
+    margin: 0 0 0.2em; font-size: 0.55em; font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .summary { font-size: 0.8em; }
 </style>
 </head>
 <body>
@@ -54,7 +94,13 @@
     <div id="waiting">Waiting for video…</div>
     <div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting…</span></div>
   </main>
-  <aside id="look" hidden aria-live="polite"></aside>
+  <aside id="look" hidden aria-live="polite">
+    <div id="look-crop" class="thumb"><img alt=""></div>
+    <div id="look-name"></div>
+    <div id="look-desc"></div>
+    <div id="look-status"></div>
+    <div id="look-results"></div>
+  </aside>
 </div>
 <script>
 "use strict";
@@ -70,6 +116,7 @@ const MOVE_MS = 400;      // a box glides to its new position
 const FADE_IN_MS = 250;
 const FADE_OUT_MS = 1500; // a box missing from the latest update fades out
 const STALE_S = 10;       // the badge turns amber when the boxes are older than this
+const DIM = 0.35;         // the other boxes, while one is picked
 const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font").trim();
 
 // Labels arrive every few seconds; between updates each box stays where it was last seen.
@@ -82,6 +129,7 @@ let tracking = "connecting";
 
 function color(id) { return "hsl(" + Math.round((id * 137.508) % 360) + ", 90%, 62%)"; }
 function ease(k) { return 1 - Math.pow(1 - k, 3); }
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
 function boxAt(t, now) {
   const k = ease(Math.min(1, (now - t.t0) / MOVE_MS));
@@ -126,8 +174,137 @@ function handle(ev) {
   } else if (ev.type === "status") {
     tracking = ev.tracking;
     if (tracking === "stopped") { fadeAll(performance.now()); updatedAt = null; lastFrameIdx = -1; epoch++; }
+  } else if (ev.type === "look") {
+    onLook(ev);
   }
-  // "look" events (product cards for #look) come later.
+}
+
+// ---------- the Look panel: the item the user picked, and where to buy it ----------
+
+const panel = document.getElementById("look");
+const crop = document.getElementById("look-crop");
+const cropImg = crop.querySelector("img");
+const nameEl = document.getElementById("look-name");
+const descEl = document.getElementById("look-desc");
+const statusEl = document.getElementById("look-status");
+const resultsEl = document.getElementById("look-results");
+const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
+const EXACT = 85;         // match_score from here up is an "Exact match"
+let look = null;          // the Look on the panel: {capture_id, key ("epoch:id" of its box, or null), name, price}
+
+function onLook(ev) {
+  if (ev.stage === "detected" || ev.stage === "nothing") { // a new Look
+    const found = ev.stage === "detected";
+    look = { capture_id: ev.capture_id, key: found && ev.track_id != null ? epoch + ":" + ev.track_id : null,
+             name: cap(ev.label), price: null };
+    panel.hidden = false;
+    crop.hidden = !found;
+    if (found && cropImg.getAttribute("src") !== "/" + ev.cutout_path) cropImg.src = "/" + ev.cutout_path;
+    nameEl.textContent = found ? look.name : "No product spotted";
+    descEl.textContent = "";
+    setStatus(found ? "Finding prices…" : ev.quick_phrase, found ? "busy" : "");
+    resultsEl.replaceChildren();
+    return;
+  }
+  if (!look || ev.capture_id !== look.capture_id) return; // an older Look, already replaced
+  if (ev.stage === "described") {
+    describe(ev.item);
+  } else if (ev.stage === "results") {
+    if (ev.search.item) describe(ev.search.item);
+    look.price = ev.search.best_match ? money(ev.search.best_match) : null;
+    setStatus("", "");
+    showResults(ev.search);
+  } else if (ev.stage === "failed") {
+    setStatus(ev.message || "Couldn't get prices.", "error");
+  }
+}
+
+function describe(item) {
+  if (item.category) look.name = cap(item.category);
+  nameEl.textContent = look.name;
+  descEl.textContent = item.description || "";
+}
+
+function setStatus(text, cls) {
+  statusEl.textContent = text || "";
+  statusEl.className = cls;
+  statusEl.hidden = !text;
+}
+
+function showResults(s) {
+  const parts = [];
+  if (s.best_match) {
+    const pi = s.price_insight;
+    if (pi.verdict_text) {
+      const v = el("div", "verdict");
+      v.append(el("span", "chip " + pi.best_match_verdict, VERDICT[pi.best_match_verdict] || "Price"), pi.verdict_text);
+      parts.push(v);
+    }
+    parts.push(card(s.best_match));
+  } else {
+    parts.push(el("div", "summary", s.spoken_summary));
+  }
+  if (s.dupes.length) parts.push(group("Cheaper dupes", s.dupes));
+  if (s.used.length) parts.push(group("Used", s.used));
+  resultsEl.replaceChildren(...parts);
+}
+
+function card(p) {
+  const tag = p.match_score == null ? "Best match" : p.match_score >= EXACT ? "Exact match" : "Similar";
+  const info = el("div", "info");
+  info.append(el("div", "tag", tag), el("div", "ptitle", p.title), el("div", "store", p.store));
+  if (p.match_reason) info.append(el("div", "reason", p.match_reason));
+  const c = el("div", "best");
+  c.append(thumb(p.image_url), info, el("div", "price", money(p)));
+  return c;
+}
+
+function group(name, products) {
+  const g = el("section", "group");
+  g.append(el("h2", "", name));
+  for (const p of products.slice(0, 2)) {
+    const store = el("div", "store", p.store);
+    if (p.savings_pct) store.append(" · ", el("span", "save", "Save " + p.savings_pct + "%"));
+    const info = el("div", "info");
+    info.append(el("div", "ptitle", p.title), store);
+    const row = el("div", "row");
+    row.append(thumb(p.image_url), info, el("div", "price", money(p)));
+    g.append(row);
+  }
+  return g;
+}
+
+// Store data comes from the web: it only ever goes in as text, and images only from http(s) URLs.
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function thumb(src) {
+  const box = el("div", "thumb");
+  let url = null;
+  try { url = new URL(src, location.href); } catch (err) { /* no picture */ }
+  if (src && url && (url.protocol === "https:" || url.protocol === "http:")) {
+    const img = el("img");
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.onerror = () => img.remove();
+    img.src = url.href;
+    box.append(img);
+  }
+  return box;
+}
+
+function money(p) {
+  const digits = Number.isInteger(p.price) || p.price >= 100 ? 0 : 2;
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: p.currency || "USD",
+      minimumFractionDigits: digits, maximumFractionDigits: digits }).format(p.price);
+  } catch (err) { // an unknown currency code
+    return "$" + p.price.toFixed(digits);
+  }
 }
 
 // ---------- drawing ----------
@@ -161,19 +338,23 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawTrack(t, b, alpha, v, font, line) {
+// picked: the label of the box the user picked (drawn thicker, with a glow), else undefined
+function drawTrack(t, b, alpha, v, font, line, picked) {
   const x = v.x + b[0] * v.w, y = v.y + b[1] * v.h, w = b[2] * v.w, h = b[3] * v.h;
   const c = color(t.id);
+  if (picked) line *= 2;
   ctx.globalAlpha = alpha;
   roundRect(x, y, w, h, Math.min(14, w / 4, h / 4));
   ctx.lineWidth = line + 3;
   ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
   ctx.stroke();
+  if (picked) { ctx.shadowColor = c; ctx.shadowBlur = line * 4; }
   ctx.lineWidth = line;
   ctx.strokeStyle = c;
   ctx.stroke();
+  ctx.shadowBlur = 0;
 
-  const text = t.label.charAt(0).toUpperCase() + t.label.slice(1) + "  #" + t.id;
+  const text = picked || cap(t.label) + "  #" + t.id;
   ctx.font = "700 " + font + "px " + FONT;
   const pad = font * 0.4, tw = ctx.measureText(text).width + pad * 2, th = font * 1.4;
   const lx = Math.max(v.x, Math.min(x - line / 2, v.x + v.w - tw));
@@ -214,10 +395,14 @@ function draw() {
   if (v) {
     const font = Math.round(Math.max(18, Math.min(v.h * 0.045, 56)));
     const line = Math.max(3, Math.round(v.h * 0.005));
-    for (const [key, t] of tracks) {
-      const a = alphaAt(t, now);
-      if (t.gone !== null && a <= 0) tracks.delete(key);
-      else drawTrack(t, boxAt(t, now), a, v, font, line);
+    for (const [key, t] of tracks) if (t.gone !== null && alphaAt(t, now) <= 0) tracks.delete(key);
+    const picked = look && look.key ? tracks.get(look.key) : undefined;
+    for (const t of tracks.values()) {
+      if (t !== picked) drawTrack(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, line);
+    }
+    if (picked) { // on top, labelled with what it is and its price
+      const label = look.name + (look.price ? "  ·  " + look.price : "");
+      drawTrack(picked, boxAt(picked, now), alphaAt(picked, now), v, font, line, label);
     }
   }
   updateBadge(now);

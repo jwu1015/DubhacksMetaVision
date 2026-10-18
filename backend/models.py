@@ -87,6 +87,7 @@ class SearchResponse(BaseModel):
     price_insight: PriceInsight
     spoken_summary: str
     timing_ms: dict[str, int]
+    item: Item | None = None          # ADDED: the finished item (Claude's name, description, queries)
 
 
 class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search merged"

@@ -8,7 +8,11 @@ Each answer goes to the projector page (and any other subscriber) as an "objects
     {"type": "objects", "frame_idx", "width", "height", "age_ms",
      "objects": [{"id", "label", "score", "box": {"x", "y", "w", "h"}}]}     (box normalized 0-1)
 
-plus {"type": "status", "tracking": "stopped" | "starting" | "ok" | "offline"} when that changes.
+plus {"type": "status", "tracking": "stopped" | "starting" | "ok" | "offline"} when that changes,
+and the "look" events main.py publishes as a picked item is identified and priced:
+
+    {"type": "look", "stage": "detected" | "nothing" | "described" | "results" | "failed",
+     "capture_id", "track_id" (the tracked object, or null for a photo), ...}
 
     python stream.py --video test_media/room.mp4 [--port 8002]   # then open http://localhost:8002/stream/viewer
     python stream.py --webcam
@@ -62,6 +66,7 @@ class Stream:
         self._tasks: list[asyncio.Task] = []
         self._subscribers: set[asyncio.Queue] = set()
         self._status = "stopped"  # the last status published
+        self._look: list[dict] = []  # the latest Look's events, replayed to new subscribers
         self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
 
     # ---------- frames in, results out ----------
@@ -155,19 +160,29 @@ class Stream:
 
     def publish(self, event: dict):
         """Send an event to every subscriber; a slow one loses its oldest."""
+        if event.get("type") == "look":
+            if event["stage"] in ("detected", "nothing"):  # a new Look replaces the last one
+                self._look = [event]
+            elif self._look and self._look[0]["capture_id"] == event["capture_id"]:
+                self._look.append(event)
         for q in self._subscribers:
             if q.full():
                 q.get_nowait()
             q.put_nowait(event)
 
-    async def subscribe(self) -> AsyncIterator[dict]:
-        """Events for one client, starting with the current state."""
+    async def subscribe(self, replay_look: bool = True) -> AsyncIterator[dict]:
+        """Events for one client, starting with the current state: the latest Look's events too, unless
+        replay_look is False."""
         q: asyncio.Queue = asyncio.Queue(QUEUE)
         self._subscribers.add(q)
+        # taken with the queue added: each later Look event goes to the queue, once
+        look = list(self._look) if replay_look else []
         try:
             yield self._status_event()
             if self._result:
                 yield self._objects_event()
+            for event in look:
+                yield event
             while True:
                 yield await q.get()
         finally:
