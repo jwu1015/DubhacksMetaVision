@@ -16,7 +16,10 @@ struct SpottedApp: App {
         }
         #endif
         // Stream to the backend when Config.xcconfig has its URL; mockup frames stay on mock data.
-        if mockFrame == nil { state.startLive() }
+        if mockFrame == nil {
+            state.startLive()
+            state.startGlasses()
+        }
         _appState = State(initialValue: state)
     }
 

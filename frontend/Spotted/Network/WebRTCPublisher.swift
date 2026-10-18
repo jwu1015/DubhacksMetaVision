@@ -12,12 +12,22 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
         case connecting, connected, disconnected
     }
 
+    /// Where the video comes from. Both feed the same source and track, so switching needs no
+    /// renegotiation: the other capturer just stops sending frames.
+    enum VideoSource {
+        case phone, glasses
+    }
+
     /// Both are called on the main actor.
     var onMessage: (@MainActor (ChannelMessage) -> Void)?
     var onStateChange: (@MainActor (State) -> Void)?
 
     /// The outgoing video, for the local preview.
     let videoTrack: RTCVideoTrack
+    /// Fed by GlassesManager while the glasses are the source.
+    let glassesCapturer: GlassesCapturer
+    private(set) var activeSource: VideoSource = .phone
+    private var isPaused = false
 
     private static let factory: RTCPeerConnectionFactory = {
         RTCInitializeSSL()
@@ -39,6 +49,7 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
         videoSource.adaptOutputFormat(toWidth: 504, height: 896, fps: 15)
         videoTrack = Self.factory.videoTrack(with: videoSource, trackId: "feed")
         capturer = FeedCapturer.make(for: videoSource)
+        glassesCapturer = GlassesCapturer(source: videoSource)
         super.init()
     }
 
@@ -49,8 +60,17 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
 
     /// Camera privacy: pausing stops capture entirely and sends nothing.
     func setPaused(_ paused: Bool) {
+        isPaused = paused
         videoTrack.isEnabled = !paused
-        paused ? capturer.stop() : capturer.start()
+        if paused || activeSource == .glasses { capturer.stop() } else { capturer.start() }
+    }
+
+    /// Switches between the phone camera and the glasses. The glasses stream itself is started and
+    /// stopped by GlassesManager.
+    func use(_ source: VideoSource) {
+        guard source != activeSource else { return }
+        activeSource = source
+        if source == .glasses || isPaused { capturer.stop() } else { capturer.start() }
     }
 
     /// Tells the backend the user picked this object; its Look steps follow on the same channel.
