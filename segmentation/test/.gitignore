@@ -1,5 +1,0 @@
-# test videos are not committed (downloaded, or local like table.mp4)
-videos/
-output/
-.env
-__pycache__/

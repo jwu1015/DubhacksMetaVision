@@ -59,10 +59,6 @@ lightning_logs/
 .cache/
 huggingface/
 
-# ---- Segmentation tester (downloaded videos, generated output) ----
-segmentation/test/videos/
-segmentation/test/output/
-
 # ---- Media / large data (add exceptions with ! if something must be tracked) ----
 *.mp4
 *.mov
