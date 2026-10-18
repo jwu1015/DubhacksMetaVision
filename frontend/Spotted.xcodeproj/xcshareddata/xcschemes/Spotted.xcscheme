@@ -29,6 +29,16 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
          <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "5D0A00000000000000000055"
+               BuildableName = "SpottedTests.xctest"
+               BlueprintName = "SpottedTests"
+               ReferencedContainer = "container:Spotted.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
             skipped = "NO"
             parallelizable = "NO">
             <BuildableReference

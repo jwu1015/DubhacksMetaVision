@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
+import LiveKit
 import Observation
-import WebRTC
 
 @MainActor
 @Observable
@@ -19,7 +19,9 @@ final class AppState {
     }
 
     var tab: Tab = .live
-    var connection: Connection = .live
+    var connection: Connection {
+        isConnected && tracking != .offline ? .live : .reconnecting
+    }
     var isCameraPaused = false {
         didSet {
             live?.setPaused(isCameraPaused)
@@ -27,23 +29,24 @@ final class AppState {
         }
     }
 
-    // Live view
-    var detections: [Detection] = MockData.detections
+    // Live view: what the server last sent. It tracks every object and runs every Look; the app only
+    // keeps what's on screen.
+    var objects: [LiveObject] = []
+    /// The quick labels of the objects in `objects`.
+    var labels: [String: LabelMessage] = [:]
     var scan: ScanState = .idle {
         didSet { scanChanged(from: oldValue) }
     }
-    var selectedTrackID: String?
-    /// Sources that have answered while /search runs.
-    var finishedSources: Set<ProductSource> = []
+    var selectedUID: String?
     var currentRoom = "Maya’s apartment"
 
     // Glasses mode (G1–G7)
     var captureMode: CaptureMode = .phone {
         didSet {
             guard captureMode != oldValue else { return }
-            live?.setMode(captureMode == .glasses ? .glasses : .phone)
-            // The backend restarts tracking (new ids) for the new camera.
-            if live != nil { detections = [] }
+            live?.setMode(captureMode)
+            // The backend restarts tracking (new uids) for the new camera.
+            if live != nil { clearObjects() }
             updateVideoSource()
         }
     }
@@ -70,8 +73,8 @@ final class AppState {
 
     static let taxRate = 0.1035
 
-    var selectedDetection: Detection? {
-        detections.first { $0.trackID == selectedTrackID }
+    var selectedObject: LiveObject? {
+        objects.first { $0.uid == selectedUID }
     }
 
     var currentSearch: SearchResponse? {
@@ -88,47 +91,30 @@ final class AppState {
 
     // MARK: - Scanning
 
-    /// Live: sends select on the channel and follows that Look (see handle(_:)).
-    /// Mock: fakes detected → results with the latency budget from FRONTEND.md.
-    func select(_ detection: Detection) {
-        selectedTrackID = detection.trackID
-        finishedSources = []
-        currentCaptureID = nil
+    /// Picks an object. The server already runs its Look (or starts it now): show the Look as it stands,
+    /// then follow its updates.
+    func select(_ object: LiveObject) {
+        selectedUID = object.uid
         scan = .looking
-        if let live {
-            isAwaitingLook = true
-            live.select(trackID: detection.trackID)
-            return
-        }
-        let isLamp = detection.label == "lamp"
-        let (mockDetect, mockSearch) = isLamp ? (MockData.lampDetect, MockData.lampSearch) : (MockData.detect, MockData.search)
         Task {
-            try? await Task.sleep(for: .seconds(0.8))
-            guard scan == .looking, selectedTrackID == detection.trackID else { return }
-            scan = .detected(Look(mockDetect))
-
-            try? await Task.sleep(for: .seconds(0.9))
-            guard case .detected = scan, selectedTrackID == detection.trackID else { return }
-            finishedSources.insert(.shopping)
-
-            try? await Task.sleep(for: .seconds(1.6))
-            guard case let .detected(look) = scan, selectedTrackID == detection.trackID else { return }
-            finishedSources = Set(ProductSource.searchable)
-            scan = .matched(look.finished(with: mockSearch), mockSearch)
+            do {
+                let look = try await source.select(uid: object.uid)
+                if selectedUID == object.uid { show(look) }
+            } catch {
+                guard selectedUID == object.uid else { return }
+                scan = .failed((error as? APIError)?.detail ?? "Couldn't tell. Try again closer.")
+            }
         }
     }
 
     func clearScan() {
         scan = .idle
-        selectedTrackID = nil
-        finishedSources = []
-        currentCaptureID = nil
-        isAwaitingLook = false
+        selectedUID = nil
     }
 
     func retry() {
-        if let detection = selectedDetection ?? detections.first {
-            select(detection)
+        if let object = selectedObject ?? objects.first {
+            select(object)
         }
     }
 
@@ -154,7 +140,7 @@ final class AppState {
         guard !isSaved(title) else { return }
         let match = currentSearch?.bestMatch
         let item = SavedItem(id: UUID().uuidString, title: title, store: match?.store ?? look.item?.brandGuess ?? "",
-                             price: match?.price ?? 0, image: match?.imageURL ?? look.cutoutURL ?? "",
+                             price: match?.price ?? 0, image: match?.imageURL ?? look.cropURL ?? "",
                              room: currentRoom)
         saved.insert(item, at: 0)
         undoStack.append(.saved(itemID: item.id))
@@ -184,7 +170,7 @@ final class AppState {
             let item = CartItem(id: UUID().uuidString, title: product.title,
                                 shortTitle: short.isEmpty ? product.title : short, store: product.store,
                                 room: currentRoom, price: product.price, quantity: 1,
-                                image: product.imageURL ?? currentLook?.cutoutURL ?? "")
+                                image: product.imageURL ?? currentLook?.cropURL ?? "")
             cart.append(item)
             id = item.id
         }
@@ -258,20 +244,25 @@ final class AppState {
         return values.filter { seen.insert($0).inserted }
     }
 
-    // MARK: - Live stream (WebRTC)
+    // MARK: - Live session (LiveKit)
 
-    /// Set when Config.xcconfig has a backend URL. Nil runs everything on mock data.
-    private var live: WebRTCPublisher?
-    /// True from a select until its "detected" (or "failed") arrives.
-    private var isAwaitingLook = false
-    /// The Look being followed. Messages with any other captureID are stale and ignored.
-    private var currentCaptureID: String?
-    private var lastDetectionsTS: Int64 = 0
+    /// Set when Config.xcconfig has a backend URL. Nil runs everything on MockSession.
+    private var live: LiveSession?
+    private var source: UpdateSource
+    private var isConnected = true
+    private var tracking: StatusMessage.Tracking?
     private let speaker = Speaker()
+
+    init() {
+        let mock = MockSession()
+        source = mock
+        mock.onUpdate = { [weak self] in self?.handle($0) }
+        mock.start()
+    }
 
     /// The camera track to preview on a device. Nil in mock mode and in the Simulator, which shows
     /// (and streams) the mock room instead.
-    var liveVideoTrack: RTCVideoTrack? {
+    var liveVideoTrack: LocalVideoTrack? {
         #if targetEnvironment(simulator)
         nil
         #else
@@ -284,24 +275,29 @@ final class AppState {
 
     func startLive() {
         guard live == nil, let baseURL = AppConfig.baseURL else { return }
-        let api = APIClient(baseURL: baseURL)
-        self.api = api
-        let voice = VoiceAssistant(api: api)
-        voice.perform = { [weak self] action in
-            await self?.perform(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
+        clearObjects()
+        isConnected = false
+        Task { [weak self] in
+            let session = await LiveSession.make(api: APIClient(baseURL: baseURL))
+            guard let self else { return }
+            session.onUpdate = { [weak self] in self?.handle($0) }
+            session.onConnectionChange = { [weak self] connected in
+                self?.isConnected = connected
+                // Joining sends the current state again.
+                if connected { self?.clearObjects() }
+            }
+            let voice = VoiceAssistant(session: session)
+            voice.perform = { [weak self] action in
+                await self?.perform(action) ?? VoiceActionReply(ok: false, detail: "The app isn't ready.")
+            }
+            self.voice = voice
+            live = session
+            source = session
+            session.setMode(captureMode)
+            session.setPaused(isCameraPaused)
+            session.start()
+            updateVideoSource()
         }
-        self.voice = voice
-        let publisher = WebRTCPublisher(api: api)
-        publisher.onMessage = { [weak self] in self?.handle($0) }
-        publisher.onStateChange = { [weak self] state in
-            self?.connection = state == .connected ? .live : .reconnecting
-        }
-        live = publisher
-        detections = []
-        connection = .reconnecting
-        publisher.setMode(captureMode == .glasses ? .glasses : .phone)
-        publisher.start()
-        updateVideoSource()
     }
 
     // MARK: - Meta glasses
@@ -332,70 +328,52 @@ final class AppState {
         }
     }
 
-    private func handle(_ message: ChannelMessage) {
-        switch message {
-        case let .detections(update):
-            guard update.ts >= lastDetectionsTS else { return }
-            lastDetectionsTS = update.ts
-            detections = update.objects
+    private func handle(_ update: Update) {
+        switch update {
+        case let .objects(message):
+            objects = message.objects
+            let uids = Set(objects.map(\.uid))
+            labels = labels.filter { uids.contains($0.key) }
+        case let .label(label):
+            labels[label.uid] = label
         case let .look(look):
-            handle(look)
+            if look.uid == selectedUID { show(look) }
+        case let .status(status):
+            tracking = status.tracking
         case .other:
             break
         }
     }
 
-    /// Follows the "detected" whose trackID is the selected one, then only that captureID.
-    private func handle(_ message: LookMessage) {
-        if message.stage == .detected {
-            guard isAwaitingLook, message.trackID == selectedTrackID else { return }
-            isAwaitingLook = false
-            currentCaptureID = message.captureID
-            let look = Look(captureID: message.captureID,
-                            label: message.label ?? selectedDetection?.label ?? "item",
-                            quickPhrase: message.quickPhrase ?? "",
-                            cutoutURL: message.cutoutPath.flatMap(AppConfig.url(for:))?.absoluteString,
-                            item: nil)
+    private func clearObjects() {
+        objects = []
+        labels = [:]
+    }
+
+    /// The selected object's Look, at its latest step.
+    private func show(_ look: Look) {
+        let previous = currentLook?.lookID == look.lookID ? currentLook : nil
+        // The select's answer can arrive after a later step of the same Look.
+        if let previous, previous.stage == .results, look.stage != .results { return }
+        switch look.stage {
+        case .started, .described:
             scan = .detected(look)
-            say(look.quickPhrase)
-            return
-        }
-
-        // A failure can arrive before "detected", so also accept it for the pending select.
-        let isCurrent = message.captureID == currentCaptureID
-            || (isAwaitingLook && message.trackID == selectedTrackID)
-        guard isCurrent else { return }
-
-        switch message.stage {
-        case .described:
-            if case var .detected(look) = scan, let item = message.item {
-                look.item = item
-                scan = .detected(look)
-            }
+            if previous == nil { speaker.say(look.quickPhrase) }
         case .results:
-            guard let search = message.search, let look = currentLook else { return }
-            finishedSources = Set(ProductSource.searchable)
-            scan = .matched(look.finished(with: search), search)
-            say(search.spokenSummary)
-        case .failed, .nothing:
-            isAwaitingLook = false
-            let line = message.message ?? "Couldn't tell. Try again closer."
+            guard let search = look.search else { return }
+            scan = .matched(look, search)
+            if previous?.stage != .results { speaker.say(search.spokenSummary) }
+        case .failed:
+            let line = look.message ?? "Couldn't tell. Try again closer."
             scan = .failed(line)
-            say(line)
-        case .detected, .unknown:
+            speaker.say(line)
+        case .unknown:
             break
         }
     }
 
-    /// The app's own speech, only when the voice assistant isn't connected (it speaks the Look itself).
-    private func say(_ text: String) {
-        guard voice?.isConnected != true else { return }
-        speaker.say(text)
-    }
-
     // MARK: - Voice assistant (LiveKit)
 
-    private var api: APIClient?
     private(set) var voice: VoiceAssistant?
 
     /// Connect only while voice is in use: the app is in front and the Live view, the assistant
@@ -415,7 +393,7 @@ final class AppState {
             }
             return await add(product)
         case .saveItem:
-            guard let look = currentLook, action.captureID == nil || action.captureID == look.captureID else {
+            guard let look = currentLook, action.captureID == nil || action.captureID == look.lookID else {
                 return VoiceActionReply(ok: false, detail: "That item isn't on screen anymore.")
             }
             save(look)
@@ -473,12 +451,12 @@ final class AppState {
     }
 
     /// The next-best object for "Not this one" (G3): the most confident one that isn't selected.
-    var nextBestDetection: Detection? {
-        detections.filter { $0.trackID != selectedTrackID }.max { $0.score < $1.score }
+    var nextBestObject: LiveObject? {
+        objects.filter { $0.inView && $0.uid != selectedUID }.max { $0.score < $1.score }
     }
 
     func notThisOne() {
-        guard let next = nextBestDetection else { return clearScan() }
+        guard let next = nextBestObject else { return clearScan() }
         select(next)
     }
 
@@ -488,10 +466,10 @@ final class AppState {
     }
 
     private func scanChanged(from old: ScanState) {
-        if case let .matched(look, search) = scan, !captures.contains(where: { $0.id == look.captureID }) {
-            captures.insert(Capture(id: look.captureID, title: look.name.sentenceCased, price: search.bestMatch?.price,
+        if case let .matched(look, search) = scan, !captures.contains(where: { $0.id == look.lookID }) {
+            captures.insert(Capture(id: look.lookID, title: look.name.sentenceCased, price: search.bestMatch?.price,
                                     verdict: search.bestMatch == nil ? nil : search.priceInsight.bestMatchVerdict,
-                                    image: search.bestMatch?.imageURL ?? look.cutoutURL ?? "", room: currentRoom,
+                                    image: search.bestMatch?.imageURL ?? look.cropURL ?? "", room: currentRoom,
                                     date: .now, product: search.bestMatch), at: 0)
         }
         if captureMode == .glasses {
@@ -533,7 +511,7 @@ final class AppState {
         guard url.scheme == "spotted" else { return }
         let captureID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "capture" }?.value
-        let isCurrent = captureID == nil || captureID == currentLook?.captureID
+        let isCurrent = captureID == nil || captureID == currentLook?.lookID
         let capture = captures.first { $0.id == captureID }
         switch url.host() {
         case "talk":

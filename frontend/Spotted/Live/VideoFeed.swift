@@ -1,34 +1,31 @@
 import AVFoundation
+import LiveKit
 import MWDATCamera
 import SwiftUI
-import WebRTC
 
-/// Pushes frames into the WebRTC video source: the phone's back camera on a device, the mock room in
+/// Pushes frames into the session's video track: the phone's back camera on a device, the mock room in
 /// the Simulator (which has no camera), or the Meta glasses (GlassesCapturer).
 /// Frames are sent upright in portrait, 9:16, with no rotation metadata.
 class FeedCapturer: NSObject, @unchecked Sendable {
-    static func make(for source: RTCVideoSource) -> FeedCapturer {
+    static func make(for buffer: BufferCapturer) -> FeedCapturer {
         #if targetEnvironment(simulator)
-        MockRoomCapturer(source: source)
+        MockRoomCapturer(buffer: buffer)
         #else
-        CameraCapturer(source: source)
+        CameraCapturer(buffer: buffer)
         #endif
     }
 
-    let source: RTCVideoSource
-    let rtcCapturer: RTCVideoCapturer
+    let buffer: BufferCapturer
 
-    init(source: RTCVideoSource) {
-        self.source = source
-        rtcCapturer = RTCVideoCapturer(delegate: source)
+    init(buffer: BufferCapturer) {
+        self.buffer = buffer
     }
 
     func start() {}
     func stop() {}
 
     func send(_ pixelBuffer: CVPixelBuffer, timeStampNs: Int64) {
-        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: timeStampNs)
-        source.capturer(rtcCapturer, didCapture: frame)
+        buffer.capture(pixelBuffer, timeStampNs: timeStampNs)
     }
 
     /// Draws an image into a new BGRA pixel buffer.
@@ -54,7 +51,7 @@ class FeedCapturer: NSObject, @unchecked Sendable {
 /// GlassesManager starts and stops the stream, so start() and stop() do nothing here.
 final class GlassesCapturer: FeedCapturer, @unchecked Sendable {
     /// Called on the SDK's queue for every frame.
-    func send(_ frame: VideoFrame) {
+    func send(_ frame: MWDATCamera.VideoFrame) {
         let sampleBuffer = frame.sampleBuffer
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let timeStampNs = time.isValid ? Int64(CMTimeGetSeconds(time) * 1_000_000_000)

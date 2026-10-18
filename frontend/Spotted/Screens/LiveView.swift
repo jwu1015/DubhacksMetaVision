@@ -1,3 +1,4 @@
+import LiveKit
 import SwiftUI
 
 /// 01 · Live: the glasses' feed with hotspots, the selected object's brackets and the product card.
@@ -5,7 +6,7 @@ import SwiftUI
 struct LiveView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var focusedTrackID: String?
+    @State private var focusedUID: String?
 
     var body: some View {
         ZStack {
@@ -40,7 +41,7 @@ struct LiveView: View {
 
     @ViewBuilder private var feed: some View {
         if let track = app.liveVideoTrack {
-            LiveFeedView(track: track)
+            SwiftUIVideoView(track, layoutMode: .fill)
         } else {
             MockCameraFeed()
         }
@@ -59,7 +60,7 @@ struct LiveView: View {
 
     /// Back to the hotspots: clears the product, searching or couldn't-tell card and any open tag.
     private func dismissSelection() {
-        focusedTrackID = nil
+        focusedUID = nil
         switch app.scan {
         case .looking, .detected, .matched, .failed: app.clearScan()
         case .idle: break
@@ -91,18 +92,18 @@ struct LiveView: View {
         if app.isCameraPaused {
             EmptyView()
         } else {
-            // Detections also list objects that left the view in the last 15 s (for voice); only
-            // the ones in view get a hotspot.
-            ForEach(app.detections.filter { $0.isHotspot && $0.score >= 0.6 }) { detection in
-                marker(for: detection, in: size)
+            // Objects that left the view in the last 15 s are still listed (for voice); only the ones in
+            // view get a hotspot.
+            ForEach(app.objects.filter(\.inView)) { object in
+                marker(for: object, in: size)
             }
         }
     }
 
     @ViewBuilder
-    private func marker(for detection: Detection, in size: CGSize) -> some View {
-        let rect = feedRect(detection.bbox, in: size)
-        if detection.trackID == app.selectedTrackID, isSelecting {
+    private func marker(for object: LiveObject, in size: CGSize) -> some View {
+        let rect = feedRect(object.bbox, in: size)
+        if object.uid == app.selectedUID, isSelecting {
             DetectionBrackets()
                 .frame(width: rect.width, height: rect.height)
                 // A tap on the selected object itself keeps it selected.
@@ -115,19 +116,20 @@ struct LiveView: View {
                     .offset(x: rect.minX, y: rect.minY - 32)
             }
         } else {
-            Hotspot(item: detection.displayName, priceEstimate: detection.priceEstimate,
-                    isFocused: focusedTrackID == detection.trackID)
+            let label = app.labels[object.uid]
+            Hotspot(item: (label?.name ?? object.prompt).sentenceCased, priceEstimate: label?.priceEstimate,
+                    isFocused: focusedUID == object.uid)
                 .opacity(hotspotOpacity)
                 .offset(x: rect.midX - 32, y: rect.midY - 32)
                 .onTapGesture {
-                    focusedTrackID = nil
-                    app.select(detection)
+                    focusedUID = nil
+                    app.select(object)
                 }
                 // Press-and-hold stands in for Figma's Hover state on touch.
                 .onLongPressGesture(minimumDuration: 0.4) {
-                    focusedTrackID = detection.trackID
+                    focusedUID = object.uid
                 }
-                .accessibilityAction { app.select(detection) }
+                .accessibilityAction { app.select(object) }
         }
     }
 
@@ -148,7 +150,7 @@ struct LiveView: View {
     @ViewBuilder private var bottomContent: some View {
         switch app.scan {
         case .idle:
-            HintPill(text: "Tap the \(app.detections.first?.label ?? "item") or say “What’s this?”")
+            HintPill(text: "Tap the \(app.objects.first?.prompt ?? "item") or say “What’s this?”")
                 .padding(.bottom, 12)
                 .transition(.opacity)
         case .looking:
@@ -156,8 +158,7 @@ struct LiveView: View {
                 .padding(.bottom, 12)
                 .transition(.opacity)
         case let .detected(look):
-            SearchingCard(look: look, finishedSources: app.finishedSources,
-                          isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
+            SearchingCard(look: look, isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         case let .matched(look, search):
@@ -179,8 +180,8 @@ struct LiveView: View {
 
 #Preview("01 · Live View") {
     let app = AppState()
-    app.selectedTrackID = MockData.chair.trackID
-    app.scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.search)
+    app.selectedUID = MockData.chair.uid
+    app.scan = .matched(MockData.chairResults, MockData.search)
     return RootView().environment(app)
 }
 
@@ -190,7 +191,7 @@ struct LiveView: View {
 
 #Preview("01b · Searching") {
     let app = AppState()
-    app.selectedTrackID = MockData.chair.trackID
-    app.scan = .detected(Look(MockData.detect))
+    app.selectedUID = MockData.chair.uid
+    app.scan = .detected(MockData.chairDescribed)
     return RootView().environment(app)
 }

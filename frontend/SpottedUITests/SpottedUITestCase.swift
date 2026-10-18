@@ -17,7 +17,8 @@ class SpottedUITestCase: XCTestCase {
     /// Taps the chair's hotspot and waits for the mocked results. The searching card also has
     /// "Add to cart", so wait for the results' price range instead.
     func openChairCard() {
-        let hotspot = app.buttons["Chair"]
+        // Its quick label names it "Lounge chair", with a price estimate after.
+        let hotspot = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lounge chair'")).firstMatch
         XCTAssertTrue(hotspot.waitForExistence(timeout: 5))
         hotspot.tap()
         XCTAssertTrue(app.staticTexts["typical $899–$1,349"].waitForExistence(timeout: 8))

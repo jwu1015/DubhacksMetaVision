@@ -8,7 +8,7 @@ import OSLog
 private let log = Logger(subsystem: "com.dubhacks.spotted", category: "Glasses")
 
 /// Meta glasses through the Wearables Device Access Toolkit: registration with the Meta AI app,
-/// which glasses are connected, and the glasses camera stream that feeds our WebRTC video.
+/// which glasses are connected, and the glasses camera stream that feeds the session's video track.
 ///
 /// Needs Developer Mode on in the Meta AI app (Settings › your glasses › Developer Mode) and a real
 /// iPhone; there's no Bluetooth to the glasses in the Simulator.

@@ -21,8 +21,7 @@ struct CaptureCardView: View {
             }
             .padding(.horizontal, 16)
 
-            CapturedFrame(look: app.currentLook, detection: app.selectedDetection,
-                          time: captureTime)
+            CapturedFrame(look: app.currentLook, time: captureTime)
                 .frame(height: 300)
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -31,8 +30,9 @@ struct CaptureCardView: View {
                 .padding(.horizontal, 12)
                 .padding(.top, 16)
 
-            if let next = app.nextBestDetection {
-                SecondaryButton(title: "Not this one · try the \(next.label)", action: app.notThisOne)
+            if let next = app.nextBestObject {
+                SecondaryButton(title: "Not this one · try the \(app.labels[next.uid]?.name ?? next.prompt)",
+                                action: app.notThisOne)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
             }
@@ -51,19 +51,18 @@ struct CaptureCardView: View {
 
     private var title: String {
         if case .failed = app.scan { return "Couldn't tell" }
-        let label = app.currentLook?.label ?? app.selectedDetection?.label ?? "item"
+        let label = app.currentLook?.label ?? app.selectedObject?.prompt ?? "item"
         return "Price check · \(label)"
     }
 
     private var captureTime: Date {
-        app.captures.first { $0.id == app.currentLook?.captureID }?.date ?? .now
+        app.captures.first { $0.id == app.currentLook?.lookID }?.date ?? .now
     }
 
     @ViewBuilder private var card: some View {
         switch app.scan {
         case let .detected(look):
-            SearchingCard(look: look, finishedSources: app.finishedSources,
-                          isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
+            SearchingCard(look: look, isSaved: app.isSaved(look.name.sentenceCased), onSave: app.toggleSaveCurrent)
         case let .matched(look, search):
             ProductCard(look: look, search: search, isSaved: app.isSaved(look.name.sentenceCased),
                         onOpen: { app.isShowingDetail = true },
@@ -81,15 +80,14 @@ struct CaptureCardView: View {
 /// its crop, since the phone doesn't receive the glasses' full frame.
 private struct CapturedFrame: View {
     let look: Look?
-    let detection: Detection?
     let time: Date
 
     var body: some View {
         GeometryReader { geo in
             Group {
-                if let detection, isMock {
-                    mockRoom(around: detection, in: geo.size)
-                } else if let source = look?.cutoutURL {
+                if let look, isMock {
+                    mockRoom(around: BBox(corners: look.box), in: geo.size)
+                } else if let source = look?.cropURL {
                     ProductImage(source: source)
                         .padding(24)
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -114,15 +112,15 @@ private struct CapturedFrame: View {
             .padding(12)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Captured frame with the \(look?.label ?? detection?.label ?? "item") highlighted")
+        .accessibilityLabel("Captured frame with the \(look?.label ?? "item") highlighted")
     }
 
-    private var isMock: Bool { AppConfig.baseURL == nil || (look?.cutoutURL?.hasPrefix("asset:") ?? true) }
+    private var isMock: Bool { AppConfig.baseURL == nil || (look?.cropURL?.hasPrefix("asset:") ?? true) }
 
     /// The 393×852 mock room, shifted so the item sits inside the crop.
-    private func mockRoom(around detection: Detection, in size: CGSize) -> some View {
+    private func mockRoom(around item: BBox, in size: CGSize) -> some View {
         let canvas = CGSize(width: 393, height: 852)
-        let rect = detection.rect(in: canvas)
+        let rect = item.rect(in: canvas)
         let dx = min(0, max(size.width - canvas.width, size.width / 2 - rect.midX))
         let dy = min(0, max(size.height - canvas.height, size.height / 2 - rect.midY))
         let box = rect.offsetBy(dx: dx, dy: dy)
@@ -133,7 +131,7 @@ private struct CapturedFrame: View {
             DetectionBrackets()
                 .frame(width: box.width, height: box.height)
                 .offset(x: box.minX, y: box.minY)
-            DetectionTag(item: (look?.label ?? detection.label).sentenceCased)
+            DetectionTag(item: (look?.label ?? "item").sentenceCased)
                 .fixedSize()
                 .offset(x: min(box.minX, size.width - 130), y: box.minY - 34)
         }
@@ -144,6 +142,6 @@ private struct CapturedFrame: View {
 #Preview("G3 · Capture Card") {
     let app = AppState()
     app.captureMode = .glasses
-    app.scan = .matched(Look(MockData.lampDetect).finished(with: MockData.lampSearch), MockData.lampSearch)
+    app.scan = .matched(MockData.lampResults, MockData.lampSearch)
     return RootView().environment(app)
 }
