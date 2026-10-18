@@ -450,6 +450,7 @@
 		};
 		5D0A00000000000000000038 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5D0A00000000000000000023 /* Spotted.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -473,6 +474,7 @@
 		};
 		5D0A00000000000000000039 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5D0A00000000000000000023 /* Spotted.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
