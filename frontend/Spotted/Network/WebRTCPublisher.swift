@@ -28,6 +28,8 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
     let glassesCapturer: GlassesCapturer
     private(set) var activeSource: VideoSource = .phone
     private var isPaused = false
+    /// The camera mode the backend tracks for. Sent when the channel opens and on every switch.
+    private var mode: ModeMessage.Mode = .phone
 
     private static let factory: RTCPeerConnectionFactory = {
         RTCInitializeSSL()
@@ -59,10 +61,20 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
     }
 
     /// Camera privacy: pausing stops capture entirely and sends nothing.
+    /// The backend purges everything it was tracking when paused (the privacy line).
     func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
         isPaused = paused
         videoTrack.isEnabled = !paused
         if paused || activeSource == .glasses { capturer.stop() } else { capturer.start() }
+        send(PauseMessage(paused: paused))
+    }
+
+    /// Glasses or phone: the backend forgets what it tracked and starts over with the new camera.
+    func setMode(_ mode: ModeMessage.Mode) {
+        guard mode != self.mode else { return }
+        self.mode = mode
+        send(ModeMessage(mode: mode))
     }
 
     /// Switches between the phone camera and the glasses. The glasses stream itself is started and
@@ -75,8 +87,13 @@ final class WebRTCPublisher: NSObject, @unchecked Sendable {
 
     /// Tells the backend the user picked this object; its Look steps follow on the same channel.
     func select(trackID: String) {
+        send(SelectMessage(trackID: trackID))
+    }
+
+    /// One JSON message on the "detections" channel; dropped if it isn't open (state is re-sent on open).
+    private func send<Message: Encodable>(_ message: Message) {
         guard let channel, channel.readyState == .open,
-              let data = try? JSONEncoder().encode(SelectMessage(trackID: trackID)) else { return }
+              let data = try? JSONEncoder().encode(message) else { return }
         channel.sendData(RTCDataBuffer(data: data, isBinary: false))
     }
 
@@ -209,7 +226,10 @@ extension WebRTCPublisher: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         guard dataChannel === channel else { return }
         switch dataChannel.readyState {
-        case .open: report(.connected)
+        case .open:
+            report(.connected)
+            send(ModeMessage(mode: mode))
+            if isPaused { send(PauseMessage(paused: true)) }
         case .closed: report(.connecting)
         default: break
         }

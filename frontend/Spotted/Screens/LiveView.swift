@@ -99,7 +99,9 @@ struct LiveView: View {
                     .offset(x: rect.minX - 12, y: rect.minY - 16)
             }
         } else {
-            ForEach(app.detections.filter { $0.score >= 0.6 }) { detection in
+            // Detections also list objects that left the view in the last 15 s (for voice); only
+            // the ones in view get a hotspot.
+            ForEach(app.detections.filter { $0.isHotspot && $0.score >= 0.6 }) { detection in
                 marker(for: detection, in: size)
             }
         }

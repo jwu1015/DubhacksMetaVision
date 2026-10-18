@@ -39,7 +39,13 @@ final class AppState {
 
     // Glasses mode (G1–G7)
     var captureMode: CaptureMode = .phone {
-        didSet { updateVideoSource() }
+        didSet {
+            guard captureMode != oldValue else { return }
+            live?.setMode(captureMode == .glasses ? .glasses : .phone)
+            // The backend restarts tracking (new ids) for the new camera.
+            if live != nil { detections = [] }
+            updateVideoSource()
+        }
     }
     /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
     private(set) var glasses: GlassesManager?
@@ -178,19 +184,9 @@ final class AppState {
         Task { await add(match) }
     }
 
-    /// Adds a product: POST /cart when live, then the local cart, with "Added · Undo".
+    /// Adds a product to the local cart (the cart lives only on the phone), with "Added · Undo".
     @discardableResult
     func add(_ product: Product) async -> VoiceActionReply {
-        var serverIndex: Int?
-        if let api {
-            do {
-                serverIndex = try await api.addToCart(product).items.count - 1
-            } catch {
-                print("[Cart] POST /cart failed: \(error)")
-                showToast("Couldn't add it. Try again.", canUndo: false)
-                return VoiceActionReply(ok: false, detail: "Couldn't add it. Try again.")
-            }
-        }
         let id: String
         if let index = cart.firstIndex(where: { $0.title == product.title && $0.store == product.store }) {
             cart[index].quantity += 1
@@ -204,7 +200,7 @@ final class AppState {
             cart.append(item)
             id = item.id
         }
-        undoStack.append(.added(cartItemID: id, serverIndex: serverIndex))
+        undoStack.append(.added(cartItemID: id))
         showToast("Added · \(product.title)", canUndo: true)
         return VoiceActionReply(ok: true)
     }
@@ -212,7 +208,7 @@ final class AppState {
     // MARK: - Undo and toasts
 
     private enum UndoEntry {
-        case added(cartItemID: String, serverIndex: Int?)
+        case added(cartItemID: String)
         case saved(itemID: String)
     }
 
@@ -243,12 +239,9 @@ final class AppState {
             return VoiceActionReply(ok: false, detail: "Nothing to undo.")
         }
         switch entry {
-        case let .added(cartItemID, serverIndex):
+        case let .added(cartItemID):
             if let item = cart.first(where: { $0.id == cartItemID }) {
                 changeQuantity(of: item, by: -1)
-            }
-            if let api, let serverIndex {
-                _ = try? await api.removeFromCart(at: serverIndex)
             }
         case let .saved(itemID):
             saved.removeAll { $0.id == itemID }
@@ -318,6 +311,7 @@ final class AppState {
         live = publisher
         detections = []
         connection = .reconnecting
+        publisher.setMode(captureMode == .glasses ? .glasses : .phone)
         publisher.start()
         updateVideoSource()
     }

@@ -44,18 +44,6 @@ struct APIClient {
         try await post("voice/token", body: VoiceTokenRequest(participantIdentity: identity))
     }
 
-    /// POST /cart with a Product exactly as /search returned it.
-    func addToCart(_ product: Product) async throws -> Cart {
-        try await post("cart", body: AddToCartRequest(product: product))
-    }
-
-    /// DELETE /cart/{index}
-    func removeFromCart(at index: Int) async throws -> Cart {
-        var request = URLRequest(url: baseURL.appending(path: "cart/\(index)"))
-        request.httpMethod = "DELETE"
-        return try await send(request, as: Cart.self)
-    }
-
     private func post<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response {
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = "POST"

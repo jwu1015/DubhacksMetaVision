@@ -17,10 +17,6 @@
 //   POST   /checkout           CheckoutRequest (JSON)                -> CheckoutResponse
 //   POST   /voice/token        VoiceTokenRequest (JSON, optional)    -> VoiceToken (LiveKit voice assistant)
 //   GET    /health                                                   -> HealthResponse
-//   Cart (in the search/cart PR, not on the live server yet):
-//   POST   /cart               AddToCartRequest (JSON)               -> Cart
-//   GET    /cart                                                     -> Cart
-//   DELETE /cart/{index}                                             -> Cart
 // Errors come back as {"detail": "..."} (APIError).
 
 import CoreGraphics
@@ -255,21 +251,6 @@ struct IdentifyResponse: Codable, Hashable {
 
 // MARK: - Cart and checkout
 
-struct AddToCartRequest: Codable, Hashable {
-    let product: Product         // send a Product exactly as /search returned it
-}
-
-struct Cart: Codable, Hashable {
-    let items: [Product]
-    let total: Double
-    let spokenSummary: String    // e.g. "Added the Target item, 90 dollars. Your cart has 2 items, 439 dollars total."
-
-    enum CodingKeys: String, CodingKey {
-        case items, total
-        case spokenSummary = "spoken_summary"
-    }
-}
-
 struct CheckoutItem: Codable, Hashable {
     let title: String
     let price: Double
@@ -301,11 +282,17 @@ struct HealthResponse: Codable, Hashable {
     let modelService: Bool       // the segmentation server is reachable
     let fixtures: Bool           // true = the backend is returning canned test data
     let demoMode: Bool
+    // For debug builds; nil from an older backend.
+    var webrtcSessions: Int? = nil   // phones streaming now (0 or 1)
+    var sceneMemory: Bool? = nil     // scene memory is live (the stream is tracking)
+    var voice: Bool? = nil           // the voice assistant is set up (LiveKit)
 
     enum CodingKeys: String, CodingKey {
-        case ok, fixtures
+        case ok, fixtures, voice
         case modelService = "model_service"
         case demoMode = "demo_mode"
+        case webrtcSessions = "webrtc_sessions"
+        case sceneMemory = "scene_memory"
     }
 }
 
@@ -330,10 +317,11 @@ struct SessionDescription: Codable, Hashable {
     let type: String             // "offer" from the phone, "answer" from the backend
 }
 
-/// One object on the "detections" data channel (backend -> phone).
+/// One object on the "detections" data channel (backend -> phone): every object scene memory holds,
+/// including ones that left the view in the last 15 s (inView false: not a hotspot, but voice can name it).
 struct Detection: Codable, Identifiable, Hashable {
-    let trackID: String          // stable while the object stays in view
-    let box: [Double]            // normalized x1, y1, x2, y2
+    let trackID: String          // stable while the object is remembered (ids survive ~6 s unseen)
+    let box: [Double]            // normalized x1, y1, x2, y2; the last one seen
     let label: String
     let score: Double
     // Arrive ~1–3 s after the object appears; nil until the backend has them. `var` with defaults so
@@ -341,15 +329,32 @@ struct Detection: Codable, Identifiable, Hashable {
     var name: String? = nil      // quick label, e.g. "black insulated water bottle"
     var priceLow: Int? = nil     // whole dollars, a rough estimate
     var priceHigh: Int? = nil
+    // Scene memory; `var` with defaults like the quick label. nil from an older backend.
+    var inView: Bool? = nil          // in the latest frame (nil: treat as true)
+    var centered: Double? = nil      // 0–1, how close to the view's center it was, weighted by time in view
+    var secondsViewed: Double? = nil // time in view within the last 15 s
+    var firstSeenTs: Int64? = nil    // ms since epoch
+    var lastSeenTs: Int64? = nil
 
     var id: String { trackID }
     var bbox: BBox { BBox(corners: box) }
+    /// Draw a hotspot only for objects in view; the others are only remembered.
+    var isHotspot: Bool { inView ?? true }
+    /// "$60–150" once the quick label is in.
+    var priceText: String? {
+        guard let low = priceLow, let high = priceHigh else { return nil }
+        return low == high ? "$\(low)" : "$\(low)–\(high)"
+    }
 
     enum CodingKeys: String, CodingKey {
-        case box, label, score, name
+        case box, label, score, name, centered
         case trackID = "track_id"
         case priceLow = "price_low"
         case priceHigh = "price_high"
+        case inView = "in_view"
+        case secondsViewed = "seconds_viewed"
+        case firstSeenTs = "first_seen_ts"
+        case lastSeenTs = "last_seen_ts"
     }
 }
 
@@ -370,12 +375,30 @@ struct SelectMessage: Codable, Hashable {
     }
 }
 
+/// Phone -> backend on the detections channel, on connect and on every camera switch: the backend forgets
+/// what it tracked (new tracking session, ids restart) and starts over with the new camera.
+struct ModeMessage: Codable, Hashable {
+    var type = "mode"
+    let mode: Mode
+
+    enum Mode: String, Codable, Hashable { case glasses, phone }
+}
+
+/// Phone -> backend: the user paused (or resumed) the camera. Paused: tracking stops and everything it
+/// held is purged (scene memory, the latest frame, the tracking server's session).
+struct PauseMessage: Codable, Hashable {
+    var type = "pause"
+    let paused: Bool
+}
+
 /// Backend -> phone, after a select: the steps of that "Look", in order. Follow the "detected" whose
 /// trackID is the one you selected, then only messages with its captureID.
 ///   detected:  label, quickPhrase (speak it), box, cutoutPath   at once
-///   described: item (Claude's name and description)           ~2s later
-///   results:   search, the same answer as POST /search/{id}    ~4–5s after the select
+///   described: item (Claude's name and description)           ~2–3s later
+///   results:   search, the same answer as POST /search/{id}    ~8–11s after the select
 ///   failed:    message
+/// For an object the backend already looked at in the background (one of the 3 in view longest), all
+/// three arrive at once.
 struct LookMessage: Codable, Hashable {
     let type: String             // "look"
     let stage: LookStage
