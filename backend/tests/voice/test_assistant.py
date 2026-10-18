@@ -219,6 +219,12 @@ class GetCurrentObjectTest(AssistantTest):
             await asyncio.sleep(0.1)
         self.session.generate_reply.assert_not_called()  # the cup's prices came in, but they asked about the mug
 
+    async def test_the_looks_brand_reaches_the_agent(self):
+        m = look("1.1", "described")
+        m["item"]["brand_guess"] = "Le Creuset"
+        self.seen.update(m)
+        self.assertEqual(app_data(await self.agent.get_current_object(None))["brand"], "Le Creuset")
+
     async def test_prices_failed(self):
         self.seen.update(look("1.1", "failed"))
         data = app_data(await self.agent.get_current_object(None))

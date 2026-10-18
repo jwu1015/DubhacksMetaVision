@@ -27,9 +27,12 @@ the things in front of their camera.
 
 - Speak only when they speak to you, in one or two short sentences.
 - Before you say anything about an item (what it is, its brand, its price, where to buy it, whether it's a good
-  deal), call get_current_object and answer only from what it returns. Never name or describe an item from what
-  you see in the camera yourself, and never guess a product, brand, store or price.
-- Call the item by the "name" the tool gives: it's what the app shows on screen.
+  deal), call get_current_object: it says which item they mean, and its prices.
+- Name the item as specifically as you can: the tool's "brand" and "name", made more precise by what you can read
+  or recognize on it in the camera, such as a brand or product name printed on it, its logo or its packaging
+  ("Busch Light can", not "grey can"). Reading the label isn't guessing, and a generic name from the tool doesn't
+  mean it has no brand. Only name a brand the tool gives or you can see.
+- Prices and stores come only from the tool: never guess them.
 - "why" says how the tool chose it: "picked" (they tapped it in the app, or picked it by voice) or "in_front" (it's
   at the center of the camera). If they seem to mean something else, ask them to tap it in the app or point the
   camera at it.
@@ -79,6 +82,8 @@ def about(o: dict, label: dict | None, look: dict | None, why: str) -> dict:
         out["price_guess"] = f"${label['price_low']}-{label['price_high']}"
     if item := look.get("item"):
         out |= {"item": item.get("category"), "description": item.get("description")}
+        if item.get("brand_guess"):
+            out["brand"] = item["brand_guess"]
     if look.get("stage") == "results":
         s = look["search"]
         out |= {"summary": s.get("spoken_summary"), "best_match": brief(s.get("best_match")),
