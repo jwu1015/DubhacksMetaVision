@@ -24,6 +24,8 @@ final class AppState {
     }
     var isCameraPaused = false {
         didSet {
+            // Resuming starts a new session, which the backend checks again.
+            if !isCameraPaused { blockedReason = nil }
             live?.setPaused(isCameraPaused)
             updateVideoSource()
         }
@@ -59,9 +61,17 @@ final class AppState {
     var captures: [Capture] = []
     var isShowingRoomRecap = false
     private let lookActivity = LookActivityController()
-    /// Objects whose Look came in selected, and the latest picked_at: to tell a new pick (isNewPick).
+    /// Picks, newest wins (by the backend's picked_at, so taps and voice picks compare on one clock).
+    /// The newest pick's Look, at its latest step.
+    private var latestPick: Look?
+    /// Each picked object's latest picked_at: tells a stale select_item from one not seen yet.
+    private var pickTimes: [String: Int64] = [:]
+    /// Objects whose Look came in selected without a picked_at (an older backend): to tell a new pick.
     private var pickedUIDs = Set<String>()
-    private var lastPickedAt: Int64 = 0
+    /// A tap whose answer (and so its picked_at) is still out. A pick that comes in meanwhile is held
+    /// until then, and whichever of the two is newer shows.
+    private var pendingTap: String?
+    private var heldPick: Look?
 
     // Sheets
     var isListening = false
@@ -96,17 +106,36 @@ final class AppState {
     // MARK: - Scanning
 
     /// Picks an object. The server already runs its Look (or starts it now): show the Look as it stands,
-    /// then follow its updates.
+    /// then follow its updates. A pick made by voice while the answer is out wins if it's newer.
     func select(_ object: LiveObject) {
-        selectedUID = object.uid
+        let uid = object.uid
+        selectedUID = uid
         scan = .looking
+        pendingTap = uid
+        heldPick = nil
         Task {
             do {
-                let look = try await source.select(uid: object.uid)
-                if selectedUID == object.uid { show(look) }
+                let look = try await source.select(uid: uid)
+                guard selectedUID == uid, pendingTap == uid else { return }
+                pendingTap = nil
+                _ = notePick(look)
+                let held = heldPick
+                heldPick = nil
+                if let held, isNewer(held, than: look) {
+                    follow(held)
+                } else {
+                    show(look)
+                }
             } catch {
-                guard selectedUID == object.uid else { return }
-                scan = .failed((error as? APIError)?.detail ?? "Couldn't tell. Try again closer.")
+                guard selectedUID == uid, pendingTap == uid else { return }
+                pendingTap = nil
+                let held = heldPick
+                heldPick = nil
+                if let held {
+                    follow(held)
+                } else {
+                    scan = .failed((error as? APIError)?.detail ?? "Couldn't tell. Try again closer.")
+                }
             }
         }
     }
@@ -114,6 +143,8 @@ final class AppState {
     func clearScan() {
         scan = .idle
         selectedUID = nil
+        pendingTap = nil
+        heldPick = nil
     }
 
     func retry() {
@@ -256,6 +287,9 @@ final class AppState {
     private var isConnected = true
     /// The backend's last tracking status: its state, category and SAM's prompts.
     private var status: StatusMessage?
+    /// Why the session failed: the backend's security check found recording isn't OK here. The camera
+    /// stays paused until the user resumes it.
+    private(set) var blockedReason: String?
 
     init() {
         let mock = MockSession()
@@ -373,33 +407,56 @@ final class AppState {
         case let .label(label):
             labels[label.uid] = label
         case let .look(look):
-            let isNewPick = isNewPick(look)
+            let isNewPick = notePick(look)
+            if heldPick?.uid == look.uid, look.pickedAt == heldPick?.pickedAt { heldPick = look }
             if look.uid == selectedUID {
                 show(look)
             } else if isNewPick {
-                // Picked by the voice agent (or for it, by the backend): show it as if tapped.
-                NSLog("[Live] following a pick: %@ (%@)", look.uid, look.stage.rawValue)
-                bringLiveViewToFront()
-                selectedUID = look.uid
-                show(look)
+                // Picked by the voice agent (or for it, by the backend): show it as if tapped, unless
+                // a tap is still out: then the newer of the two shows, once its answer is back.
+                if pendingTap != nil { heldPick = look } else { follow(look) }
             }
         case let .status(status):
             self.status = status
+            if status.tracking == .blocked {
+                NSLog("[Live] session blocked: %@", status.message ?? "")
+                blockedReason = status.message ?? "Recording isn't allowed here."
+                clearScan()
+                isCameraPaused = true
+            }
         case .other:
             break
         }
     }
 
-    /// A Look someone just picked: newer than the last pick by picked_at, or, from a backend without it,
-    /// the first time this object's Look comes in selected.
-    private func isNewPick(_ look: Look) -> Bool {
+    /// Notes a Look that came in selected. True if it's a new pick: newer by picked_at than every pick
+    /// so far, or, from a backend without picked_at, the first time this object comes in selected.
+    private func notePick(_ look: Look) -> Bool {
         guard look.selected else { return false }
-        defer {
-            pickedUIDs.insert(look.uid)
-            if let at = look.pickedAt { lastPickedAt = max(lastPickedAt, at) }
+        guard let at = look.pickedAt else { return pickedUIDs.insert(look.uid).inserted }
+        pickTimes[look.uid] = max(pickTimes[look.uid] ?? 0, at)
+        if let latest = latestPick, let latestAt = latest.pickedAt, at <= latestAt {
+            // A later step of the newest pick: keep it current. An older pick: ignore it.
+            if at == latestAt, look.uid == latest.uid { latestPick = look }
+            return false
         }
-        if let at = look.pickedAt { return at > lastPickedAt }
-        return !pickedUIDs.contains(look.uid)
+        latestPick = look
+        return true
+    }
+
+    /// Whether pick `a` came after `b`. A Look without picked_at loses: the other is known to be newer.
+    private func isNewer(_ a: Look, than b: Look) -> Bool {
+        guard let aAt = a.pickedAt else { return false }
+        guard let bAt = b.pickedAt else { return true }
+        return aAt > bAt
+    }
+
+    /// Shows a pick as if tapped.
+    private func follow(_ look: Look) {
+        NSLog("[Live] following a pick: %@ (%@)", look.uid, look.stage.rawValue)
+        bringLiveViewToFront()
+        selectedUID = look.uid
+        show(look)
     }
 
     /// Closes what covers the Live view (not the pay sheet), so a pick's label and card show.
@@ -413,7 +470,10 @@ final class AppState {
     private func clearObjects() {
         objects = []
         labels = [:]
+        latestPick = nil
+        pickTimes = [:]
         pickedUIDs = []
+        heldPick = nil
     }
 
     /// The selected object's Look, at its latest step.
@@ -486,13 +546,27 @@ final class AppState {
             guard let uid = action.uid, let object = objects.first(where: { $0.uid == uid }) else {
                 return VoiceActionReply(ok: false, detail: "That item isn't tracked anymore.")
             }
+            // The agent picks it on the backend before asking us, so its Look usually came in already.
+            // Newest pick wins: a select_item older than the latest pick doesn't take it back.
+            if let latest = latestPick, latest.uid != uid,
+               let at = pickTimes[uid], let latestAt = latest.pickedAt, at < latestAt {
+                NSLog("[Live] select_item %@ skipped: %@ was picked since", uid, latest.uid)
+                return VoiceActionReply(ok: false, detail: "Another item was picked since.")
+            }
+            // A tap still out: the newer of the two shows once its answer is back.
+            if pendingTap != nil { return VoiceActionReply(ok: true) }
             bringLiveViewToFront()
             // Already open: keep its card as it is. A failed one is tried again.
             let isOpen = switch scan {
             case .looking, .detected, .matched: selectedUID == uid
             case .idle, .failed: false
             }
-            if !isOpen { select(object) }
+            if isOpen { return VoiceActionReply(ok: true) }
+            if let latest = latestPick, latest.uid == uid, latest.stage != .failed {
+                follow(latest)  // the backend's pick as it stands: no new pick, so no new picked_at
+            } else {
+                select(object)
+            }
             return VoiceActionReply(ok: true)
         case .unknown:
             return VoiceActionReply(ok: false, detail: "Not in the app yet.")

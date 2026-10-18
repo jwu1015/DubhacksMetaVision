@@ -275,6 +275,8 @@ struct Look: Codable, Hashable {
 struct StatusMessage: Codable, Hashable {
     enum Tracking: String, Codable, Hashable {
         case stopped, starting, ok, offline, unknown
+        /// The security check found recording isn't OK here: the session stopped. `message` says why.
+        case blocked
 
         init(from decoder: Decoder) throws {
             self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
@@ -284,6 +286,8 @@ struct StatusMessage: Codable, Hashable {
     let tracking: Tracking
     let category: String
     let prompts: [String]
+    /// .blocked: why, in a short sentence for the user.
+    var message: String? = nil
 }
 
 /// Any message on topic "updates": decode each one with this, then switch on it.

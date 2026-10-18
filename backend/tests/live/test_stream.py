@@ -13,7 +13,7 @@ from PIL import Image
 from fakes.frames import image
 from fakes.tracking import fake_server
 from storefront import config
-from storefront.live import labels, tracker
+from storefront.live import labels, security, tracker
 from storefront.live.stream import Stream
 from storefront.live.tracker import Tracker
 from storefront.models import BBox
@@ -26,11 +26,19 @@ async def lamp_prompts(image, category) -> list[str]:
     return ["lamp"]
 
 
+async def allowed(image) -> security.Verdict:
+    return security.Verdict(allowed=True)
+
+
+async def changing_room(image) -> security.Verdict:
+    return security.Verdict(allowed=False, reason="This looks like a changing room.")
+
+
 def setUpModule():
     # Fake credentials, no real server and no Claude: nothing here may reach the shared GPU or print the token.
     for target, name, value in ((config, "CF_ACCESS_CLIENT_ID", "test-id"),
                                 (config, "CF_ACCESS_CLIENT_SECRET", "test-secret"), (config, "MODEL_SERVICE_URL", ""),
-                                (labels, "labels_or_fallback", lamp_prompts)):
+                                (labels, "labels_or_fallback", lamp_prompts), (security, "check", allowed)):
         patcher = mock.patch.object(target, name, value)
         patcher.start()
         unittest.addModuleCleanup(patcher.stop)
@@ -111,6 +119,18 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
                                         "POST /session", "POST /session/s2/frame"])
         self.assertEqual([(p[1], p[2]) for p in self.picks], [("kitchen utensils", 0), ("kitchen utensils", 3)])
         self.assertEqual(result.objects[0].uid, "2.7")  # the new session's
+
+    async def test_a_failed_security_check_blocks_until_stop(self):
+        t = self.tracker()
+        with mock.patch.object(security, "check", changing_room):
+            self.assertIsNone(await t.send(image(320)))
+            self.assertEqual(t.blocked, "This looks like a changing room.")
+            self.assertIsNone(await t.send(image(320)))  # blocked: no new check, no request
+        self.assertEqual((self.calls(), len(self.picks), self.sleeps), ([], 1, []))
+        await t.stop()  # e.g. the camera paused: the next session is checked again
+        self.assertIsNone(t.blocked)
+        self.assertIsNotNone(await t.send(image(320)))
+        self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame"])
 
     async def test_send_creates_the_session_if_needed(self):
         t = self.tracker()
@@ -345,7 +365,8 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(lamp, {"uid": "1.4", "box": [0.0, 0.0, 0.25, 0.5], "prompt": "lamp", "score": 0.88,
                                 "in_view": True})
         self.assertEqual(await next_event(self.events, "status"),
-                         {"type": "status", "tracking": "ok", "category": config.DEFAULT_CATEGORY, "prompts": ["lamp"]})
+                         {"type": "status", "tracking": "ok", "category": config.DEFAULT_CATEGORY, "prompts": ["lamp"],
+                          "message": None})
 
         result = self.stream.latest_objects()
         self.assertEqual((result.frame_idx, result.objects[0].label), (0, "lamp"))
@@ -428,6 +449,20 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await next_event(self.events, "status"))["tracking"], "ok")
         self.assertEqual((await next_event(self.events, "status"))["tracking"], "stopped")
         self.assertFalse(self.stream.running)
+
+    async def test_a_blocked_session_says_why(self):
+        with mock.patch.object(security, "check", changing_room):
+            await self.stream.start()
+            self.stream.push_frame(image(320))
+            status = await next_event(self.events, "status")
+            while status["tracking"] != "blocked":
+                status = await next_event(self.events, "status")
+        self.assertEqual(status["message"], "This looks like a changing room.")
+        self.assertTrue(self.gate.arrived.empty())  # no frame went to the server
+        await self.stream.stop()
+        self.assertEqual(await next_event(self.events, "status"),
+                         {"type": "status", "tracking": "stopped", "category": config.DEFAULT_CATEGORY, "prompts": [],
+                          "message": None})
 
     async def test_tracking_down_shows_offline_and_frames_still_arrive(self):
         async def down(request):

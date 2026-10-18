@@ -124,6 +124,7 @@ const names = new Map();  // uid -> its quick label: {name, price_low, price_hig
 let updatedAt = null;     // performance.now() when the frame behind the latest boxes was captured
 let count = 0;
 let tracking = "connecting";
+let blockedReason = "";  // "blocked": why recording isn't OK here
 
 function ease(k) { return 1 - Math.pow(1 - k, 3); }
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
@@ -172,6 +173,7 @@ function handle(ev) {
     names.set(ev.uid, { ...ev, at: performance.now() });
   } else if (ev.type === "status") {
     tracking = ev.tracking;
+    blockedReason = ev.message || "Recording isn't allowed here.";
     if (tracking === "stopped") { fadeAll(performance.now()); names.clear(); updatedAt = null; }
   } else if (ev.type === "look" && ev.selected) {
     showLook(ev);
@@ -363,7 +365,7 @@ let shownText = "";
 function updateStatus() {
   const live = tracking === "ok" || tracking === "starting";
   const text = tracking === "connecting" ? "Connecting…" : tracking === "stopped" ? "Waiting for the phone"
-    : tracking === "offline" ? "Tracking offline" : updatedAt === null ? "Live · Finding items…"
+    : tracking === "offline" ? "Tracking offline" : tracking === "blocked" ? "Stopped · " + blockedReason : updatedAt === null ? "Live · Finding items…"
     : "Live · " + count + (count === 1 ? " item" : " items");
   if (text !== shownText) statusText.textContent = shownText = text;
   statusEl.classList.toggle("live", live);
