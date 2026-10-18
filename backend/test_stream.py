@@ -97,16 +97,10 @@ def fake_server(latency: float = 0.0, max_sessions: int = 4) -> FastAPI:
     async def health():
         return {"status": "ok", "model": "fake", "device": "cpu", "sessions": len(sessions)}
 
-    @app.post("/session/auto")
-    async def create_auto(body: dict = Body(default={})):
-        if not body.get("category"):  # like the real server since 18 Oct
-            raise HTTPException(400, 'category is required, e.g. "electronics"')
-        return await create({"prompt": ", ".join(o[1] for o in FAKE_OBJECTS)})
-
     @app.post("/session")
     async def create(body: dict = Body(default={})):
         if not body.get("prompt"):  # like the real server since 17 Oct
-            raise HTTPException(400, 'prompt is required: "cup, laptop" or ["cup", "laptop"] (or use /session/auto)')
+            raise HTTPException(400, 'prompt is required: "cup, laptop" or ["cup", "laptop"]')
         if len(sessions) >= max_sessions:
             raise HTTPException(503, f"too many sessions (max {max_sessions}); delete one or wait for expiry")
         sid = uuid.uuid4().hex
@@ -154,13 +148,10 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         """Baptiste's API: sessions s1, s2, ...; frames answered from self.replies, else one box."""
         self.requests.append(request)
         path = request.url.path.removeprefix("/inference")
-        if request.method == "POST" and path in ("/session", "/session/auto"):
+        if request.method == "POST" and path == "/session":
             body = json.loads(request.content or b"{}")
-            if path == "/session" and not body.get("prompt"):
-                return httpx.Response(400, json={"detail": 'prompt is required: "cup, laptop" or ["cup", "laptop"] '
-                                                           "(or use /session/auto)"})
-            if path == "/session/auto" and not body.get("category"):
-                return httpx.Response(400, json={"detail": 'category is required, e.g. "electronics"'})
+            if not body.get("prompt"):
+                return httpx.Response(400, json={"detail": 'prompt is required: "cup, laptop" or ["cup", "laptop"]'})
             self.sessions += 1
             return httpx.Response(200, json={"session_id": f"s{self.sessions}", "labels": ["sofa"]})
         if request.method == "DELETE":
@@ -198,13 +189,41 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await t.start())  # already has one
         self.assertEqual(self.calls(), ["POST /session"])
 
-    async def test_no_categories_means_the_servers_own_list(self):
+    def auto_tracker(self, picked=("lamp", "rug")) -> tuple[Tracker, list]:
+        """A tracker without categories, with Claude's labels faked; picks records each call, in order
+        with the server's requests."""
+        picks = []
+
+        async def fake_labels(image, category):
+            picks.append((image.size, category, len(self.requests)))  # how many requests went before
+            return list(picked)
+        patcher = mock.patch("labels.labels_or_fallback", fake_labels)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         client = httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
         self.addAsyncCleanup(client.aclose)
-        t = Tracker(base_url=BASE, client=client, categories="")
+        return Tracker(base_url=BASE, client=client, categories=""), picks
+
+    async def test_no_categories_waits_for_claudes_labels_from_the_first_frame(self):
+        t, picks = self.auto_tracker()
         self.assertTrue(await t.start())
-        self.assertEqual(self.calls(), ["POST /session/auto"])
-        self.assertEqual(json.loads(self.requests[0].content), {"category": config.SAM_AUTO_CATEGORY})
+        self.assertEqual((self.calls(), picks), ([], []))  # no frame yet: nothing to pick labels from
+        result = await t.send(image(320))
+        self.assertEqual(picks, [((320, 240), config.SAM_AUTO_CATEGORY, 0)])  # before any request
+        self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame"])
+        self.assertEqual(json.loads(self.requests[0].content), {"prompt": ["lamp", "rug"]})
+        self.assertEqual(result.objects[0].id, 7)
+        await t.send(image(320))  # same session: no new labels
+        self.assertEqual(len(picks), 1)
+
+    async def test_no_categories_picks_new_labels_for_a_new_session(self):
+        t, picks = self.auto_tracker()
+        await t.send(image(320))
+        self.replies = [404]  # expired
+        await t.send(image(320))
+        self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame", "POST /session/s1/frame",
+                                        "POST /session", "POST /session/s2/frame"])
+        self.assertEqual([p[2] for p in picks], [0, 3])  # each right before its session
 
     async def test_send_creates_the_session_if_needed(self):
         t = self.tracker()

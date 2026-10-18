@@ -10,11 +10,12 @@ Streams test videos through the segmentation API the way the glasses would, then
    pip install -r requirements.txt     # or: uv pip install -r requirements.txt
    ```
 
-2. Copy `.env.example` to `.env` and fill in the Cloudflare Access service token:
+2. Copy `.env.example` to `.env` and fill in the Cloudflare Access service token and an Anthropic key (Claude picks each pass's labels):
 
    ```
    CF_ACCESS_CLIENT_ID=<id>.access
    CF_ACCESS_CLIENT_SECRET=<secret>
+   ANTHROPIC_API_KEY=<key>
    ```
 
 ## Run
@@ -28,8 +29,8 @@ python run_tests.py --file my.mp4 --category furniture   # your own video, one p
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--url` | `https://dubhacks.tamkar.ai/inference` | API base URL |
-| `--category` | `things to buy` | Category sent to `/labels` (with `--file`) |
-| `--prompt` | from `/labels` | Skip `/labels` and use these comma-separated phrases |
+| `--category` | `things to buy` | Category Claude picks labels in (with `--file`) |
+| `--prompt` | picked by Claude | Skip Claude and use these comma-separated phrases |
 | `--fps` | 30 | Rate frames are extracted at (the "camera" rate) |
 | `--max-frames` | 0 (whole video) | Cap on extracted frames |
 | `--no-annotate` | off | Skip writing annotated videos |
@@ -37,7 +38,7 @@ python run_tests.py --file my.mp4 --category furniture   # your own video, one p
 ## What a pass does
 
 1. Extracts frames from the video with ffmpeg at `--fps`.
-2. Sends the first frame (raw JPEG) to `POST /labels?category=<category>` and uses the returned labels as the session prompt. Living things (people, pets, plants) are dropped from the labels and from every frame's results.
+2. Has Claude pick labels in `<category>` from the first frame (`backend/labels.py`, the same picker live tracking uses) and uses them as the session prompt. Living things (people, pets, plants) are dropped from the labels and from every frame's results.
 3. Opens a session and plays the frames like a live stream: when a response comes back, the frame matching the elapsed time is sent next and the frames in between are dropped.
 4. Writes `output/<video>-<category>.mp4` (real-time, showing only the frames that were sent, with boxes and labels) and a summary to `output/report.json`. `report.json` covers only the latest run.
 
@@ -52,4 +53,4 @@ The summary has latency, objects per frame, frames with no objects, and id stabi
 {"name": "bedroom", "url": "https://…/bedroom.mp4", "category": "furniture"}
 ```
 
-`path` points to a local file in `videos/`. Videos are not committed, so put `table.mp4` there yourself. `url` entries are downloaded to `videos/` on first use. Entries without a `category` use `things to buy`, since the server requires one.
+`path` points to a local file in `videos/`. Videos are not committed, so put `table.mp4` there yourself. `url` entries are downloaded to `videos/` on first use. Entries without a `category` use `things to buy`.
