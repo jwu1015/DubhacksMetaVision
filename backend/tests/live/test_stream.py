@@ -3,10 +3,8 @@ import asyncio
 import io
 import json
 import logging
-import tempfile
 import time
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import httpx
@@ -18,9 +16,9 @@ import config
 import stream
 import tracker
 from fakes.frames import image
-from fakes.tracking import fake_server, make_video
+from fakes.tracking import fake_server
 from models import BBox
-from stream import FileSource, Stream, WebcamSource
+from stream import Stream
 from tracker import Tracker
 
 logging.getLogger("gtl").setLevel(logging.CRITICAL)  # the failure tests log expected warnings
@@ -88,7 +86,7 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await t.start())
         self.assertEqual(t.session_id, "s1")
         self.assertEqual(str(self.requests[0].url), f"{BASE}/session")
-        self.assertEqual(json.loads(self.requests[0].content), {"prompt": config.SAM_CATEGORIES})  # ours, as /detect
+        self.assertEqual(json.loads(self.requests[0].content), {"prompt": config.SAM_CATEGORIES})
         self.assertTrue(await t.start())  # already has one
         self.assertEqual(self.calls(), ["POST /session"])
 
@@ -489,104 +487,33 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         await video.aclose()
 
 
-# ---------- frame sources ----------
-
-class Collector:
-    """Stands in for a Stream: records what a source pushes and when."""
-
-    def __init__(self):
-        self.frames: list[tuple[float, Image.Image]] = []
-
-    def push_frame(self, img):
-        self.frames.append((time.monotonic(), img))
-
-
-class SourceTest(unittest.IsolatedAsyncioTestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
-        cls.video = make_video(Path(cls.tmp.name) / "room.mp4", seconds=0.8, fps=15)  # 12 frames
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp.cleanup()
-
-    async def test_file_plays_at_its_frame_rate_without_blocking_the_loop(self):
-        out, gaps = Collector(), []
-
-        async def ticker():
-            while True:
-                t = time.monotonic()
-                await asyncio.sleep(0.005)
-                gaps.append(time.monotonic() - t)
-        tick = asyncio.create_task(ticker())
-        t0 = time.monotonic()
-        await FileSource(self.video, loop=False).run(out)
-        tick.cancel()
-        self.assertEqual(len(out.frames), 12)
-        self.assertEqual(out.frames[0][1].size, (320, 240))
-        self.assertEqual(out.frames[0][1].mode, "RGB")
-        self.assertGreater(out.frames[-1][0] - out.frames[0][0], 0.6)  # 11 frame gaps at 15 fps: 0.73s
-        self.assertLess(time.monotonic() - t0, 3)
-        self.assertLess(max(gaps), 0.1)
-
-    async def test_file_loops_until_cancelled(self):
-        out = Collector()
-        task = asyncio.create_task(FileSource(self.video).run(out))
-        await asyncio.sleep(1.2)
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
-        self.assertGreater(len(out.frames), 12)
-        n = len(out.frames)
-        await asyncio.sleep(0.2)
-        self.assertLessEqual(len(out.frames), n + 1)  # the decode thread stops too
-
-    async def test_a_bad_file_never_raises(self):
-        out = Collector()
-        await FileSource(Path(self.tmp.name) / "missing.mp4").run(out)
-        not_video = Path(self.tmp.name) / "notes.mp4"
-        not_video.write_text("not a video")
-        await FileSource(not_video).run(out)
-        self.assertEqual(out.frames, [])
-
-    def test_source_from(self):
-        self.assertIsInstance(stream.source_from("webcam"), WebcamSource)
-        with mock.patch.object(stream, "MEDIA", Path(self.tmp.name)):
-            self.assertEqual(stream.source_from(f"file:{self.video}").path, self.video.resolve())
-            for spec in ("file:config.py", f"file:{self.tmp.name}/../config.py", f"file:{self.tmp.name}/nope.mp4",
-                         "rtsp://cam", "file:"):
-                with self.assertRaises(Exception, msg=spec) as cm:
-                    stream.source_from(spec)
-                self.assertEqual(cm.exception.status_code, 400)
-
-
-# ---------- end to end: video file -> stream -> tracker -> fake server -> events ----------
+# ---------- end to end: frames -> stream -> tracker -> fake server -> events ----------
 
 class EndToEndTest(unittest.IsolatedAsyncioTestCase):
-    async def test_video_to_events_through_the_fake_server(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            video = make_video(Path(tmp) / "room.mp4", seconds=1.0, fps=30)
-            server = fake_server(latency=0.08)
-            client = httpx.AsyncClient(transport=httpx.ASGITransport(app=server))
-            s = Stream(Tracker(base_url="http://fake", client=client))
-            pushed = 0
-            push = s.push_frame
+    async def test_frames_to_events_through_the_fake_server(self):
+        server = fake_server(latency=0.08)
+        client = httpx.AsyncClient(transport=httpx.ASGITransport(app=server))
+        s = Stream(Tracker(base_url="http://fake", client=client))
+        pushed = 0
 
-            def counting_push(img):
-                nonlocal pushed
+        async def camera():  # 30 fps, like the phone
+            nonlocal pushed
+            while True:
+                s.push_frame(image(320, 240))
                 pushed += 1
-                push(img)
-            s.push_frame = counting_push
-            events = s.subscribe()
-            await s.start(FileSource(video))
-            got = []
-            async with asyncio.timeout(10):
-                while len(got) < 8:
-                    got.append(await next_event(events, "objects"))
-            self.assertEqual(len(server.state.sessions), 1)
-            await s.stop()
-            await events.aclose()
-            await client.aclose()
+                await asyncio.sleep(1 / 30)
+        events = s.subscribe()
+        await s.start()
+        frames = asyncio.create_task(camera())
+        got = []
+        async with asyncio.timeout(10):
+            while len(got) < 8:
+                got.append(await next_event(events, "objects"))
+        self.assertEqual(len(server.state.sessions), 1)
+        frames.cancel()
+        await s.stop()
+        await events.aclose()
+        await client.aclose()
 
         stats = server.state.stats
         self.assertEqual(stats["overlaps"], 0)
@@ -637,35 +564,3 @@ class RouteTest(unittest.TestCase):
     def test_events_start_with_the_current_state(self):
         with self.client() as c, c.websocket_connect("/stream/events") as ws:
             self.assertEqual(ws.receive_json(), {"type": "status", "tracking": "stopped"})
-
-    def test_start_and_stop(self):
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(stream, "MEDIA", Path(tmp)):
-            video = make_video(Path(tmp) / "room.mp4", seconds=0.5)
-            with self.client() as c, c.websocket_connect("/stream/events") as ws:
-                self.assertEqual(ws.receive_json()["tracking"], "stopped")
-                r = c.post("/stream/start", json={"source": f"file:{video}"})
-                self.assertEqual((r.status_code, r.json()), (200, {"tracking": "starting"}))
-                self.assertEqual(ws.receive_json(), {"type": "status", "tracking": "starting"})
-                r = c.post("/stream/stop")
-                self.assertEqual((r.status_code, r.json()), (200, {"tracking": "stopped"}))
-                events = [ws.receive_json()]
-                while events[-1] != {"type": "status", "tracking": "stopped"}:
-                    events.append(ws.receive_json())
-                self.assertTrue(all(e["type"] in ("objects", "status") for e in events))
-        self.assertEqual(self.calls[0], "POST /session")
-        self.assertEqual(self.calls[-1], "DELETE /session/s1")
-
-    def test_start_rejects_other_files(self):
-        with self.client() as c:
-            for source in ("file:config.py", "file:/etc/hosts", "http://example.com/a.mp4"):
-                self.assertEqual(c.post("/stream/start", json={"source": source}).status_code, 400, source)
-        self.assertFalse(self.live.running)
-
-    def test_test_routes_are_local_only(self):
-        with self.client("203.0.113.9") as c:
-            self.assertEqual(c.post("/stream/stop").status_code, 403)
-        with self.client() as c:  # a tunnel connects from localhost but says who it forwards for
-            self.assertEqual(c.post("/stream/stop", headers={"X-Forwarded-For": "203.0.113.9"}).status_code, 403)
-            self.assertEqual(c.post("/stream/start", json={"source": "webcam"},
-                                    headers={"X-Forwarded-For": "203.0.113.9"}).status_code, 403)
-        self.assertFalse(self.live.running)

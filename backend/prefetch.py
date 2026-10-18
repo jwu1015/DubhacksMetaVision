@@ -28,7 +28,6 @@ from dataclasses import dataclass
 from PIL import Image
 from pydantic import BaseModel
 
-import config
 import vlm
 from models import BBox
 from scene import WINDOW_S
@@ -36,7 +35,7 @@ from tracker import TrackResult
 
 log = logging.getLogger("gtl.prefetch")
 
-ENABLED = os.getenv("PREFETCH", "true").strip().lower() in ("1", "true", "yes") and not config.USE_FIXTURES
+ENABLED = os.getenv("PREFETCH", "true").strip().lower() in ("1", "true", "yes")
 QUICK_AFTER_S = 0.5      # in view this long before it gets a quick label, so flicker costs nothing
 PREFETCH_AFTER_S = 2.0   # in view this long before its whole Look starts in the background
 PREFETCH_MAX = 3         # background Looks among the objects in view

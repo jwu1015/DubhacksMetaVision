@@ -67,7 +67,6 @@ class Capture(BaseModel):
     image_url: str
     item: Item
     segmentation: Segmentation | None
-    image_sha256: str | None = None   # PROPOSED: lets /search look up the demo cache
 
 
 class DetectResponse(BaseModel):
@@ -88,11 +87,6 @@ class SearchResponse(BaseModel):
     spoken_summary: str
     timing_ms: dict[str, int]
     item: Item | None = None          # ADDED: the finished item (Claude's name, description, queries)
-
-
-class IdentifyResponse(BaseModel):   # PROPOSED: shape of "/detect + /search merged"
-    detect: DetectResponse
-    search: SearchResponse | None     # None when no item was detected
 
 
 # --- Request/response bodies for the remaining routes (typed versions of Section 4e) ---
@@ -134,8 +128,6 @@ class VoiceTokenResponse(BaseModel):  # ... and its response, which LiveKit's cl
 class HealthResponse(BaseModel):
     ok: bool
     model_service: bool
-    fixtures: bool
-    demo_mode: bool
     webrtc_sessions: int = 0     # phones streaming over WebRTC (one at a time)
     scene_memory: bool = False   # the live stream is tracking, so scene memory is filling
     voice: bool = False          # the voice assistant is set up (LiveKit keys present)

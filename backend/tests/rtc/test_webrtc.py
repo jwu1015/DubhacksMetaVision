@@ -1,14 +1,9 @@
 """Tests for webrtc.py, and a stand-in for the iPhone app. No GPU, no Cloudflare: both peers run in
 this process and connect over localhost; tracking is the fake tracking server, Cloudflare is mocked.
-
-    PYTHONPATH=.:tests python tests/rtc/test_webrtc.py --client [--url http://127.0.0.1:8004] [--video test_media/synthetic_room.mp4]
-                                   [--seconds 30] [--codec H264|VP8]    # play the phone against a server
 """
-import argparse
 import asyncio
 import json
 import logging
-import sys
 import tempfile
 import time
 import unittest
@@ -587,70 +582,3 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------- the stand-in phone, against a running server ----------
-
-def look_line(msg: dict) -> str:
-    """A step of a Look in one line ("results" carries the whole /search answer)."""
-    search = msg.get("search") or {}
-    best = search.get("best_match")
-    detail = {"detected": msg.get("label"), "described": (msg.get("item") or {}).get("category"),
-              "results": f"{best['store']} ${best['price']:.0f}, {len(search['dupes'])} dupes, "
-                         f"{len(search['used'])} used" if best else "no match",
-              "failed": msg.get("message")}.get(msg.get("stage"))
-    return f"look {msg.get('stage')} {msg.get('track_id')} {msg.get('capture_id')}: {detail}"
-
-
-async def run_client(args):
-    async with httpx.AsyncClient(base_url=args.url, timeout=30) as http:
-        phone = PhoneClient(http, Camera(args.video), codec=args.codec)
-        t0 = time.perf_counter()
-        print(f"phone: {Path(args.video).name} as {PHONE_SIZE[0]}x{PHONE_SIZE[1]} @ {PHONE_FPS} fps, "
-              f"{args.codec} first, to {args.url}")
-        try:
-            await phone.connect()
-            for s in phone.ice_servers:  # the URLs only: never print credentials
-                print(f"ice: {', '.join(s['urls'])}{'  (with credentials)' if s.get('username') else ''}")
-            print(f"answer: {webrtc.describe(phone.pc.remoteDescription.sdp)} ({time.perf_counter() - t0:.1f}s)")
-            phone.pc.on("connectionstatechange", lambda: print(
-                f"{time.perf_counter() - t0:5.1f}s connection {phone.pc.connectionState}"))
-            labels: dict[str, set[str]] = {}
-            first = selected = None
-            count = 0
-            deadline = time.monotonic() + args.seconds
-            while (left := deadline - time.monotonic()) > 0:
-                try:
-                    msg = await asyncio.wait_for(phone.messages.get(), left)
-                except TimeoutError:
-                    break
-                count += 1
-                print(f"{time.perf_counter() - t0:5.1f}s {look_line(msg) if msg.get('type') == 'look' else json.dumps(msg)}")
-                for o in msg.get("objects", []):
-                    labels.setdefault(o["track_id"], set()).add(o["label"])
-                    first = first or time.perf_counter() - t0
-                if selected is None and msg.get("objects"):
-                    selected = msg["objects"][0]["track_id"]
-                    phone.select(selected)
-                    print(f"{time.perf_counter() - t0:5.1f}s sent select {selected}")
-        finally:
-            await phone.close()
-        print(f"\n{count} messages; first objects after {first:.1f}s" if first else f"\n{count} messages; no objects")
-        for track_id, names in sorted(labels.items(), key=lambda kv: int(kv[0][1:])):
-            print(f"  {track_id}: {', '.join(sorted(names))}{'  <- label changed' if len(names) > 1 else ''}")
-
-
-if __name__ == "__main__":
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--client", action="store_true", help="play the phone against a running server")
-    p.add_argument("--url", default="http://127.0.0.1:8004")
-    p.add_argument("--video", default="test_media/synthetic_room.mp4")
-    p.add_argument("--seconds", type=float, default=30)
-    p.add_argument("--codec", default="H264", choices=["H264", "VP8"])
-    args, rest = p.parse_known_args()
-    if args.client:
-        if not Path(args.video).is_file():
-            p.error(f"no such file: {args.video}")
-        try:
-            asyncio.run(run_client(args))
-        except KeyboardInterrupt:
-            pass
-    else:
-        unittest.main(argv=[sys.argv[0], *rest])

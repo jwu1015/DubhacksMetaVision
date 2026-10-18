@@ -74,7 +74,7 @@ _client: anthropic.AsyncAnthropic | None = None
 def client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
-        # /detect has a ~2s budget; the SDK default (10 min, 2 retries) would hang the app.
+        # A Look waits on this; the SDK default (10 min, 2 retries) would hang it.
         _client = anthropic.AsyncAnthropic(timeout=15.0, max_retries=1, default_headers=config.ANTHROPIC_HEADERS)
     return _client
 
