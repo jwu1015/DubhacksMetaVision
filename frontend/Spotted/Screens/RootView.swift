@@ -41,11 +41,15 @@ struct RootView: View {
             }
 
             if app.isListening {
-                // The phone Live view dims its own feed under the sheet.
-                if app.tab != .live || app.captureMode == .glasses {
-                    Color.black.opacity(0.35).ignoresSafeArea().transition(.opacity)
-                }
+                // The phone Live view dims its own feed under the sheet, so it only needs a tap target.
+                let dims = app.tab != .live || app.captureMode == .glasses
+                Color.black.opacity(dims ? 0.35 : 0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { app.isListening = false }
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
                 AgentSheet()
+                    .accessibilityAction(.escape) { app.isListening = false }
                     .transition(.move(edge: .bottom))
             }
 

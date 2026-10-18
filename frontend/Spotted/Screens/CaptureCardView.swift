@@ -40,7 +40,13 @@ struct CaptureCardView: View {
             Spacer(minLength: 0)
         }
         .padding(.bottom, 86)
-        .background(Color.ink)
+        // Tapping empty space outside the frame and card goes back to Glasses Home.
+        .background {
+            Color.ink
+                .ignoresSafeArea()
+                .onTapGesture { app.clearScan() }
+        }
+        .accessibilityAction(.escape) { app.clearScan() }
     }
 
     private var title: String {

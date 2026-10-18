@@ -13,6 +13,9 @@ struct LiveView: View {
                 ZStack(alignment: .topLeading) {
                     feed
                         .opacity(app.connection == .disconnected ? 0.35 : 1)
+                        // Tapping the feed outside the card dismisses the selection.
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: dismissSelection)
                     if dimsFeed {
                         Color.black.opacity(0.35)
                     }
@@ -36,6 +39,7 @@ struct LiveView: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.scan)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.connection)
+        .accessibilityAction(.escape, dismissSelection)
     }
 
     @ViewBuilder private var feed: some View {
@@ -55,6 +59,15 @@ struct LiveView: View {
         let origin = CGPoint(x: (size.width - width) / 2, y: (size.height - height) / 2)
         return CGRect(x: origin.x + box.x * width, y: origin.y + box.y * height,
                       width: box.w * width, height: box.h * height)
+    }
+
+    /// Back to the hotspots: clears the product, searching or couldn't-tell card and any open tag.
+    private func dismissSelection() {
+        focusedTrackID = nil
+        switch app.scan {
+        case .looking, .detected, .matched, .failed: app.clearScan()
+        case .idle, .ambiguous: break
+        }
     }
 
     private var dimsFeed: Bool {
@@ -113,6 +126,9 @@ struct LiveView: View {
         if detection.trackID == app.selectedTrackID, isSelecting {
             DetectionBrackets()
                 .frame(width: rect.width, height: rect.height)
+                // A tap on the selected object itself keeps it selected.
+                .contentShape(Rectangle())
+                .onTapGesture {}
                 .offset(x: rect.minX, y: rect.minY)
             if let look = app.currentLook {
                 DetectionTag(item: look.name.sentenceCased)
