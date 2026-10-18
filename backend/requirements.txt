@@ -11,3 +11,4 @@ av==17.1.0  # aiortc 1.15 needs av<18; stream.py is tested on 17.1
 aiortc==1.15.0
 livekit-agents~=1.8  # voice/agent.py
 livekit-plugins-google~=1.8  # voice/agent.py: Gemini Live
+livekit-plugins-noise-cancellation~=0.3  # voice/agent.py: background voice cancellation (LiveKit Cloud)
