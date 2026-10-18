@@ -124,8 +124,8 @@ struct AgentSheet: View {
     private var status: String {
         guard let voice = app.voice else { return "Listening…" }
         return switch voice.status {
-        case .off, .connecting: "Connecting to Spotted…"
-        case .connected: "Spotted assistant · AI · Listening…"
+        case .off, .connecting: "Connecting to Storefront…"
+        case .connected: "Storefront assistant · AI · Listening…"
         case let .failed(message): message
         }
     }
@@ -183,7 +183,7 @@ struct AgentSheet: View {
             return highlightingTarget(said)
         }
         if isGlasses {
-            var said = AttributedString("“Spotted, how much is that lamp?”")
+            var said = AttributedString("“Storefront, how much is that lamp?”")
             said.foregroundColor = .white
             return highlightingTarget(said)
         }

@@ -111,7 +111,7 @@ enum MockData {
                    quickPhrase: "Lamp. Finding prices.")
     )
 
-    /// G2: what the assistant understood from "Spotted, how much is that lamp?"
+    /// G2: what the assistant understood from "Storefront, how much is that lamp?"
     static let parsedRequest = ParsedRequest(action: "Price check", target: "lamp", context: "In view · centered")
 
     /// G5 and G7: today's captures.

@@ -118,7 +118,7 @@ final class GlassesManager {
             guard let self else { return }
             do {
                 guard try await wearables.checkPermissionStatus(.camera) == .granted else {
-                    camera = .failed("Allow camera access for Spotted in the Meta AI app.")
+                    camera = .failed("Allow camera access for Storefront in the Meta AI app.")
                     return
                 }
                 let session = try wearables.createSession(deviceSelector: AutoDeviceSelector(wearables: wearables))

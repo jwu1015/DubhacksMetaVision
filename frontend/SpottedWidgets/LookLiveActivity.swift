@@ -70,7 +70,7 @@ private struct LockScreenCard: View {
                     Summary(state: state)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Spotted")
+                Text("Storefront")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Color.lime)
             }
@@ -136,7 +136,7 @@ private struct Actions: View {
                     .background(.white.opacity(0.12), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
             }
-            .accessibilityLabel("Talk to Spotted")
+            .accessibilityLabel("Talk to Storefront")
         }
     }
 }

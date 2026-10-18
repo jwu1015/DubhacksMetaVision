@@ -49,7 +49,7 @@ final class AppState {
     }
     /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
     private(set) var glasses: GlassesManager?
-    /// "Glasses connected. Say “Spotted” to capture." on Glasses Home for a few seconds.
+    /// "Glasses connected. Say “Storefront” to capture." on Glasses Home for a few seconds.
     var modeBanner: String?
     /// Every Look the user asked for: Spotted Today and the room recap.
     var captures: [Capture] = []
@@ -476,7 +476,7 @@ final class AppState {
     }
 
     private func showModeBanner() {
-        let text = "Glasses connected. Say “Spotted” to capture."
+        let text = "Glasses connected. Say “Storefront” to capture."
         modeBanner = text
         Task {
             try? await Task.sleep(for: .seconds(6))
@@ -621,7 +621,7 @@ final class AppState {
             connection = .disconnected
         case .glassesHome:
             enterGlasses()
-            modeBanner = "Glasses connected. Say “Spotted” to capture."
+            modeBanner = "Glasses connected. Say “Storefront” to capture."
         case .voiceCommand:
             show(.glassesHome)
             parsedRequest = MockData.parsedRequest

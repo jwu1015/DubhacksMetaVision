@@ -62,6 +62,6 @@ struct MicButton: View {
                 .glass(in: Circle(), tint: 0.42)
         }
         .buttonStyle(PressableStyle())
-        .accessibilityLabel("Talk to Spotted")
+        .accessibilityLabel("Talk to Storefront")
     }
 }

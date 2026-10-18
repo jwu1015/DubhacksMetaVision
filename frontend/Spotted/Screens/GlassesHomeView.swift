@@ -56,7 +56,7 @@ struct GlassesHomeView: View {
                 Text("Look at something and ask")
                     .font(.spottedTitle2)
                     .foregroundStyle(.labelPrimary)
-                Text("Say “Spotted, how much is that lamp?”")
+                Text("Say “Storefront, how much is that lamp?”")
                     .font(.spottedSubhead)
                     .foregroundStyle(.labelSecondary)
                 Text("Hold to talk · or press the Action Button")
@@ -156,7 +156,7 @@ struct PushToTalkButton: View {
             }
         }
         .buttonStyle(PressableStyle())
-        .accessibilityLabel("Talk to Spotted")
+        .accessibilityLabel("Talk to Storefront")
         .accessibilityHint("Ask about what you're looking at")
     }
 }
