@@ -197,7 +197,7 @@ def make_search(ranked: list[Product]) -> SearchResponse:
         capture_id=CAPTURE_ID, best_match=best, dupes=dupes, used=used, price_insight=insight,
         spoken_summary=(f"That's a West Elm tripod lamp, about {best.price:.0f} dollars. "
                         f"Target has a close lookalike for {dupes[0].price:.0f}."),
-        timing_ms={"search": 2100, "rerank": 450, "rank": 1200, "total": 3900},
+        timing_ms={"search": 2100, "rerank": 450, "rank": 1200, "total": 3900}, item=ITEM,
     )
 
 
