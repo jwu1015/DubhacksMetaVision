@@ -11,7 +11,14 @@ The phone's offer has one video track (sendonly, H.264 or VP8) and a data channe
      "objects": [{"track_id": "t3", "box": [x1, y1, x2, y2], "label": "sofa", "score": 0.93}]}   (box normalized 0-1)
 
 When the user taps a hotspot the phone sends {"type": "select", "track_id": "t3"}, which calls
-select_handler(3). One phone at a time: a new offer closes the previous connection.
+select_handler(3): main.py's Look. Each step of a Look on a tracked object then comes back on the channel
+as stream.py's "look" event, with its track_id as "t3" too:
+
+    {"type": "look", "stage": "detected" | "described" | "results" | "failed", "capture_id", "track_id": "t3",
+     ...}   ("detected": label, quick_phrase, box, cutout_path; "described": item; "results": search,
+            the whole /search answer; "failed": message)
+
+One phone at a time: a new offer closes the previous connection.
 
 TURN: the phone and the laptop are on different networks, so media relays through Cloudflare's TURN
 service. Credentials are minted with our TURN key (CF_TURN_KEY_ID, CF_TURN_KEY_API_TOKEN) and cached;
@@ -188,6 +195,11 @@ def detections(event: dict) -> dict:
         for o in event["objects"]]}
 
 
+def look_message(event: dict) -> dict:
+    """A stream "look" event on a tracked object, with the track_id as the phone knows it ("t3")."""
+    return {**event, "track_id": f"t{event['track_id']}"}
+
+
 def track_number(track_id) -> int | None:
     """The tracker's id in a track_id ("t3" -> 3); None if it isn't one."""
     if isinstance(track_id, str) and track_id[:1] == "t" and track_id[1:].isascii() and track_id[1:].isdigit():
@@ -327,15 +339,21 @@ class Phone:
             sender.cancel()
 
     async def _send(self, channel):
-        """Every "objects" event as a detections message. send() only queues, so a slow phone never
-        holds up the stream; one that falls far behind misses messages instead."""
-        events = stream.live.subscribe()
+        """Every "objects" event as a detections message, and each step of a Look on a tracked object.
+        send() only queues, so a slow phone never holds up the stream; one that falls far behind misses
+        detections instead (never a Look step)."""
+        events = stream.live.subscribe(replay_look=False)  # a Look from before this phone isn't its own
         try:
             async for event in events:
-                if event["type"] != "objects":
+                looked = event["type"] == "look" and event.get("track_id") is not None  # not a photo's
+                if event["type"] != "objects" and not looked:
                     continue
                 if channel.readyState != "open":
                     return
+                if looked:
+                    channel.send(json.dumps(look_message(event)))
+                    log.info("webrtc: %s look %s sent for t%d", self, event["stage"], event["track_id"])
+                    continue
                 if channel.bufferedAmount > MAX_BUFFERED:
                     self.skipped += 1
                     continue
