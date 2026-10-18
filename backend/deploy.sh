@@ -98,9 +98,25 @@ tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' &&
 
 # The worker waits for the backend to send for it (voice on, in the app), so it runs all the time; Gemini only
 # runs while voice is on. It restarts if it exits.
+# One worker per box: two would share the jobs. So any other one stops first: the "voice" windows of other
+# sessions (another SESSION or checkout; their loops would restart it), then any started by hand. And the worker
+# holds VOICE_LOCK while it runs: a loop that finds it taken stops for good.
+VOICE_LOCK="${VOICE_LOCK:-/tmp/storefront-voice-agent.lock}"
 if [ -n "$(env_value "$ENV_FILE" GOOGLE_API_KEY)" ] && [ -n "$(env_value "$ENV_FILE" LIVEKIT_URL)" ]; then
+    for w in $(tmux list-windows -a -F '#{session_name}:#{window_index}|#{window_name}' | grep '|voice$' | cut -d'|' -f1); do
+        [ "${w%%:*}" = "$SESSION" ] && continue
+        echo "Closing the voice agent in tmux window $w"
+        tmux kill-window -t "$w"
+    done
+    sleep 1
+    if pkill -f "storefront.voice.agent start"; then
+        echo "Stopping the voice agent that was already running"
+        for _ in $(seq 10); do pgrep -f "storefront.voice.agent start" > /dev/null || break; sleep 1; done
+        pkill -KILL -f "storefront.voice.agent start"  # a worker in a session drains it first; don't wait
+    fi
+    flock -w 10 "$VOICE_LOCK" true || echo "warning: $VOICE_LOCK is still held; the voice agent may not start" >&2
     tmux new-window -t "$SESSION" -n voice
-    tmux send-keys -t "$SESSION:voice" "cd '$DIR' && source '$VENV/bin/activate' && while true; do python -m storefront.voice.agent start; echo 'voice agent exited; restarting in 3s'; sleep 3; done" Enter
+    tmux send-keys -t "$SESSION:voice" "cd '$DIR' && source '$VENV/bin/activate' && while true; do flock -n -E 75 '$VOICE_LOCK' python -m storefront.voice.agent start; [ \$? = 75 ] && { echo 'another voice agent holds $VOICE_LOCK; this one stops'; break; }; echo 'voice agent exited; restarting in 3s'; sleep 3; done" Enter
     echo "Started the voice agent (window '$SESSION:voice')"
 else
     echo "warning: no voice agent: GOOGLE_API_KEY and LIVEKIT_URL must be set in backend/.env" >&2
