@@ -37,9 +37,9 @@ class Runner:
         for uid in [u for u in self.looks.looks if u not in self.live.scene.tracks]:
             self.looks.forget(uid)
 
-    def select(self, uid: str) -> Look | None:
-        """The user picked this object: its Look, started now if its timer hadn't yet. None if scene memory
-        doesn't hold it (any more)."""
+    def select(self, uid: str, by: str = "user") -> Look | None:
+        """The user picked this object (or the voice agent did, by "voice"): its Look, started now if its timer
+        hadn't yet. None if scene memory doesn't hold it (any more)."""
         if self.looks.get(uid) is None:
             best = self.live.scene.best(uid)
             if best is None:
@@ -49,7 +49,7 @@ class Runner:
             self.dwell.looked(uid)
             self.looks.start(uid, track.label, track.frame_box, crop.sam_cutout(frame, track.frame_box),
                              self.live.tracker.category)
-        return self.looks.select(uid)
+        return self.looks.select(uid, by)
 
     def reset(self):
         """Tracking restarted: forget every object and stop its work, except the Looks the user picked."""

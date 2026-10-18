@@ -71,7 +71,7 @@ def test_open_makes_a_room_for_the_category_and_a_new_one_leaves_the_old(session
         first = await rooms.open("kitchen utensils")
         assert live.tracker.category == "kitchen utensils"
         assert lk.calls == [("create_room", first, room_module.EMPTY_TIMEOUT_S)]
-        assert set(room.local_participant.rpc) == {"select", "mode", "pause", "category", "voice"}
+        assert set(room.local_participant.rpc) == {"select", "mode", "pause", "category", "voice", "memory"}
         second = await rooms.open()
         assert second != first and rooms.current.name == second and room.disconnected
         assert live.tracker.category == config.DEFAULT_CATEGORY
@@ -117,6 +117,36 @@ def test_select_picks_a_tracked_object(session):
         assert picked["ok"] and picked["look"]["uid"] == "1.4" and picked["look"]["selected"]
         assert (await lp.call("select", {"uid": "9.9"}))["ok"] is False
         assert (await lp.call("select", "not json"))["detail"] == "the payload must be a JSON object"
+        await rooms.close()
+
+    asyncio.run(go())
+
+
+def test_memory_gives_the_users_taps_the_latest_first(session, monkeypatch):
+    rooms, room, _, live = session
+
+    async def go():
+        await rooms.open()
+        r = TrackResult(frame_idx=0, width=640, height=480, latency_ms=1, captured_at=time.time(), objects=[
+            TrackedObject(uid=uid, label=label, score=0.9, box=BBox(x=0.1, y=0.1, w=0.3, h=0.4))
+            for uid, label in (("1.4", "lamp"), ("1.5", "chair"), ("1.6", "vase"))])
+        live.scene.update(r, Image.new("RGB", (640, 480), "gray"))
+        lp = room.local_participant
+        await lp.call("select", {"uid": "1.4"})
+        await asyncio.sleep(0.01)
+        await lp.call("select", {"uid": "1.6", "by": "voice"})  # the agent's pick: not a tap
+        await lp.call("select", {"uid": "1.5"})
+        memory = await lp.call("memory", {})
+        assert [s["uid"] for s in memory["picked"]] == ["1.5", "1.4"]
+        assert memory["picked"][0]["name"] == "chair"  # SAM's label, until Claude names it
+        assert memory["picked"][0]["picked_at"] > memory["picked"][1]["picked_at"]
+        full = await lp.call("memory", {"look_id": memory["picked"][1]["look_id"]})
+        assert full["look"]["uid"] == "1.4" and full["look"]["selected"]
+        assert (await lp.call("memory", {"look_id": "l_gone"}))["detail"] == "That item isn't remembered."
+        monkeypatch.setattr(room_module, "MEMORY_ITEMS", 1)
+        assert len((await lp.call("memory", {}))["picked"]) == 1
+        monkeypatch.setattr(room_module, "MEMORY_BYTES", 10)  # more than fits in an RPC answer: left out
+        assert (await lp.call("memory", {}))["picked"] == []
         await rooms.close()
 
     asyncio.run(go())

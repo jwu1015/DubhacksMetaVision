@@ -265,10 +265,19 @@ class ActionTest(unittest.IsolatedAsyncioTestCase):
     async def test_select_asks_the_backend(self):
         self.local.reply = json.dumps({"ok": True, "look": {"uid": "1.4"}})
         self.assertEqual((await actions.select("1.4"))["look"], {"uid": "1.4"})
-        self.assertEqual(self.local.calls, [("vision", "select", {"uid": "1.4"})])
+        self.assertEqual(self.local.calls, [("vision", "select", {"uid": "1.4", "by": "voice"})])  # not a tap
         self.local.reply = json.dumps({"ok": False, "detail": "That object isn't tracked any more."})
         with self.assertRaisesRegex(ToolError, "isn't tracked"):
             await actions.select("1.9")
+
+    async def test_memory_asks_the_backend(self):
+        self.local.reply = json.dumps({"ok": True, "picked": [{"look_id": "l_1"}]})
+        self.assertEqual((await actions.memory())["picked"], [{"look_id": "l_1"}])
+        await actions.memory("l_1")
+        self.assertEqual(self.local.calls, [("vision", "memory", {}), ("vision", "memory", {"look_id": "l_1"})])
+        self.local.reply = rtc.RpcError(rtc.RpcError.ErrorCode.UNSUPPORTED_METHOD, "no such method")
+        with self.assertRaisesRegex(ToolError, "memory isn't reachable"):
+            await actions.memory()
 
     async def test_when_the_phone_cant(self):
         self.local.reply = json.dumps({"ok": False, "detail": "The cart is full."})

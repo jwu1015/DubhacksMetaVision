@@ -1,12 +1,14 @@
 """Tests for looks.py, with Claude and the stores faked."""
 import asyncio
+import json
+import time
 
 import pytest
 
 from fakes.stores import CLAUDE_ITEM, Stores
 from storefront import config
-from storefront.models import BBox
-from storefront.pipeline.looks import FAILED, Looks
+from storefront.models import BBox, PriceInsight, Product, SearchResponse
+from storefront.pipeline.looks import FAILED, Look, Looks
 
 BOX = BBox(x=0.1, y=0.2, w=0.3, h=0.4)
 JPEG = b"\xff\xd8 a crop"
@@ -159,3 +161,43 @@ def test_forget_and_reset_stop_only_the_looks_nobody_picked(stores):
         return set(looks.looks)
 
     assert run(go()) == {"b"}
+
+
+def test_the_users_taps_are_remembered_the_latest_first_and_the_agents_picks_arent(stores):
+    async def go():
+        looks = Looks(lambda m: None)
+        for uid in "abcd":
+            looks.start(uid, "thing", BOX, JPEG)
+        await settle()
+        looks.select("a")
+        time.sleep(0.002)
+        looks.select("c", by="voice")  # the voice agent's pick, to run its Look sooner: not a tap
+        looks.select("b")
+        assert [lk.uid for lk in looks.picked()] == ["b", "a"]
+        assert (looks.get("c").selected, looks.get("c").picked_at) == (True, None)
+        looks.forget("c")  # its object left scene memory: dropped like a Look nobody picked
+        assert looks.get("c") is None
+        looks.select("d", by="voice")
+        time.sleep(0.002)
+        looks.select("d")  # then the user taps it: now it's a tap, the latest
+        assert [lk.uid for lk in looks.picked()] == ["d", "b", "a"]
+        looks.reset()
+        return set(looks.looks)
+
+    assert run(go()) == {"a", "b", "d"}
+
+
+def test_a_looks_summary_is_small():
+    def product(title, price, tier="new"):
+        return Product(title=title, store="Store", price=price, url="https://shop.example/" + "x" * 300,
+                       image_url="https://img.example/" + "y" * 300, source="shopping", tier=tier, source_rank=0)
+    search = SearchResponse(capture_id="l_1", best_match=product("Owala FreeSip " + "x" * 100, 27.99),
+                            dupes=[product("Look-alike bottle", 14.5, "dupe")], used=[product("Used Owala", 12.0, "used")],
+                            price_insight=PriceInsight(typical_low=10, typical_high=30, median=20, sample_size=5,
+                                                       best_match_verdict="fair", verdict_text="Fair."),
+                            spoken_summary="Store has it for about 28 dollars.", timing_ms={})
+    s = Look("1.7", "bottle", BOX, JPEG, item=CLAUDE_ITEM, stage="results", search=search).summary()
+    assert (s["name"], s["stage"], len(s["best_match"]["title"])) == (CLAUDE_ITEM.category, "results", 80)
+    assert (s["cheapest"]["price"], s["cheapest"]["tier"]) == (12.0, "used")
+    assert "url" not in s["best_match"] and len(json.dumps(s)) < 800  # a dozen fit in one RPC answer
+    assert Look("1.8", "mug", BOX, JPEG).summary()["best_match"] is None  # no results yet

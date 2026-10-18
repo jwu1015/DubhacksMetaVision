@@ -2,6 +2,7 @@
 backend's messages go to Seen as they'd arrive in the room, and the RPCs to a stand-in room: no LiveKit, no Gemini."""
 import asyncio
 import json
+import time
 import unittest
 from unittest import mock
 
@@ -193,7 +194,7 @@ class GetCurrentObjectTest(AssistantTest):
         self.assertEqual((data["item"], data["price_guess"], data["store_prices"]), ("coffee mug", "$8-15", "checking"))
         self.assertNotIn("best_match", data)
         await asyncio.sleep(0.05)
-        self.assertEqual(self.rpcs("select"), [{"uid": "1.1"}])  # its Look runs now, as a tap would start it
+        self.assertEqual(self.rpcs("select"), [{"uid": "1.1", "by": "voice"}])  # its Look runs now; not a tap
         self.assertIn("1.1", self.seen.agent_picked)
 
     async def test_it_tells_the_prices_when_they_come_in(self):
@@ -318,3 +319,89 @@ class PickByVoiceTest(AssistantTest):
         with self.assertRaisesRegex(ToolError, "isn't tracked anymore"):
             await self.agent.select_object(None, "9.9")
         self.assertEqual(self.rpcs("action"), [])
+
+
+# A jacket the user tapped five minutes ago, before tracking restarted: only the backend still has it.
+JACKET_SEARCH = {**SEARCH, "capture_id": "l_jacket", "spoken_summary": "Nike has it for 135 dollars.",
+                 "best_match": product("Nike ACG Wolf Tree Full-Zip Jacket", "Nike", 135.0, score=95),
+                 "dupes": [product("Fleece Color-Block Jacket", "Amazon", 89.0, "dupe")], "used": []}
+JACKET = {"type": "look", "uid": "0.3", "look_id": "l_jacket", "stage": "results", "label": "jacket",
+          "box": [0.3, 0.2, 0.7, 0.6], "selected": True, "crop_url": None,
+          "item": {"category": "fleece jacket", "description": "Maroon fleece with taupe sleeves."},
+          "search": JACKET_SEARCH, "message": None}
+
+
+def summary(look, picked_ago_s):
+    s = look["search"] or {}
+    cheapest = min([p for p in (s.get("best_match"), *s.get("dupes", []), *s.get("used", [])) if p],
+                   key=lambda p: p["price"], default=None)
+    return {"look_id": look["look_id"], "uid": look["uid"], "picked_at": time.time() - picked_ago_s,
+            "stage": look["stage"], "name": look["item"]["category"], "description": look["item"]["description"],
+            "best_match": s.get("best_match"), "cheapest": cheapest}
+
+
+class MemoryToolsTest(AssistantTest):
+    def setUp(self):
+        super().setUp()
+        self.full: dict[str, dict] = {}
+
+        async def perform_rpc(*, destination_identity, method, payload, response_timeout=None):
+            payload = json.loads(payload)
+            self.local.calls.append((destination_identity, method, payload))
+            if method == "memory" and "look_id" in payload:
+                look = self.full.get(payload["look_id"])
+                return json.dumps({"ok": True, "look": look} if look else
+                                  {"ok": False, "detail": "That item isn't remembered."})
+            if method == "memory":
+                return json.dumps({"ok": True, "picked": [summary(lk, 300) for lk in self.full.values()]})
+            return json.dumps({"ok": True})
+        self.local.perform_rpc = perform_rpc
+        self.full["l_jacket"] = JACKET
+        self.seen.update(look("1.1", "results"))    # the mug: in front now
+        self.seen.update(look("1.2", "described"))  # the lamp: looked up, no prices yet
+
+    async def test_remembered_items_this_first_then_taps_then_the_rest(self):
+        items = app_data(await self.agent.remembered_items(None))["items"]
+        self.assertEqual([(i["id"], i["is_this"]) for i in items],
+                         [("l_1.1", True), ("l_jacket", False), ("l_1.2", False)])
+        mug, jacket, lamp = items
+        self.assertEqual((mug["name"], mug["where"], mug["best_match"]["price"], mug["cheapest"]["kind"]),
+                         ("white ceramic mug", "in view", 11.99, "dupe"))
+        self.assertEqual((jacket["tapped"], jacket["where"], jacket["best_match"]["store"], jacket["cheapest"]["price"]),
+                         ("5 minutes ago", "not in view", "Nike", 89.0))
+        self.assertEqual(lamp["store_prices"], "checking")
+
+    async def test_compare_this_with_an_older_tap(self):
+        out = app_data(await self.agent.compare_items(None, "l_jacket"))  # against "this", the mug
+        self.assertEqual((out["first"]["name"], out["second"]["name"]), ("fleece jacket", "white ceramic mug"))
+        self.assertEqual(out["best_match"], {"cheaper": "second", "cheaper_name": "white ceramic mug", "by": 123.01,
+                                             "percent_cheaper": 91})
+        self.assertEqual(out["cheapest"], {"cheaper": "second", "cheaper_name": "white ceramic mug", "by": 81.51,
+                                           "percent_cheaper": 92})
+        self.assertIn(("vision", "memory", {"look_id": "l_jacket"}), self.local.calls)
+
+    async def test_compare_without_prices_or_with_itself(self):
+        out = app_data(await self.agent.compare_items(None, "l_1.2", "this"))
+        self.assertEqual(out["best_match"], {"unknown": "no store price yet for coffee mug"})
+        with self.assertRaisesRegex(ToolError, "same item"):
+            await self.agent.compare_items(None, "l_1.1", "this")
+        with self.assertRaisesRegex(ToolError, "isn't remembered"):
+            await self.agent.compare_items(None, "l_nope")
+
+    async def test_add_a_remembered_item_to_the_cart(self):
+        await self.agent.add_to_cart(None, item_id="l_jacket")
+        await self.agent.add_to_cart(None, option="cheaper_dupe", item_id="l_jacket")
+        self.assertEqual([a["product"]["title"] for a in self.rpcs("action")],
+                         ["Nike ACG Wolf Tree Full-Zip Jacket", "Fleece Color-Block Jacket"])
+
+    async def test_without_the_backend_it_still_remembers_this_session(self):
+        async def down(**kw):
+            raise RuntimeError("no room")
+        self.local.perform_rpc = down
+        items = app_data(await self.agent.remembered_items(None))["items"]
+        self.assertEqual([i["id"] for i in items], ["l_1.1", "l_1.2"])
+
+    async def test_nothing_remembered_yet(self):
+        self.full.clear()
+        self.seen.looks.clear()
+        self.assertTrue((await self.agent.remembered_items(None)).startswith("Nothing is remembered yet"))

@@ -5,11 +5,15 @@ voice agent. POST /session/token opens a new room (Rooms.open): the backend join
     vision -> all     data packets, topic "updates": the "objects", "label" and "status" messages (models.py)
                       text streams, topic "updates": the "look" messages (results can pass a data packet's ~15 KB)
     phone -> vision   RPCs, each answering {"ok": true, ...} or {"ok": false, "detail"}:
-                        select {uid}             pick an object; answers its Look ("look")
+                        select {uid, by?}        pick an object; answers its Look ("look"). by "voice": the
+                                                 voice agent picked it, to run its Look sooner: not a tap
                         mode {mode}              "glasses" | "phone": a camera switch, so forget what was tracked
                         pause {paused}           stop tracking and purge it / start again
                         category {category}      track things in another category
                         voice {on}               bring the voice agent in / send it away
+                        memory {look_id?}        for the voice agent: what the user tapped, the latest first
+                                                 ("picked": Look summaries, across tracking restarts), or one
+                                                 Look in full ("look")
 
 Someone joining gets the current state, sent to them alone. When the phone leaves for PHONE_GRACE_S,
 tracking stops.
@@ -37,6 +41,8 @@ log = logging.getLogger("storefront.room")
 PHONE_GRACE_S = 10.0  # a phone that drops out this long has left: tracking stops
 EMPTY_TIMEOUT_S = 120  # LiveKit closes a room this long after its last participant left
 MAX_CATEGORY = 100     # characters
+MEMORY_ITEMS = 12      # the latest taps the memory RPC lists
+MEMORY_BYTES = 12_000  # and at most this much of them: an RPC answer can't pass 15 KiB
 DEGREES = {rtc.VideoRotation.VIDEO_ROTATION_90: 90, rtc.VideoRotation.VIDEO_ROTATION_180: 180,
            rtc.VideoRotation.VIDEO_ROTATION_270: 270}
 
@@ -76,7 +82,7 @@ class Session:
         room.on("participant_disconnected", self._on_leave)
         room.on("track_subscribed", self._on_track)
         for method, handler in (("select", self._select), ("mode", self._mode), ("pause", self._pause),
-                                ("category", self._category), ("voice", self._voice)):
+                                ("category", self._category), ("voice", self._voice), ("memory", self._memory)):
             room.local_participant.register_rpc_method(method, self._rpc(handler))
         self._spawn(self._publish())
 
@@ -159,10 +165,25 @@ class Session:
 
     async def _select(self, payload: dict) -> str:
         uid = payload.get("uid")
-        look = self.runner.select(uid) if isinstance(uid, str) else None
+        by = "voice" if payload.get("by") == "voice" else "user"
+        look = self.runner.select(uid, by) if isinstance(uid, str) else None
         if look is None:
             return answer(False, "That object isn't tracked any more.")
         return answer(look=look.message_dict())
+
+    async def _memory(self, payload: dict) -> str:
+        """What the voice agent recalls: the Looks the user tapped, the latest first, or one Look in full."""
+        looks = self.runner.looks
+        if look_id := payload.get("look_id"):
+            look = next((lk for lk in looks.looks.values() if lk.look_id == look_id), None)
+            return answer(look=look.message_dict()) if look else answer(False, "That item isn't remembered.")
+        picked: list[dict] = []
+        for look in looks.picked()[:MEMORY_ITEMS]:
+            picked.append(look.summary())
+            if len(json.dumps(picked)) > MEMORY_BYTES:
+                picked.pop()
+                break
+        return answer(picked=picked)
 
     async def _mode(self, payload: dict) -> str:
         if payload.get("mode") not in ("glasses", "phone"):

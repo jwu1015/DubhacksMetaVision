@@ -6,6 +6,9 @@ as a "look" message (models.LookMessage). At most MAX_LOOKS run at once: the res
 The crop stays in memory until the user picks the object (select): only then is it written to uploads/,
 and the Look's messages carry its URL. Google Lens needs that public URL, so a Look only searches Lens
 when the object was picked before its search started.
+
+Picked Looks stay until the server restarts, so the voice agent can recall them (picked(), summary()).
+The agent can pick an object too, to run its Look sooner: picked_by tells its picks from the user's taps.
 """
 import asyncio
 import logging
@@ -55,6 +58,8 @@ class Look:
     search: SearchResponse | None = None
     message: str | None = None
     selected: bool = False
+    picked_by: str | None = None     # who picked it: "user" (a tap) or "voice" (the agent, to run it sooner)
+    picked_at: float | None = None   # when the user tapped it (time.time())
     crop_url: str | None = None
     task: asyncio.Task | None = None
 
@@ -62,6 +67,20 @@ class Look:
         return LookMessage(uid=self.uid, look_id=self.look_id, stage=self.stage, label=self.label,
                            box=self.box.corners(), selected=self.selected, crop_url=self.crop_url,
                            item=self.item, search=self.search, message=self.message).model_dump(mode="json")
+
+    def summary(self) -> dict:
+        """The Look in a few hundred bytes, for the voice agent's list of what the user tapped: what it is, and its
+        best match and cheapest option once the stores answered."""
+        def brief(p):
+            return p and {"title": p.title[:80], "store": p.store, "price": p.price, "tier": p.tier,
+                          "match_score": p.match_score}
+        s = self.search
+        options = [p for p in ([s.best_match, *s.dupes, *s.used] if s else []) if p]
+        return {"look_id": self.look_id, "uid": self.uid, "picked_at": self.picked_at, "stage": self.stage,
+                "name": (self.item.category if self.item else None) or self.label,
+                "description": ((self.item.description or "")[:160] or None) if self.item else None,
+                "best_match": brief(s.best_match) if s else None,
+                "cheapest": brief(min(options, key=lambda p: p.price, default=None))}
 
 
 class Looks:
@@ -86,15 +105,18 @@ class Looks:
             self._waiting.append(look)
         return look
 
-    def select(self, uid: str) -> Look | None:
-        """The user picked this object: write its crop, so its messages carry the crop's URL. None if it has
-        no Look."""
+    def select(self, uid: str, by: str = "user") -> Look | None:
+        """The user picked this object (by "user"), or the voice agent did (by "voice"): write its crop, so its
+        messages carry the crop's URL. None if it has no Look."""
         look = self.looks.get(uid)
+        if look is not None and look.selected and by == "user" and look.picked_by != "user":
+            look.picked_by, look.picked_at = "user", time.time()  # the agent picked it first; now the user did
         if look is None or look.selected:
             return look
         path = config.UPLOADS / f"{look.look_id}.jpg"
         path.write_bytes(look.cutout)
         look.selected, look.crop_url = True, f"{config.PUBLIC_BASE_URL}/uploads/{path.name}"
+        look.picked_by, look.picked_at = by, time.time() if by == "user" else None
         if look in self._waiting:  # the user is waiting on this one now
             self._waiting.remove(look)
             self._run(look)
@@ -102,15 +124,19 @@ class Looks:
         self._send(look)
         return look
 
+    def picked(self) -> list[Look]:
+        """The Looks the user tapped (not the agent's picks), the latest tap first."""
+        return sorted((lk for lk in self.looks.values() if lk.picked_by == "user"), key=lambda lk: -lk.picked_at)
+
     def forget(self, uid: str):
         """The object left scene memory: stop its Look, unless the user picked it."""
         look = self.looks.get(uid)
-        if look and not look.selected:
+        if look and look.picked_by != "user":
             self._drop(look)
 
     def reset(self):
         """Tracking restarted (pause, camera switch, disconnect): stop every Look nobody picked."""
-        for look in [lk for lk in self.looks.values() if not lk.selected]:
+        for look in [lk for lk in self.looks.values() if lk.picked_by != "user"]:
             self._drop(look)
 
     def _running(self) -> int:

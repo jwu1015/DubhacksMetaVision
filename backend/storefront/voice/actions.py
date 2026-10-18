@@ -1,4 +1,5 @@
-"""The voice agent's calls: the phone's RPC "action", and the backend's "select" (a Look, as a tap starts).
+"""The voice agent's calls: the phone's RPC "action", and the backend's "select" (a Look, as a tap starts) and
+"memory" (what the user tapped).
 
 The phone's "action":
 
@@ -42,18 +43,28 @@ async def phone_action(name: str, **args) -> dict:
     return answer
 
 
-async def select(uid: str) -> dict:
-    """Pick a scene object, as a tap on its hotspot does: the backend's answer, with its Look. ToolError if
-    it can't."""
+async def backend(method: str, payload: dict, failed: str) -> dict:
+    """One of the backend's RPCs: its answer. ToolError (its detail, else `failed`) if it can't."""
     room = get_job_context().room
     try:
         reply = await room.local_participant.perform_rpc(
-            destination_identity=VISION, method="select", payload=json.dumps({"uid": uid}),
-            response_timeout=RPC_TIMEOUT_S)
+            destination_identity=VISION, method=method, payload=json.dumps(payload), response_timeout=RPC_TIMEOUT_S)
     except rtc.RpcError as e:
-        log.warning("voice: select %s failed: %s (%s)", uid, e.message, e.code)
-        raise ToolError("The app couldn't look right now.")
+        log.warning("voice: %s %s failed: %s (%s)", method, payload, e.message, e.code)
+        raise ToolError(failed)
     answer = json.loads(reply)
     if not answer.get("ok"):
-        raise ToolError(answer.get("detail") or "The app couldn't look right now.")
+        raise ToolError(answer.get("detail") or failed)
     return answer
+
+
+async def select(uid: str) -> dict:
+    """Pick a scene object, as a tap on its hotspot does, so its Look runs now; the backend keeps it apart from
+    the user's taps. Its answer, with the Look. ToolError if it can't."""
+    return await backend("select", {"uid": uid, "by": "voice"}, "The app couldn't look right now.")
+
+
+async def memory(look_id: str | None = None) -> dict:
+    """What the backend remembers: the Looks the user tapped, the latest first ({"picked": [summaries]}), or one
+    Look in full ({"look": message}). ToolError if it can't."""
+    return await backend("memory", {"look_id": look_id} if look_id else {}, "The app's memory isn't reachable right now.")
