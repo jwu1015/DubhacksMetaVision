@@ -115,9 +115,7 @@ const MOVE_MS = 150;      // a label glides to its new position
 const FADE_IN_MS = 80;
 const FADE_OUT_MS = 200;  // a label missing from the latest update fades out
 const DIM = 0.35;         // the other labels, while one is picked
-const PULSE_MS = 700;     // the ring around a newly picked object
-const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const TOP = 4;            // labels shown in full; the other labeled objects get a dot
+const TOP = 4;            // labels shown in full, the picked one included; the other labeled objects get a dot
 const W_SCORE = 0.2, W_SIZE = 0.8; // how labels are ranked: SAM's score and the box's share of the frame
 
 // Positions arrive a few times a second; between updates each label stays where it was last seen.
@@ -196,8 +194,7 @@ function showLook(ev) {
   const fresh = !look || ev.look_id !== look.look_id || at > look.picked_at;
   const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
   look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
-           price: best ? money(best.price, best.currency) : null, picked_at: at,
-           since: fresh ? performance.now() : look.since };
+           price: best ? money(best.price, best.currency) : null, picked_at: at };
   const panel = $("look");
   panel.hidden = false;
   if (fresh) { // a new pick: back to its top, and a short flash so it's seen to change
@@ -356,31 +353,6 @@ function drawLabel(t, b, alpha, v, font, full, picked) {
   ctx.globalAlpha = 1;
 }
 
-// The picked object: a lime outline around its box, and a ring that grows out of it when it's picked.
-function drawPicked(b, alpha, v, now) {
-  const x = v.x + b[0] * v.w, y = v.y + b[1] * v.h, w = b[2] * v.w, h = b[3] * v.h;
-  const r = Math.min(14, w / 4, h / 4);
-  ctx.globalAlpha = alpha;
-  roundRect(x, y, w, h, r);
-  ctx.fillStyle = "rgba(200, 255, 61, 0.08)";
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#c8ff3d";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-  ctx.shadowBlur = 4;
-  ctx.stroke();
-  ctx.shadowColor = "transparent";
-  const k = (now - look.since) / PULSE_MS;
-  if (!REDUCED_MOTION && k >= 0 && k < 1) {
-    const grow = 14 * ease(k);
-    roundRect(x - grow, y - grow, w + 2 * grow, h + 2 * grow, r + grow);
-    ctx.globalAlpha = alpha * (1 - k);
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
-
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)));
@@ -409,15 +381,12 @@ function draw() {
     const picked = look ? tracks.get(look.uid) : undefined;
     const labeled = [...tracks.values()].filter((t) => t !== picked && names.has(t.uid) && t.gone === null)
       .map((t) => ({ t, b: boxAt(t, now) })).sort((a, z) => rank(z.t, z.b) - rank(a.t, a.b));
-    const top = new Set(labeled.slice(0, TOP).map((x) => x.t));
+    const slots = TOP - (picked && picked.gone === null ? 1 : 0); // the picked label is one of the TOP
+    const top = new Set(labeled.slice(0, slots).map((x) => x.t));
     for (const t of tracks.values()) {
       if (t !== picked) drawLabel(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, top.has(t));
     }
-    if (picked) {
-      const b = boxAt(picked, now), a = alphaAt(picked, now);
-      drawPicked(b, a, v, now);
-      drawLabel(picked, b, a, v, font, true, look);
-    }
+    if (picked) drawLabel(picked, boxAt(picked, now), alphaAt(picked, now), v, font, true, look);
   }
   updateStatus();
   requestAnimationFrame(draw);
