@@ -155,7 +155,7 @@ async def run_detect(data: bytes) -> DetectResponse:
 
     sam_failed = False
     if claude and segment and config.MODEL_SERVICE_URL:
-        # SAM first: every home-goods object in view; the user is looking at the one at the center of
+        # SAM first: every object in view from SAM_CATEGORIES; the user is looking at the one at the center of
         # the view. Answer with SAM's label right away; Claude's description arrives in the
         # background, before the search needs it.
         with timed(timing, "sam"):

@@ -23,17 +23,18 @@ MODEL = "claude-sonnet-5-5"
 MAX_EDGE = 1024  # resize before the call; never upscale
 
 SYSTEM_PROMPT = """\
-You identify home goods and furniture in photos for a shopping app.
+You identify consumer products in photos for a shopping app.
 The photo was taken from smart glasses, so the item the user is looking at
 is usually the most prominent object near the center of the frame. Focus on
 that single item. Ignore people, walls, floors, ceilings, and windows.
 
 Fill in these fields:
-- category: short noun phrase (e.g. "floor lamp", "accent chair", "area rug")
+- category: short noun phrase (e.g. "floor lamp", "running shoes", "backpack", "coffee maker")
   - this is also used as a segmentation text prompt, so keep it simple
 - description: one detailed sentence a shopper would type into a search box,
   including shape, color, material, and distinctive features
-- style: design style (e.g. "mid-century modern", "japandi", "boho", "industrial")
+- style: design style if the product has one (e.g. "mid-century modern", "minimalist",
+  "streetwear", "industrial"), else null
 - colors: 1-3 colors
 - materials: 1-3 materials
 - brand_guess: brand if there is a visible logo or very distinctive design, else null
