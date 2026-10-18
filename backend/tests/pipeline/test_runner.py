@@ -4,7 +4,7 @@ import time
 
 import httpx
 import pytest
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from fakes.stores import Stores
 from fakes.tracking import fake_server
@@ -15,6 +15,7 @@ from storefront.live.stream import Stream
 from storefront.live.tracker import TrackedObject, Tracker, TrackResult
 from storefront.live.trigger import Dwell
 from storefront.models import BBox
+from storefront.pipeline import crop, quick_label
 from storefront.pipeline.looks import Looks
 from storefront.pipeline.quick_label import QuickLabel
 from storefront.pipeline.runner import Runner
@@ -75,6 +76,25 @@ def test_a_quick_label_then_a_look_once_each_timer_is_up(setup):
     assert len(labeled) == 1 and labeled[0][0][:2] == b"\xff\xd8"  # one call, on a JPEG crop
     assert labeled[0][1:] == (config.DEFAULT_CATEGORY, "bottle")  # told the category and SAM's label
     assert [m["stage"] for m in sent if m["type"] == "look"] == ["started", "described", "results"]
+
+
+def test_crops_come_from_the_best_frame_not_the_one_that_triggered_them(setup):
+    """The camera moves just as the timers run out: the quick label and the Look still crop the sharp frame
+    scene memory kept, not the blurred one that triggered them."""
+    runner, _, labeled = setup
+    sharp = Image.effect_noise((640, 480), 64).convert("RGB")
+    blurred = sharp.filter(ImageFilter.GaussianBlur(4))
+
+    async def go():
+        for t, img in ((0.0, sharp), (0.6, blurred), (1.1, blurred)):  # the label's timer, then the Look's
+            r = result(t, "1.7")
+            runner.live.scene.update(r, img)
+            runner.observe(r, img)
+        await settle()
+
+    asyncio.run(go())
+    assert labeled[0][0] == crop.sam_cutout(sharp, BOX, quick_label.EDGE)
+    assert runner.looks.get("1.7").cutout == crop.sam_cutout(sharp, BOX)
 
 
 def test_select_before_the_timer_starts_the_look_now(setup):
