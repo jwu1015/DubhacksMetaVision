@@ -1,11 +1,11 @@
 """The voice agent's worker: groundwork for a voice assistant over LiveKit, with no model or tools yet.
 
-It joins each room POST /voice/token opens and follows the stream (seen.py); resolve.py and actions.py
-hold the pieces its tools will use. It says nothing yet.
+The backend brings it into the session's room when the phone asks for voice (RPC voice {on: true}). It
+follows the backend's messages there (seen.py); resolve.py and actions.py hold the pieces its tools will
+use. It says nothing yet.
 
-    python -m storefront.voice.agent start   # from backend/; needs LIVEKIT_* and the main server on :8000
+    python -m storefront.voice.agent start   # from backend/; needs LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
 """
-import asyncio
 import logging
 
 from livekit import agents
@@ -22,8 +22,7 @@ server = AgentServer(num_idle_processes=1)  # one phone at a time: one warm proc
 @server.rtc_session(agent_name=config.VOICE_AGENT)
 async def entry(ctx: agents.JobContext):
     seen = Seen()
-    follower = asyncio.create_task(seen.follow())
-    ctx.add_shutdown_callback(follower.cancel)
+    seen.listen(ctx.room)
     await ctx.connect()
     log.info("voice: joined room %s", ctx.room.name)
 

@@ -5,8 +5,8 @@ the tracked objects back in the format the current app reads.
     POST /offer        {"sdp", "type": "offer"} -> {"sdp", "type": "answer"}
 
 The phone's offer has one video track (sendonly, H.264 or VP8) and a data channel the phone creates,
-"detections". Each video frame goes to stream.live.push_frame() (tracking, and the projector page at
-/stream/viewer). Each "objects" message from stream.live goes back on the channel as
+"detections". Each video frame goes to stream.live.push_frame() for tracking (the projector page only
+shows the LiveKit room's video). Each "objects" message from stream.live goes back on the channel as
 
     {"type": "detections", "ts": <ms since epoch>,
      "objects": [{"track_id": "3.17", "box": [x1, y1, x2, y2], "label": "lamp", "score": 0.93, "in_view": true,

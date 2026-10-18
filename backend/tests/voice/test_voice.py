@@ -5,18 +5,14 @@ from a stand-in room.
 import asyncio
 import json
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
-import websockets
-from fastapi.testclient import TestClient
-from livekit import api, rtc
+from livekit import rtc
 from livekit.agents import ToolError
 
-from fakes.livekit import FakeLocalParticipant, FakeParticipant, FakeRoom
-from storefront import app as main
-from storefront import config
+from fakes.livekit import FakeLocalParticipant, FakeParticipant, FakeRoom, FakeTextReader
 from storefront.voice import actions, resolve
-from storefront.voice import seen as seen_module
 from storefront.voice.seen import Seen
 
 
@@ -230,26 +226,21 @@ class ResolveTest(unittest.TestCase):
             self.assertShort(say)
 
 
-class FollowTest(unittest.IsolatedAsyncioTestCase):
-    async def test_follows_the_stream(self):
-        messages = [{"type": "status", "tracking": "ok", "category": "furniture", "prompts": PROMPTS}, OBJECTS, "not json", look("results", search=SEARCH)]
+class ListenTest(unittest.IsolatedAsyncioTestCase):
+    async def test_takes_the_backends_messages_in_the_room(self):
+        room, seen = FakeRoom(), Seen()
+        seen.listen(room)
+        vision, phone = FakeParticipant("vision"), FakeParticipant("phone-1")
 
-        async def serve(ws):
-            assert ws.request.path == "/stream/events"
-            for m in messages:
-                await ws.send(m if isinstance(m, str) else json.dumps(m))
-            await ws.wait_closed()  # stay open, like the real stream
-
-        async with websockets.serve(serve, "127.0.0.1", 0) as server:
-            port = server.sockets[0].getsockname()[1]
-            with mock.patch.object(seen_module, "BACKEND", f"http://127.0.0.1:{port}"):
-                seen = Seen()
-                follower = asyncio.create_task(seen.follow())
-                async with asyncio.timeout(5):
-                    while seen.look is None:
-                        await asyncio.sleep(0.02)
-                follower.cancel()
-        self.assertEqual((seen.look["search"], len(seen.objects)), (SEARCH, 3))
+        def data(who, body):
+            room.emit("data_received", SimpleNamespace(topic="updates", participant=who, data=body))
+        data(vision, json.dumps(OBJECTS).encode())
+        data(phone, json.dumps(scene()).encode())  # not the backend: ignored
+        data(vision, b"not json")                  # skipped
+        room.text_handlers["updates"](FakeTextReader(json.dumps(look("results", search=SEARCH))), "vision")
+        room.text_handlers["updates"](FakeTextReader(json.dumps(look("results", uid=9))), "phone-1")  # ignored
+        await asyncio.sleep(0.01)
+        self.assertEqual((len(seen.objects), seen.look["uid"], seen.look["search"]), (3, 3, SEARCH))
 
 
 class ActionTest(unittest.IsolatedAsyncioTestCase):
@@ -265,6 +256,14 @@ class ActionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await actions.phone_action("add_to_cart", look_id="l_1"), {"ok": True})
         self.assertEqual(self.local.calls, [("phone-1", "action", {"name": "add_to_cart", "look_id": "l_1"})])
 
+    async def test_select_asks_the_backend(self):
+        self.local.reply = json.dumps({"ok": True, "look": {"uid": "1.4"}})
+        self.assertEqual((await actions.select("1.4"))["look"], {"uid": "1.4"})
+        self.assertEqual(self.local.calls, [("vision", "select", {"uid": "1.4"})])
+        self.local.reply = json.dumps({"ok": False, "detail": "That object isn't tracked any more."})
+        with self.assertRaisesRegex(ToolError, "isn't tracked"):
+            await actions.select("1.9")
+
     async def test_when_the_phone_cant(self):
         self.local.reply = json.dumps({"ok": False, "detail": "The cart is full."})
         with self.assertRaisesRegex(ToolError, "The cart is full."):
@@ -275,39 +274,6 @@ class ActionTest(unittest.IsolatedAsyncioTestCase):
         self.room.remote_participants.pop("phone-1")  # only the agent is left
         with self.assertRaisesRegex(ToolError, "isn't connected"):
             await actions.phone_action("start_checkout")
-
-
-class TokenRouteTest(unittest.TestCase):
-    KEY, SECRET = "APItestkey", "test-secret-" + "s" * 32
-
-    def setUp(self):
-        self.client = TestClient(main.app)  # no lifespan: no warm-up, no segmentation server
-
-    def settings(self, url="wss://test.livekit.cloud"):
-        return mock.patch.multiple(config, LIVEKIT_URL=url, LIVEKIT_API_KEY=self.KEY, LIVEKIT_API_SECRET=self.SECRET)
-
-    def test_a_token_for_a_new_room_with_the_agent_in_it(self):
-        with self.settings():
-            r = self.client.post("/voice/token", json={"participant_identity": "phone-shiven", "room_name": "theirs"})
-            other = self.client.post("/voice/token").json()
-        self.assertEqual(r.status_code, 201)
-        body = r.json()
-        self.assertEqual(set(body), {"server_url", "participant_token"})
-        self.assertEqual(body["server_url"], "wss://test.livekit.cloud")
-        claims = api.TokenVerifier(self.KEY, self.SECRET).verify(body["participant_token"])
-        self.assertEqual(claims.identity, "phone-shiven")
-        self.assertTrue(claims.video.room_join)
-        self.assertTrue(claims.video.room.startswith("storefront-"))  # our room, not the one asked for
-        self.assertEqual([a.agent_name for a in claims.room_config.agents], [config.VOICE_AGENT])
-        other_claims = api.TokenVerifier(self.KEY, self.SECRET).verify(other["participant_token"])
-        self.assertNotEqual(other_claims.video.room, claims.video.room)  # a new room each time: the agent comes
-        self.assertTrue(other_claims.identity.startswith("phone-"))
-
-    def test_not_set_up(self):
-        with self.settings(url=""):
-            r = self.client.post("/voice/token")
-        self.assertEqual(r.status_code, 503)
-        self.assertIn("LIVEKIT_URL", r.json()["detail"])
 
 
 if __name__ == "__main__":

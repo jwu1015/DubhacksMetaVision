@@ -2,8 +2,8 @@
 
     uvicorn storefront.app:app --reload --port 8000 --timeout-graceful-shutdown 1        (from backend/)
 
-(--timeout-graceful-shutdown 1: an open projector page streams forever, which would otherwise block
-Ctrl+C and --reload.)
+(--timeout-graceful-shutdown 1: shutdown leaves the LiveKit room and closes the legacy phone connection
+without waiting on open requests.)
 """
 import asyncio
 import json
@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from storefront import config, net
-from storefront.api import cart, checkout, health, look, session, viewer
+from storefront.api import cart, checkout, health, session, viewer
 from storefront.live import stream
 from storefront.live.trigger import Dwell
 from storefront.models import Item, Product
@@ -23,6 +23,7 @@ from storefront.pipeline import pricing, rank, vision
 from storefront.pipeline.looks import Looks
 from storefront.pipeline.runner import Runner
 from storefront.rtc import legacy_webrtc
+from storefront.rtc.room import Rooms
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("storefront")
@@ -50,14 +51,15 @@ async def warm_up():
             log.warning("warm-up: %s call failed: %r", name, e)
 
 
-def wire() -> Runner:
+def wire() -> Rooms:
     """Connect the parts: every tracking result feeds the pipeline (quick labels and Looks), a purge (pause,
-    camera switch, disconnect) resets it, and a tap on a hotspot picks an object."""
+    camera switch, disconnect) resets it, and a tap on a hotspot (in the room, or on the legacy WebRTC
+    channel) picks an object."""
     runner = Runner(stream.live, Looks(stream.live.publish), Dwell(config.QUICK_LABEL_DWELL_MS, config.LOOK_DWELL_MS))
     stream.live.on_result = runner.observe
     stream.live.on_purge = runner.reset
     legacy_webrtc.select_handler = runner.select
-    return runner
+    return Rooms(stream.live, runner)
 
 
 @asynccontextmanager
@@ -72,7 +74,8 @@ async def lifespan(app: FastAPI):
     yield
     for task in background:
         task.cancel()
-    await legacy_webrtc.close()  # the phone's connection
+    await app.state.rooms.close()  # leaves the session's room
+    await legacy_webrtc.close()    # the legacy phone connection
     await stream.live.stop()     # deletes the tracking session on the segmentation server
     await net.close()
 
@@ -82,6 +85,6 @@ config.LOGS.mkdir(exist_ok=True)
 
 app = FastAPI(title="Storefront backend", lifespan=lifespan)
 app.mount("/uploads", StaticFiles(directory=config.UPLOADS), name="uploads")
-for module in (cart, checkout, health, look, session, viewer, legacy_webrtc):
+for module in (cart, checkout, health, session, viewer, legacy_webrtc):
     app.include_router(module.router)
-app.state.runner = wire()
+app.state.rooms = wire()

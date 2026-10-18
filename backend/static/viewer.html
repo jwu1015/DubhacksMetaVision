@@ -89,7 +89,7 @@
 <body>
 <div id="app">
   <main id="stage">
-    <img id="video" alt="">
+    <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay"></canvas>
     <div id="waiting">Waiting for video…</div>
     <div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting…</span></div>
@@ -102,6 +102,7 @@
     <div id="look-results"></div>
   </aside>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.js"></script>
 <script>
 "use strict";
 const stage = document.getElementById("stage");
@@ -318,7 +319,7 @@ function resize() {
 }
 
 function videoRect() {
-  const iw = video.naturalWidth, ih = video.naturalHeight;
+  const iw = video.videoWidth, ih = video.videoHeight;
   if (!iw || !ih) return null;
   const s = Math.min(cw / iw, ch / ih), w = iw * s, h = ih * s;
   return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
@@ -407,37 +408,65 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-// ---------- connections ----------
+// ---------- the session's LiveKit room, watch only ----------
 
-function reloadVideo() { video.src = "video.mjpg?t=" + Date.now(); }
-video.onerror = () => setTimeout(reloadVideo, 1000);
+const LK = LivekitClient;
+const TOPIC = "updates";   // the backend's messages: data packets, and text streams for "look"
+const BACKEND = "vision";  // its identity in the room
+let room = null;
 
-let retryMs = 500, opened = false;
-
-function connect() {
-  const url = new URL("events", location.href);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.search = url.hash = "";
-  const ws = new WebSocket(url.href);
-  ws.onopen = () => {
-    retryMs = 500;
-    if (opened) reloadVideo(); // the server came back: the old video connection is gone too
-    opened = true;
-  };
-  ws.onmessage = (e) => {
-    let ev;
-    try { ev = JSON.parse(e.data); } catch (err) { return; }
-    handle(ev);
-  };
-  ws.onclose = () => {
-    tracking = "connecting";
-    setTimeout(connect, retryMs);
-    retryMs = Math.min(retryMs * 2, 5000);
-  };
+function clearVideo() {
+  video.srcObject = null;
+  video.removeAttribute("src");
 }
 
-reloadVideo();
-connect();
+async function join() {
+  tracking = "connecting";
+  let token;
+  try {
+    const r = await fetch("viewer-token", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status === 404 ? "no session yet" : "HTTP " + r.status);
+    token = await r.json();
+  } catch (err) {
+    setTimeout(join, 2000);  // no session yet, or the server is restarting
+    return;
+  }
+  room = new LK.Room();
+  room.on(LK.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+    if (track.kind === "video" && participant.identity.startsWith("phone-")) track.attach(video);
+  });
+  room.on(LK.RoomEvent.TrackUnsubscribed, (track) => { track.detach(video); clearVideo(); });
+  room.on(LK.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+    if (topic !== TOPIC || !participant || participant.identity !== BACKEND) return;
+    try { handle(JSON.parse(new TextDecoder().decode(payload))); } catch (err) { /* not a message */ }
+  });
+  room.registerTextStreamHandler(TOPIC, async (reader, from) => {
+    if (from.identity !== BACKEND) return;
+    try { handle(JSON.parse(await reader.readAll())); } catch (err) { /* not a message */ }
+  });
+  room.on(LK.RoomEvent.ParticipantDisconnected, (p) => { if (p.identity === BACKEND) leave(); }); // a new session
+  room.on(LK.RoomEvent.Disconnected, leave);
+  try {
+    await room.connect(token.server_url, token.participant_token);
+  } catch (err) {
+    leave();
+  }
+}
+
+function leave() {
+  if (!room) return;
+  const old = room;
+  room = null;
+  old.removeAllListeners();
+  old.disconnect();
+  clearVideo();
+  fadeAll(performance.now());
+  names.clear();
+  updatedAt = null;
+  setTimeout(join, 1000);
+}
+
+join();
 requestAnimationFrame(draw);
 </script>
 </body>

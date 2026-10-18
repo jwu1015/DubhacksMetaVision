@@ -8,15 +8,12 @@ import unittest
 from unittest import mock
 
 import httpx
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from PIL import Image
 
 from fakes.frames import image
 from fakes.tracking import fake_server
 from storefront import config
-from storefront.api import viewer
-from storefront.live import labels, stream, tracker
+from storefront.live import labels, tracker
 from storefront.live.stream import Stream
 from storefront.live.tracker import Tracker
 from storefront.models import BBox
@@ -432,7 +429,7 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await next_event(self.events, "status"))["tracking"], "stopped")
         self.assertFalse(self.stream.running)
 
-    async def test_tracking_down_shows_offline_and_video_goes_on(self):
+    async def test_tracking_down_shows_offline_and_frames_still_arrive(self):
         async def down(request):
             raise httpx.ConnectError("refused")
         client = httpx.AsyncClient(transport=httpx.MockTransport(down))
@@ -444,24 +441,9 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         for state in ("starting", "offline"):  # first read after start(): the state then
             self.assertEqual((await next_event(events, "status"))["tracking"], state)
         s.push_frame(image(310))
-        video = s.mjpeg()
-        self.assertIn(b"\xff\xd8", await anext(video))
-        await video.aclose()
+        self.assertEqual(s.latest_frame().width, 310)  # frames still arrive
         await s.stop()
         await events.aclose()
-
-    async def test_mjpeg_parts(self):
-        self.stream.push_frame(image(1600, 1200))
-        video = self.stream.mjpeg()
-        part = await anext(video)
-        head, _, rest = part.partition(b"\r\n\r\n")
-        self.assertEqual(head.split(b"\r\n")[:2], [b"--frame", b"Content-Type: image/jpeg"])
-        jpeg = rest[:-2]
-        self.assertEqual(head.split(b"\r\n")[2], b"Content-Length: %d" % len(jpeg))
-        self.assertEqual(Image.open(io.BytesIO(jpeg)).size, (1024, 768))
-        self.stream.push_frame(image(800, 600))
-        self.assertEqual(Image.open(io.BytesIO((await anext(video)).partition(b"\r\n\r\n")[2][:-2])).size, (800, 600))
-        await video.aclose()
 
 
 # ---------- end to end: frames -> stream -> tracker -> fake server -> events ----------
@@ -502,40 +484,3 @@ class EndToEndTest(unittest.IsolatedAsyncioTestCase):
         sofa = [next(o["box"] for o in e["objects"] if o["uid"] == "1.1") for e in got]
         self.assertGreater(len({b[0] for b in sofa}), 1)  # it moves
         self.assertTrue(all(0 <= x1 < x2 <= 1 for x1, _, x2, _ in sofa))
-
-
-# ---------- routes ----------
-
-class RouteTest(unittest.TestCase):
-    def setUp(self):
-        self.calls: list[str] = []
-
-        def handler(request):
-            self.calls.append(f"{request.method} {request.url.path.removeprefix('/inference')}")
-            if request.method == "DELETE":
-                return httpx.Response(200, json={"deleted": "s1"})
-            if request.url.path.endswith("/frame"):
-                return httpx.Response(200, json={"frame_idx": 0, "width": 320, "height": 240, "objects": []})
-            return httpx.Response(200, json={"session_id": "s1", "prompt": ["sofa"]})
-        self.live = Stream(Tracker(base_url=BASE, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))))
-        patcher = mock.patch.object(stream, "live", self.live)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        app = FastAPI()
-        app.include_router(viewer.router)
-        self.app = app
-
-    def client(self, host: str = "127.0.0.1") -> TestClient:
-        return TestClient(self.app, client=(host, 50000))
-
-    def test_viewer_page(self):
-        with self.client() as c:
-            r = c.get("/stream/viewer")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("text/html", r.headers["content-type"])
-        for needle in ('"video.mjpg', 'new URL("events"', 'id="look"'):
-            self.assertIn(needle, r.text)
-
-    def test_events_start_with_the_current_state(self):
-        with self.client() as c, c.websocket_connect("/stream/events") as ws:
-            self.assertEqual(ws.receive_json()["tracking"], "stopped")

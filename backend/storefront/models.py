@@ -144,12 +144,16 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
 
 
-class VoiceTokenRequest(BaseModel):   # LiveKit's standard token-endpoint request; every field is optional
+class TokenRequest(BaseModel):       # LiveKit's standard token-endpoint request; every field is optional
     participant_identity: str | None = None
     participant_name: str | None = None
 
 
-class VoiceTokenResponse(BaseModel):  # ... and its response, which LiveKit's client SDKs read
+class SessionTokenRequest(TokenRequest):
+    category: str | None = None       # what to track; default config.DEFAULT_CATEGORY
+
+
+class TokenResponse(BaseModel):      # ... and its response, which LiveKit's client SDKs read
     server_url: str
     participant_token: str
 

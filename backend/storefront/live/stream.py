@@ -20,14 +20,11 @@ from typing import AsyncIterator, Callable
 from PIL import Image
 
 from storefront.live.scene import Scene
-from storefront.live.tracker import Tracker, TrackResult, encode
+from storefront.live.tracker import Tracker, TrackResult
 from storefront.models import ObjectsMessage, StatusMessage
 
 log = logging.getLogger("storefront.stream")
 
-VIDEO_EDGE = 1024    # the projector page's MJPEG
-VIDEO_FPS = 15
-VIDEO_QUALITY = 75
 QUEUE = 64           # messages buffered per subscriber; a slow one loses the oldest
 
 
@@ -49,7 +46,6 @@ class Stream:
         self._subscribers: set[asyncio.Queue] = set()
         self._labels: dict[str, dict] = {}  # uid -> its "label" message, for new subscribers
         self._looks: dict[str, dict] = {}   # uid -> its Look's latest "look" message, for new subscribers
-        self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
         self.scene = Scene()
         self._epoch = 0  # bumps when what was tracked is purged: answers to frames sent before are dropped
         # Set by app.py (the pipeline): told about every tracking result and every purge.
@@ -117,7 +113,7 @@ class Stream:
         had = self._result is not None or bool(self.scene.tracks)
         self._epoch += 1
         self.scene.clear()
-        self._result = self._tracked = self._frame = self._jpeg = None
+        self._result = self._tracked = self._frame = None
         self._labels.clear()
         self._looks.clear()
         if self.on_purge:
@@ -205,25 +201,6 @@ class Stream:
                 yield await q.get()
         finally:
             self._subscribers.discard(q)
-
-    # ---------- video out ----------
-
-    async def video_jpeg(self, frame: Frame) -> bytes:
-        if not self._jpeg or self._jpeg[0] != frame.seq:
-            self._jpeg = (frame.seq, await asyncio.to_thread(encode, frame.image, VIDEO_EDGE, VIDEO_QUALITY))
-        return self._jpeg[1]
-
-    async def mjpeg(self) -> AsyncIterator[bytes]:
-        """multipart/x-mixed-replace parts of the newest frames, at most VIDEO_FPS a second."""
-        sent = -1
-        while True:
-            t0 = time.monotonic()
-            frame = self._frame
-            if frame and frame.seq != sent:
-                sent = frame.seq
-                jpeg = await self.video_jpeg(frame)
-                yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%b\r\n" % (len(jpeg), jpeg)
-            await asyncio.sleep(max(0.0, 1 / VIDEO_FPS - (time.monotonic() - t0)))
 
 
 live = Stream()
