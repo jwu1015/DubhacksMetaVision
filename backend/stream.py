@@ -170,11 +170,13 @@ class Stream:
                 q.get_nowait()
             q.put_nowait(event)
 
-    async def subscribe(self) -> AsyncIterator[dict]:
-        """Events for one client, starting with the current state."""
+    async def subscribe(self, replay_look: bool = True) -> AsyncIterator[dict]:
+        """Events for one client, starting with the current state: the latest Look's events too, unless
+        replay_look is False."""
         q: asyncio.Queue = asyncio.Queue(QUEUE)
         self._subscribers.add(q)
-        look = list(self._look)  # taken with the queue added: each later Look event goes to the queue, once
+        # taken with the queue added: each later Look event goes to the queue, once
+        look = list(self._look) if replay_look else []
         try:
             yield self._status_event()
             if self._result:

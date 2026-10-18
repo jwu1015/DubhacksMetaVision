@@ -335,6 +335,11 @@ class MessageTest(unittest.TestCase):
             {"track_id": "t12", "box": [0.7, 0.3, 0.98, 0.6], "label": "lamp", "score": 0.74}]})
         self.assertEqual(webrtc.detections({**event, "objects": []})["objects"], [])
 
+    def test_look_message(self):
+        event = {"type": "look", "stage": "detected", "capture_id": "c_1", "track_id": 3, "label": "lamp"}
+        self.assertEqual(webrtc.look_message(event), {**event, "track_id": "t3"})
+        self.assertEqual(event["track_id"], 3)  # the stream's own event is left alone
+
     def test_track_number(self):
         for track_id, number in (("t3", 3), ("t12", 12), ("t0", 0)):
             self.assertEqual(webrtc.track_number(track_id), number)
@@ -458,6 +463,24 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.2)
         self.assertTrue(selected.empty())  # the junk before it called nothing
 
+    async def test_the_steps_of_a_look_go_back_to_the_phone(self):
+        def look(stage, capture_id, track_id, **extra):
+            return {"type": "look", "stage": stage, "capture_id": capture_id, "track_id": track_id, **extra}
+        self.live.publish(look("detected", "c_old", 1, label="sofa"))  # before this phone connected
+        phone = await self.phone()
+        await phone.detections()
+        self.live.publish(look("detected", "c_photo", None, label="vase"))  # a photo, not the stream
+        sent = [look("detected", "c_1", 2, label="lamp"), look("described", "c_1", 2, item={"category": "floor lamp"}),
+                look("results", "c_1", 2, search={"best_match": None, "dupes": [], "used": []})]
+        for event in sent:
+            self.live.publish(event)
+        got = []
+        async with asyncio.timeout(5):
+            while len(got) < len(sent):
+                if (msg := await phone.messages.get())["type"] == "look":
+                    got.append(msg)
+        self.assertEqual(got, [{**e, "track_id": "t2"} for e in sent])  # only these, in order, ids as "t2"
+
     async def test_select_without_a_hook_or_with_a_failing_one(self):
         phone = await self.phone()
         await phone.detections()
@@ -535,6 +558,17 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
 
 # ---------- the stand-in phone, against a running server ----------
 
+def look_line(msg: dict) -> str:
+    """A step of a Look in one line ("results" carries the whole /search answer)."""
+    search = msg.get("search") or {}
+    best = search.get("best_match")
+    detail = {"detected": msg.get("label"), "described": (msg.get("item") or {}).get("category"),
+              "results": f"{best['store']} ${best['price']:.0f}, {len(search['dupes'])} dupes, "
+                         f"{len(search['used'])} used" if best else "no match",
+              "failed": msg.get("message")}.get(msg.get("stage"))
+    return f"look {msg.get('stage')} {msg.get('track_id')} {msg.get('capture_id')}: {detail}"
+
+
 async def run_client(args):
     async with httpx.AsyncClient(base_url=args.url, timeout=30) as http:
         phone = PhoneClient(http, Camera(args.video), codec=args.codec)
@@ -558,7 +592,7 @@ async def run_client(args):
                 except TimeoutError:
                     break
                 count += 1
-                print(f"{time.perf_counter() - t0:5.1f}s {json.dumps(msg)}")
+                print(f"{time.perf_counter() - t0:5.1f}s {look_line(msg) if msg.get('type') == 'look' else json.dumps(msg)}")
                 for o in msg.get("objects", []):
                     labels.setdefault(o["track_id"], set()).add(o["label"])
                     first = first or time.perf_counter() - t0

@@ -28,6 +28,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 import config
 import net
 import stream
+import webrtc
 from models import (
     BBox, Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
     IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
@@ -406,13 +407,16 @@ config.LOGS.mkdir(exist_ok=True)
 async def lifespan(app: FastAPI):
     install_fixtures()
     # In the background, so the server accepts requests right away: wake the segmentation server
-    # (no cold start on the first request) and warm up our own stages.
-    background = [asyncio.create_task(model_service_ok(timeout=90.0)), asyncio.create_task(warm_up())]
-    log.info("ready: fixtures=%s demo_mode=%s warmup=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
-             config.WARMUP, config.PUBLIC_BASE_URL)
+    # (no cold start on the first request), warm up our own stages, and get TURN credentials (the
+    # phone's first /ice-servers is then fast).
+    background = [asyncio.create_task(model_service_ok(timeout=90.0)), asyncio.create_task(warm_up()),
+                  asyncio.create_task(webrtc.phones.ice.get())]
+    log.info("ready: fixtures=%s demo_mode=%s warmup=%s ICE=%s base=%s", config.USE_FIXTURES, config.DEMO_MODE,
+             config.WARMUP, webrtc.phones.ice.mode, config.PUBLIC_BASE_URL)
     yield
     for task in background + list(search_tasks.values()):
         task.cancel()
+    await webrtc.close()      # the phone's connection
     await stream.live.stop()  # deletes the tracking session on the segmentation server
     await net.close()
 
@@ -458,6 +462,10 @@ async def health_route():
 
 # The live stream (stream.py): the projector page at /stream/viewer, its video and its events.
 app.include_router(stream.router)
+# The phone's live video over WebRTC (webrtc.py): GET /ice-servers, POST /offer. Tapping a hotspot is a
+# Look (its DetectResponse isn't needed: the steps go to the phone and the projector as "look" events).
+app.include_router(webrtc.router)
+webrtc.select_handler = look
 
 
 _checkout = None if config.USE_FIXTURES else stage("checkout")
