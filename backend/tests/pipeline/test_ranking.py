@@ -1,7 +1,4 @@
-"""Mocked tests for rerank, pricing and rank. No network, no API key.
-
-    python -m unittest test_ranking -v        (from backend/)
-"""
+"""Mocked tests for rerank, pricing and rank. No network, no API key."""
 import asyncio
 import json
 import logging

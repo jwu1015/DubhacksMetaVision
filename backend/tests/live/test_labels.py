@@ -1,7 +1,4 @@
-"""Tests for labels.py (Claude's SAM labels), with Claude faked (vlm.VLM.call): no network.
-
-    python -m unittest test_labels -v      (from backend/)
-"""
+"""Tests for labels.py (Claude's SAM labels), with Claude faked (vlm.VLM.call): no network."""
 import base64
 import io
 import os

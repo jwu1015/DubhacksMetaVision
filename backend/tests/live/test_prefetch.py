@@ -1,4 +1,4 @@
-"""pytest tests/test_prefetch.py  (from backend/). No network: Claude, the stores and the tracker are faked."""
+"""Tests for prefetch.py. No network: Claude, the stores and the tracker are faked."""
 import asyncio
 import base64
 import io

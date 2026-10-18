@@ -1,10 +1,7 @@
 """Tests for /detect and /identify inputs: track_id (no photo), hint_point, hint_text and their
 precedence. SAM (segment.sam_objects) and Claude (vision's HTTP transport) are mocked and the store
 search is stubbed: no network, no GPU.
-
-    python -m unittest test_detect -v                                  (from backend/)
 """
-import asyncio
 import base64
 import io
 import json

@@ -1,8 +1,6 @@
 """Tests for voice.py and POST /voice/token. No LiveKit, no Claude, no network: the main server's stream
 events come from a local WebSocket server, its /look route from httpx.MockTransport, and the phone's RPC
 from a stand-in room.
-
-    python -m unittest test_voice -v      (from backend/)
 """
 import asyncio
 import json
@@ -19,6 +17,7 @@ from livekit.plugins import anthropic
 import config
 import main
 import voice
+from fakes.livekit import FakeLocalParticipant, FakeParticipant, FakeRoom
 
 
 def look(stage, capture_id="c_1", track_id=3, **extra):
@@ -309,28 +308,6 @@ class FollowTest(unittest.IsolatedAsyncioTestCase):
                 follower.cancel()
         self.assertEqual(said, ["Lamp. Finding prices.", SEARCH["spoken_summary"]])
         self.assertEqual((seen.look["capture_id"], len(seen.objects)), ("c_1", 3))
-
-
-class FakeLocalParticipant:
-    def __init__(self, reply="{\"ok\": true}"):
-        self.reply, self.calls = reply, []
-
-    async def perform_rpc(self, *, destination_identity, method, payload, response_timeout=None):
-        self.calls.append((destination_identity, method, json.loads(payload)))
-        if isinstance(self.reply, Exception):
-            raise self.reply
-        return self.reply
-
-
-class FakeParticipant:
-    def __init__(self, identity, kind):
-        self.identity, self.kind = identity, kind
-
-
-class FakeRoom:
-    def __init__(self, local, *participants):
-        self.local_participant = local
-        self.remote_participants = {p.identity: p for p in participants}
 
 
 class ToolTest(unittest.IsolatedAsyncioTestCase):

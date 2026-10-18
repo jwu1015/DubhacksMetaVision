@@ -1,4 +1,4 @@
-"""pytest tests/test_search.py  (from backend/). No network: SerpAPI calls are faked."""
+"""Tests for search.py. No network: SerpAPI calls are faked."""
 import asyncio
 import json
 from pathlib import Path
@@ -10,7 +10,7 @@ import search
 from models import Item, Product
 from search import dedupe, normalize_url, parse_amazon, parse_ebay, parse_lens, parse_price, parse_shopping
 
-DATA = Path(__file__).resolve().parent / "data"
+DATA = Path(__file__).resolve().parents[1] / "data"
 
 
 def raw(name: str) -> dict:
