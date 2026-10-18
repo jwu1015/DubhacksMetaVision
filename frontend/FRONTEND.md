@@ -426,7 +426,7 @@ Target: **WCAG 2.2 AA** (the standard that the ADA, Section 508 and the European
 
 ## Backend contract
 
-Base URL: the current **ngrok HTTPS** URL, set in the untracked `Config.xcconfig`. It changes each time ngrok restarts unless the team uses a reserved domain.
+Base URL: `http://172.20.10.2:8001` by default (the laptop on the phone's hotspot), set in `Spotted.xcconfig`. Override it in the untracked `Config.xcconfig`, for example with an ngrok URL.
 
 > **Source of truth: `Network/Models.swift`**, which mirrors `backend/storefront/models.py`; change them together.
 > - Decode with a plain `JSONDecoder()` (all keys are mapped in `CodingKeys`; don't set `keyDecodingStrategy`).
@@ -535,10 +535,9 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
    - `UIBackgroundModes` → `bluetooth-central`, plus `NSBluetoothAlwaysUsageDescription`
    - `NSLocalNetworkUsageDescription` + `NSBonjourServices`: as required by the DAT SDK for Wi-Fi streaming
    - `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`, `NSFaceIDUsageDescription`
-5. **Base URL (secret):** the backend team shares it by DM. **Never commit it.** The repo is public, and every session costs LiveKit and Claude usage.
-   - Put it in an **untracked** `Config.xcconfig` (`API_BASE_URL = https:/$()/…`) read via Info.plist, or an untracked `Config.swift`.
-   - Add the file to `.gitignore` and commit a `Config.example.xcconfig` with a placeholder.
-   - HTTPS means no App Transport Security exceptions. No ngrok header is needed; `URLSession` requests (API and images) go straight through.
+5. **Base URL:** `Spotted.xcconfig` defaults to `http://172.20.10.2:8001`, the laptop on the phone's hotspot. Connections to an IP address aren't covered by App Transport Security, so plain HTTP works.
+   - For another backend (an ngrok URL, say), copy `Config.example.xcconfig` to the **untracked** `Config.xcconfig` and set `API_BASE_URL` there. Don't commit ngrok URLs: the repo is public, and every session costs LiveKit and Claude usage.
+   - Debug builds also read `SPOTTED_API_BASE_URL` from the scheme; set it empty to run on mock data, as the UI tests do.
 
 ---
 

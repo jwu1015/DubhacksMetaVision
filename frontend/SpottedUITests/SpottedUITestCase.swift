@@ -11,6 +11,8 @@ class SpottedUITestCase: XCTestCase {
 
     func launch() {
         app = XCUIApplication()
+        // No backend: the app plays its mock session.
+        app.launchEnvironment["SPOTTED_API_BASE_URL"] = ""
         app.launch()
     }
 

@@ -1,13 +1,13 @@
 import Foundation
 
 enum AppConfig {
-    /// The backend's ngrok URL, from the untracked Config.xcconfig (via Info.plist). Debug builds can
-    /// also pass SPOTTED_API_BASE_URL in the scheme. Nil means no backend: the app runs on mock data.
+    /// The backend's URL, from Spotted.xcconfig or the untracked Config.xcconfig (via Info.plist). Debug
+    /// builds can override it with SPOTTED_API_BASE_URL; set it empty to run on mock data (the UI tests do).
+    /// Nil means no backend: the app runs on mock data.
     static let baseURL: URL? = {
         #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["SPOTTED_API_BASE_URL"],
-           !override.isEmpty, let url = URL(string: override) {
-            return url
+        if let override = ProcessInfo.processInfo.environment["SPOTTED_API_BASE_URL"] {
+            return URL(string: override)
         }
         #endif
         guard let value = Bundle.main.object(forInfoDictionaryKey: "SpottedAPIBaseURL") as? String,

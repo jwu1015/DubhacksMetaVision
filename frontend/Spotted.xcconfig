@@ -1,10 +1,10 @@
 // Shared build settings for the Spotted app target. Committed.
 //
-// The backend base URL is secret (the repo is public), so it lives in an untracked Config.xcconfig
-// next to this file. Copy Config.example.xcconfig to Config.xcconfig and fill it in.
-// Without it the app runs on mock data.
+// The backend's base URL. The default is the laptop on the phone's hotspot; to use another backend
+// (an ngrok URL, say), copy Config.example.xcconfig to the untracked Config.xcconfig and set it there.
+// "//" starts a comment in xcconfig files, so write the scheme as http:/$()/
 
-API_BASE_URL =
+API_BASE_URL = http:/$()/172.20.10.2:8001
 
 // Meta Wearables DAT. Leave empty while the glasses are in Developer Mode (Meta AI app > your
 // glasses > Developer Mode); set both from the Wearables Developer Center for release.
