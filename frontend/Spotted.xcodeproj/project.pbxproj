@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5D0A00000000000000000022 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000021 /* WebRTC */; };
+		5D0A00000000000000000027 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000026 /* LiveKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5D0A00000000000000000022 /* WebRTC in Frameworks */,
+				5D0A00000000000000000027 /* LiveKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +102,7 @@
 			name = Spotted;
 			packageProductDependencies = (
 				5D0A00000000000000000021 /* WebRTC */,
+				5D0A00000000000000000026 /* LiveKit */,
 			);
 			productName = Spotted;
 			productReference = 5D0A00000000000000000001 /* Spotted.app */;
@@ -156,6 +159,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */,
+				5D0A00000000000000000025 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5D0A00000000000000000005 /* Products */;
@@ -262,6 +266,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spotted listens so you can ask the assistant about what you're looking at.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -293,6 +298,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spotted listens so you can ask the assistant about what you're looking at.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
@@ -382,6 +388,14 @@
 				minimumVersion = 155.0.0;
 			};
 		};
+		5D0A00000000000000000025 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -389,6 +403,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */;
 			productName = WebRTC;
+		};
+		5D0A00000000000000000026 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D0A00000000000000000025 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

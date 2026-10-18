@@ -70,7 +70,7 @@ enum MockData {
     static let searchShoppingTimeout = SearchResponse(
         captureID: search.captureID, bestMatch: search.bestMatch, dupes: [], used: search.used,
         priceInsight: search.priceInsight, spokenSummary: search.spokenSummary, timingMS: [:],
-        sourcesOK: [.lens, .ebay], item: finishedItem
+        sourcesOK: [.amazon], item: finishedItem
     )
 
     /// 07 uses tighter boxes than the stream so both options clear the taller card.

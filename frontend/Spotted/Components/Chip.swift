@@ -59,12 +59,14 @@ struct VerdictChip: View {
     }
 }
 
-/// "Exact match" (matchScore ≥ 85) or "Similar". matchScore is nil until visual scoring is live.
+/// "Exact match" (accent fill), or "Closest match" / "Similar" (neutral).
 struct MatchTag: View {
-    let isExact: Bool
+    let product: Product
+
+    private var isExact: Bool { product.isExactMatch }
 
     var body: some View {
-        Text(isExact ? "Exact match" : "Similar")
+        Text(product.matchLabel)
             .font(.spottedCaption)
             .foregroundStyle(isExact ? Color.onAccent : Color.labelPrimary)
             .padding(.horizontal, 8)

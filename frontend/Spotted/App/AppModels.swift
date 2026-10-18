@@ -19,8 +19,8 @@ extension DetectResponse {
 }
 
 extension ProductSource {
-    /// The stores /search queries, in display order. Excludes `.unknown`.
-    static let searchable: [ProductSource] = [.lens, .shopping, .ebay]
+    /// The stores /search queries now, in display order (Google Shopping and Amazon).
+    static let searchable: [ProductSource] = [.shopping, .amazon]
 
     /// Used in the compact "Checking 3 stores…" row.
     var shortName: String { self == .shopping ? "Shopping" : displayName }
@@ -35,6 +35,15 @@ extension SearchResponse {
 
 extension Product {
     var isUsed: Bool { tier == .used }
+
+    /// When nothing scores as the same product, the best match is the closest one instead.
+    var isClosestMatch: Bool { matchReason?.hasPrefix("Closest match") == true }
+
+    /// "Exact match" (matchScore ≥ 85), "Closest match" (not the exact item) or "Similar".
+    var matchLabel: String {
+        if isExactMatch { return "Exact match" }
+        return isClosestMatch ? "Closest match" : "Similar"
+    }
 }
 
 extension Detection {

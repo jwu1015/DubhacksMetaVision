@@ -24,8 +24,8 @@ private struct ICEServersResponse: Decodable {
     let iceServers: [ICEServer]
 }
 
-/// The backend's HTTP API. For now only the WebRTC signaling routes; /detect, /search and /checkout
-/// go here next (build steps 3 and 9 in FRONTEND.md).
+/// The backend's HTTP API: WebRTC signaling, the voice token and the cart. /detect, /search and
+/// /checkout go here next (build steps 3 and 9 in FRONTEND.md).
 struct APIClient {
     let baseURL: URL
     var session: URLSession = .shared
@@ -36,11 +36,32 @@ struct APIClient {
 
     /// POST /offer: our SDP offer in, the backend's answer out.
     func offer(_ offer: SessionDescription) async throws -> SessionDescription {
-        var request = URLRequest(url: baseURL.appending(path: "offer"))
+        try await post("offer", body: offer)
+    }
+
+    /// POST /voice/token: a LiveKit token for a fresh room with the assistant in it.
+    func voiceToken(identity: String) async throws -> VoiceToken {
+        try await post("voice/token", body: VoiceTokenRequest(participantIdentity: identity))
+    }
+
+    /// POST /cart with a Product exactly as /search returned it.
+    func addToCart(_ product: Product) async throws -> Cart {
+        try await post("cart", body: AddToCartRequest(product: product))
+    }
+
+    /// DELETE /cart/{index}
+    func removeFromCart(at index: Int) async throws -> Cart {
+        var request = URLRequest(url: baseURL.appending(path: "cart/\(index)"))
+        request.httpMethod = "DELETE"
+        return try await send(request, as: Cart.self)
+    }
+
+    private func post<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response {
+        var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(offer)
-        return try await send(request, as: SessionDescription.self)
+        request.httpBody = try JSONEncoder().encode(body)
+        return try await send(request, as: Response.self)
     }
 
     private func send<Response: Decodable>(_ request: URLRequest, as type: Response.Type) async throws -> Response {

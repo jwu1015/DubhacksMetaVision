@@ -15,6 +15,7 @@
 //   GET    /ice-servers                                              -> {"iceServers": [...]} (WebRTC)
 //   POST   /offer              SessionDescription (the offer)        -> SessionDescription (the answer)
 //   POST   /checkout           CheckoutRequest (JSON)                -> CheckoutResponse
+//   POST   /voice/token        VoiceTokenRequest (JSON, optional)    -> VoiceToken (LiveKit voice assistant)
 //   GET    /health                                                   -> HealthResponse
 //   Cart (in the search/cart PR, not on the live server yet):
 //   POST   /cart               AddToCartRequest (JSON)               -> Cart
@@ -48,7 +49,7 @@ extension BBox {
 
 /// Where a product came from.
 enum ProductSource: String, Codable, Hashable {
-    case lens, shopping, ebay, unknown
+    case lens, shopping, ebay, amazon, unknown
 
     init(from decoder: Decoder) throws {
         self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
@@ -59,6 +60,7 @@ enum ProductSource: String, Codable, Hashable {
         case .lens: "Google Lens"
         case .shopping: "Google Shopping"
         case .ebay: "eBay"
+        case .amazon: "Amazon"
         case .unknown: "Other"
         }
     }
@@ -413,4 +415,73 @@ enum ChannelMessage: Decodable, Hashable {
         default: self = .other(type)
         }
     }
+}
+
+// MARK: - Voice assistant (LiveKit)
+//
+// Mirrors backend/models.py (VoiceTokenRequest, VoiceTokenResponse) and backend/voice.py (the phone's
+// RPC method "action"). The video stays on our WebRTC; LiveKit carries only the voice.
+
+/// POST /voice/token body. Every field is optional; the body can be left out entirely.
+struct VoiceTokenRequest: Codable, Hashable {
+    var participantIdentity: String?
+    var participantName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case participantIdentity = "participant_identity"
+        case participantName = "participant_name"
+    }
+}
+
+/// Each token opens a fresh room with the assistant already in it.
+struct VoiceToken: Codable, Hashable {
+    let serverURL: String
+    let participantToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case serverURL = "server_url"
+        case participantToken = "participant_token"
+    }
+}
+
+/// The results tab the assistant asks for.
+enum ResultsTab: String, Codable, Hashable {
+    case bestMatch = "best_match"
+    case dupes, used, unknown
+
+    init(from decoder: Decoder) throws {
+        self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+    }
+}
+
+/// The assistant -> phone RPC "action" payload. Reply with a VoiceActionReply within 15 seconds.
+struct VoiceAction: Codable, Hashable {
+    enum Name: String, Codable, Hashable {
+        case addToCart = "add_to_cart"
+        case saveItem = "save_item"
+        case showResults = "show_results"
+        case undoLast = "undo_last"
+        case startCheckout = "start_checkout"
+        case unknown
+
+        init(from decoder: Decoder) throws {
+            self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+        }
+    }
+
+    let name: Name
+    let captureID: String?       // save_item: the Look to save
+    let product: Product?        // add_to_cart: send it to POST /cart as-is
+    let tab: ResultsTab?         // show_results
+
+    enum CodingKeys: String, CodingKey {
+        case name, product, tab
+        case captureID = "capture_id"
+    }
+}
+
+/// The phone's answer. On ok == false the assistant says `detail` aloud.
+struct VoiceActionReply: Codable, Hashable {
+    let ok: Bool
+    var detail: String? = nil
 }

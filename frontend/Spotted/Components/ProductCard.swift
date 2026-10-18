@@ -28,7 +28,7 @@ struct ProductCard: View {
 
             HStack(spacing: 8) {
                 if let match = search.bestMatch {
-                    Chip(title: match.isExactMatch ? "Exact match" : "Similar",
+                    Chip(title: match.matchLabel,
                          icon: match.isExactMatch ? "icon-check-chip" : nil)
                 }
                 if let cheapestUsed = search.used.map(\.price).min() {
