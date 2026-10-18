@@ -38,7 +38,7 @@ def segmentation_headers() -> dict[str, str]:
 ANTHROPIC_WORKSPACE_ID = os.getenv("ANTHROPIC_WORKSPACE_ID", "").strip()
 ANTHROPIC_HEADERS = {"anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID} if ANTHROPIC_WORKSPACE_ID else {}
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast
-# LiveKit Cloud, for the voice agent (voice/agent.py) and the phone's token for it (POST /voice/token)
+# LiveKit Cloud: the session's room (rtc/room.py, POST /session/token) and the voice agent (voice/agent.py)
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")

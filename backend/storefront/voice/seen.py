@@ -1,17 +1,15 @@
-"""What the user is looking at, as the voice agent knows it: from the main server's stream messages."""
+"""What the user is looking at, as the voice agent knows it: from the backend's messages in the room
+(topic "updates": data packets, and text streams for the "look" messages)."""
 import asyncio
 import json
 import logging
-import os
 
-import websockets
+from livekit import rtc
 
+from storefront.rtc.tokens import UPDATES, VISION
 from storefront.voice.resolve import Resolved, resolve
 
 log = logging.getLogger("storefront.voice")
-
-BACKEND = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")  # the main server, on this laptop
-RECONNECT_S = 2.0
 
 
 class Seen:
@@ -55,18 +53,29 @@ class Seen:
     def resolve(self, target: str, exclude=()) -> Resolved:
         return resolve(self.objects, target, exclude, self.asked, self.described, self.prompts)
 
-    async def follow(self):
-        """Keep up with the main server's stream messages, reconnecting whenever it restarts, until cancelled."""
-        url = "ws" + BACKEND.removeprefix("http") + "/stream/events"
-        while True:
-            try:
-                async with websockets.connect(url, max_size=2**22) as ws:
-                    log.info("voice: following %s", url)
-                    async for raw in ws:
-                        try:
-                            self.update(json.loads(raw))
-                        except (ValueError, KeyError, TypeError) as e:
-                            log.warning("voice: skipped a message (%r)", e)
-            except (OSError, websockets.WebSocketException) as e:
-                log.warning("voice: no stream messages from %s (%s); retrying in %ds", url, e, RECONNECT_S)
-            await asyncio.sleep(RECONNECT_S)
+    def take(self, raw: str | bytes):
+        """One message as it arrives; a malformed one is logged and skipped."""
+        try:
+            self.update(json.loads(raw))
+        except (ValueError, KeyError, TypeError) as e:
+            log.warning("voice: skipped a message (%r)", e)
+
+    def listen(self, room: rtc.Room):
+        """Keep up with the backend's messages in this room."""
+        reading: set[asyncio.Task] = set()
+
+        def on_data(packet: rtc.DataPacket):
+            if packet.topic == UPDATES and packet.participant and packet.participant.identity == VISION:
+                self.take(packet.data)
+
+        async def read(reader: rtc.TextStreamReader):
+            self.take(await reader.read_all())
+
+        def on_text(reader: rtc.TextStreamReader, identity: str):
+            if identity == VISION:
+                task = asyncio.create_task(read(reader))
+                reading.add(task)
+                task.add_done_callback(reading.discard)
+
+        room.on("data_received", on_data)
+        room.register_text_stream_handler(UPDATES, on_text)
