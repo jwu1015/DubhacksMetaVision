@@ -42,6 +42,7 @@ log = logging.getLogger("gtl")
 
 FIXTURE_ID = "c_fixture"
 NO_ITEM_PHRASE = "I couldn't spot a product there. Try again closer."
+MAX_HINT_TEXT = 100  # characters of hint_text kept: a SAM prompt and a line for Claude, not a paragraph
 
 # fixture image -> name it is served under, matching the URLs in the fixture JSON
 FIXTURE_IMAGES = {
@@ -168,11 +169,60 @@ def parse_hint(hint_box: str | None, hint_label: str | None):
     return segment.Found(box, None, (hint_label or "").strip())
 
 
+def parse_point(hint_point: str | None) -> tuple[float, float] | None:
+    """The point the app's user tapped: JSON normalized to the photo, {"x", "y"} or [x, y]."""
+    if not hint_point:
+        return None
+    try:
+        raw = json.loads(hint_point)
+        x, y = (float(v) for v in (raw if isinstance(raw, list) else (raw["x"], raw["y"])))
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(400, 'hint_point must be JSON like {"x": 0.45, "y": 0.6} or [x, y], normalized 0-1')
+    if not (0 <= x <= 1 and 0 <= y <= 1):
+        raise HTTPException(400, "hint_point must be inside the photo: x and y between 0 and 1")
+    return x, y
+
+
+def parse_text(hint_text: str | None) -> str | None:
+    """What the user asked about, from their voice command (e.g. "green floor lamp"): SAM's prompt and a
+    line for Claude. Kept to one short line."""
+    return " ".join((hint_text or "").split())[:MAX_HINT_TEXT] or None
+
+
+def parse_track(track_id: str) -> int:
+    """A tracked object's id as the data channel sends it: "t4" -> 4."""
+    try:
+        return int(track_id.strip().removeprefix("t"))
+    except ValueError:
+        raise HTTPException(400, 'track_id must be a tracked object\'s id like "t4"')
+
+
+async def detect_form(image: UploadFile | None, track_id: str | None, hint_box: str | None,
+                      hint_label: str | None, hint_point: str | None, hint_text: str | None) -> DetectResponse:
+    """/detect and /identify: a photo (image, with optional hints), or an object the live stream is
+    tracking (track_id, no photo), looked at in the frame its box describes."""
+    data = await image.read() if image else b""
+    if bool(data) == bool(track_id):
+        raise HTTPException(400, 'send exactly one of image (a JPEG) or track_id (e.g. "t4")')
+    if track_id:
+        resp = await look(parse_track(track_id))
+        if resp is None:
+            raise HTTPException(404, "track expired")
+        return resp
+    text = parse_text(hint_text)
+    return await run_detect(data, hint=parse_hint(hint_box, hint_label or text), point=parse_point(hint_point),
+                            text=text)
+
+
 # ---------- pipeline ----------
 
-async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> DetectResponse:
+async def run_detect(data: bytes, hint=None, track_id: int | None = None, point: tuple[float, float] | None = None,
+                     text: str | None = None) -> DetectResponse:
     """hint: a segment.Found for the object the user picked (a tapped hotspot, or a tracked object);
-    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any."""
+    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any.
+    point: where the user tapped (normalized), when there's no hint: SAM's object there.
+    text: what the user asked about. Claude always gets it; SAM looks for it unless hint is given.
+    Precedence: hint > point > text."""
     t0 = time.perf_counter()
     img = load_image(data)
     if config.USE_FIXTURES:
@@ -207,30 +257,48 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
                     else "Got it. Finding prices.")
         resp = done(item, segmentation, path)
         search_tasks[capture_id] = asyncio.create_task(
-            describe_then_search(captures[capture_id], claude, on_crop=path == "picked"))
+            describe_then_search(captures[capture_id], claude, on_crop=path.startswith("picked"), hint=text))
         return resp
+
+    def describe_crop(segmentation: Segmentation) -> asyncio.Task:
+        return asyncio.create_task(vision.detect((config.ROOT / segmentation.cutout_path).read_bytes(), hint=text))
 
     timing: dict[str, int] = {}
     vision, segment = stage("vision"), stage("segment")
+    if point and not hint and vision and segment:
+        # The user tapped a point: SAM's object there (looking for what they asked about, if they said), else
+        # a crop around the point. Either way, picked: Claude describes just the crop.
+        with timed(timing, "sam"):
+            found = await segment.sam_objects(img, text or segment.SAM_CATEGORIES or None,
+                                              timeout=segment.SAM_FIRST_TIMEOUT)
+        hint = segment.point_object(found or [], *point)
+        if hint is None:
+            with timed(timing, "crop"):
+                segmentation = segment.point_crop(img, *point, capture_id, t0)
+            target = segment.Found(segmentation.bbox, None, text or "")
+            return answer_early(target, segmentation, describe_crop(segmentation), "picked-point-crop")
+        segmentation = segment.sam_crop(img, hint, capture_id, t0)
+        return answer_early(hint, segmentation, describe_crop(segmentation), "picked-point")
     if hint and vision and segment:
         # The user picked the object: no need to ask SAM, and Claude describes just its crop.
         segmentation = segment.sam_crop(img, hint, capture_id, t0)
-        crop = (config.ROOT / segmentation.cutout_path).read_bytes()
-        return answer_early(hint, segmentation, asyncio.create_task(vision.detect(crop)), "picked")
+        return answer_early(hint, segmentation, describe_crop(segmentation), "picked")
 
     # Claude starts now either way: SAM first needs its description, Claude first its whole answer.
-    claude = asyncio.create_task(vision.detect(buf.getvalue())) if vision else None
+    claude = asyncio.create_task(vision.detect(buf.getvalue(), hint=text)) if vision else None
 
     sam_failed = False
     if claude and segment and config.MODEL_SERVICE_URL:
         # SAM first: every object in view from SAM_CATEGORIES; the user is looking at the one at the center of
-        # the view.
+        # the view. With text, SAM looks for what the user asked about instead: the one at the center, else
+        # the best match.
         with timed(timing, "sam"):
-            found = await segment.sam_objects(img, segment.SAM_CATEGORIES or None,
+            found = await segment.sam_objects(img, text or segment.SAM_CATEGORIES or None,
                                               timeout=segment.SAM_FIRST_TIMEOUT)
-        target = segment.center_object(found or [])
+        target = segment.text_object(found or []) if text else segment.center_object(found or [])
         if target:
-            return answer_early(target, segment.sam_crop(img, target, capture_id, t0), claude, "sam-first")
+            return answer_early(target, segment.sam_crop(img, target, capture_id, t0), claude,
+                                "sam-text" if text else "sam-first")
         sam_failed = found is None  # down or too slow: don't ask it again below
 
     # Claude first: no segmentation server, or nothing buyable at the center of the view.
@@ -250,11 +318,12 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
     return resp
 
 
-async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False) -> SearchResponse:
+async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False,
+                               hint: str | None = None) -> SearchResponse:
     """The object is known (SAM first, or the user picked it): Claude describes it, then the store
     search runs on Claude's queries (a label like "lamp" alone finds lamps, not this one). on_crop:
     Claude was asked about the crop itself; otherwise about the whole photo, and then about the crop if
-    it looked at a different object. Claude failing leaves the label."""
+    it looked at a different object (with hint, what the user asked about). Claude failing leaves the label."""
     t0 = time.perf_counter()
     vision, segment = stage("vision"), stage("segment")
     sam_item = cap.item
@@ -263,7 +332,7 @@ async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool
         if not on_crop and (item.category is None or item.bbox is None
                             or segment.iou(item.bbox, sam_item.bbox) <= segment.SAM_IOU):
             log.info("describe %s: Claude looked elsewhere; asking about SAM's crop", cap.capture_id)
-            item = await vision.detect((config.ROOT / cap.segmentation.cutout_path).read_bytes())
+            item = await vision.detect((config.ROOT / cap.segmentation.cutout_path).read_bytes(), hint=hint)
         if item.category:
             cap.item = item.model_copy(update={"bbox": sam_item.bbox, "quick_phrase": sam_item.quick_phrase})
             announce(cap, "described", item=cap.item.model_dump(mode="json"))
@@ -418,10 +487,14 @@ app.include_router(cart.router)
 
 
 @app.post("/detect", response_model=DetectResponse)
-async def detect_route(image: UploadFile = File(...), hint_box: str | None = Form(None),
-                       hint_label: str | None = Form(None)):
-    """hint_box, hint_label (optional): the object the user tapped; used instead of SAM's guess."""
-    return await run_detect(await image.read(), hint=parse_hint(hint_box, hint_label))
+async def detect_route(image: UploadFile | None = File(None), track_id: str | None = Form(None),
+                       hint_box: str | None = Form(None), hint_label: str | None = Form(None),
+                       hint_point: str | None = Form(None), hint_text: str | None = Form(None)):
+    """Exactly one of image (a JPEG) or track_id ("t4": a tracked object, in its best frame; 404 "track
+    expired" once it's gone). With an image, optional hints, in order of precedence:
+    hint_box + hint_label, the object the user tapped (used instead of SAM's guess); hint_point, the point
+    they tapped; hint_text, what they asked about (also passed to Claude)."""
+    return await detect_form(image, track_id, hint_box, hint_label, hint_point, hint_text)
 
 
 @app.post("/search/{capture_id}", response_model=SearchResponse)
@@ -430,9 +503,11 @@ async def search_route(capture_id: str):
 
 
 @app.post("/identify", response_model=IdentifyResponse)
-async def identify_route(image: UploadFile = File(...), hint_box: str | None = Form(None),
-                         hint_label: str | None = Form(None)):
-    det = await run_detect(await image.read(), hint=parse_hint(hint_box, hint_label))
+async def identify_route(image: UploadFile | None = File(None), track_id: str | None = Form(None),
+                         hint_box: str | None = Form(None), hint_label: str | None = Form(None),
+                         hint_point: str | None = Form(None), hint_text: str | None = Form(None)):
+    """/detect and /search in one call; the same inputs as /detect."""
+    det = await detect_form(image, track_id, hint_box, hint_label, hint_point, hint_text)
     srch = await run_search(det.capture_id) if det.item.category else None
     return IdentifyResponse(detect=det, search=srch)
 
