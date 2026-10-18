@@ -2,8 +2,6 @@
 
 The server only takes tracking sessions with labels (18 Oct), so a photo goes through a one-frame session:
 POST /session, POST /session/{id}/frame, DELETE. Without labels, Claude picks them first (labels.py).
-
-    python -m unittest test_segment -v      (from backend/)
 """
 import asyncio
 import io

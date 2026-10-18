@@ -1,4 +1,4 @@
-"""pytest tests/test_cart.py  (from backend/). In-memory only; nothing is bought."""
+"""Tests for cart.py. In memory only; nothing is bought."""
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

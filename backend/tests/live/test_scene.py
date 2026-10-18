@@ -1,7 +1,4 @@
-"""Tests for scene.py: what scene memory keeps about each tracked object, and its best frame.
-
-    python -m unittest test_scene -v      (from backend/)
-"""
+"""Tests for scene.py: what scene memory keeps about each tracked object, and its best frame."""
 import time
 import unittest
 

@@ -1,4 +1,4 @@
-"""pytest tests/test_cache.py  (from backend/). Uses a temp cache folder; no network."""
+"""Tests for cache.py, in a temp cache folder. No network."""
 import asyncio
 import hashlib
 import json

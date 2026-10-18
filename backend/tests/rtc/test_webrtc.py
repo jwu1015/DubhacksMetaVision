@@ -1,8 +1,7 @@
 """Tests for webrtc.py, and a stand-in for the iPhone app. No GPU, no Cloudflare: both peers run in
-this process and connect over localhost; tracking is test_stream's fake server, Cloudflare is mocked.
+this process and connect over localhost; tracking is the fake tracking server, Cloudflare is mocked.
 
-    python -m unittest test_webrtc -v                                   (from backend/)
-    python test_webrtc.py --client [--url http://127.0.0.1:8004] [--video test_media/synthetic_room.mp4]
+    PYTHONPATH=.:tests python tests/rtc/test_webrtc.py --client [--url http://127.0.0.1:8004] [--video test_media/synthetic_room.mp4]
                                    [--seconds 30] [--codec H264|VP8]    # play the phone against a server
 """
 import argparse
@@ -28,7 +27,7 @@ import config
 import stream
 import webrtc
 from stream import Stream
-from test_stream import fake_server, make_video  # also quiets the "gtl" logs, as in test_stream
+from fakes.tracking import fake_server, make_video
 from tracker import Tracker
 
 PHONE_SIZE = (504, 896)  # the glasses' portrait frames, as the app sends them

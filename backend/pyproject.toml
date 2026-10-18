@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+markers = ["live: needs a real service (LiveKit Cloud, the GPU server); run with -m live"]
+addopts = "-m 'not live'"

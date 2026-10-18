@@ -1,4 +1,4 @@
-"""pytest tests/test_match.py  (from backend/). No network: downloads and the Claude call are faked."""
+"""Tests for match.py. No network: downloads and the Claude call are faked."""
 import asyncio
 import io
 import json
