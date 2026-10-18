@@ -363,7 +363,8 @@ final class AppState {
     /// Spoken feedback, through the phone camera's mode only. With the glasses as the source the audio
     /// would play on them over the Bluetooth link their camera streams on, which can drop the stream.
     private func say(_ text: String) {
-        guard captureMode == .phone else { return }
+        // An item the voice assistant opened is one it's already talking about: don't read it out over it.
+        guard captureMode == .phone, voicePickedUID == nil || selectedUID != voicePickedUID else { return }
         speaker.say(text)
     }
 
@@ -397,6 +398,8 @@ final class AppState {
     // MARK: - Voice assistant (LiveKit)
 
     private(set) var voice: VoiceAssistant?
+    /// The object the voice assistant last opened (select_item), as a tap would.
+    private var voicePickedUID: String?
 
     /// Connect only while voice is in use: the app is in front and the Live view, the assistant
     /// sheet, results or the pay sheet is up. The mic is transcribed the whole time it's connected.
@@ -443,6 +446,13 @@ final class AppState {
             isShowingDetail = false
             tab = .cart
             isShowingCheckout = true
+            return VoiceActionReply(ok: true)
+        case .selectItem:
+            guard let uid = action.uid, let object = objects.first(where: { $0.uid == uid }) else {
+                return VoiceActionReply(ok: false, detail: "That item isn't tracked anymore.")
+            }
+            voicePickedUID = uid
+            select(object)
             return VoiceActionReply(ok: true)
         case .unknown:
             return VoiceActionReply(ok: false, detail: "Not in the app yet.")

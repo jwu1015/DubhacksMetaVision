@@ -358,6 +358,7 @@ struct VoiceAction: Codable, Hashable {
         case showResults = "show_results"
         case undoLast = "undo_last"
         case startCheckout = "start_checkout"
+        case selectItem = "select_item"
         case unknown
 
         init(from decoder: Decoder) throws {
@@ -369,9 +370,10 @@ struct VoiceAction: Codable, Hashable {
     let captureID: String?       // save_item: the Look to save
     let product: Product?        // add_to_cart: send it to POST /cart as-is
     let tab: ResultsTab?         // show_results
+    let uid: String?             // select_item: the tracked object to open, as a tap does
 
     enum CodingKeys: String, CodingKey {
-        case name, product, tab
+        case name, product, tab, uid
         case captureID = "capture_id"
     }
 }
