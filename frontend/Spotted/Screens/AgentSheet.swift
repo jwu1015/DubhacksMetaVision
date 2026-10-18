@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// 02 · Listening: waveform, live transcript, what the assistant said, suggestions and typed input.
-/// Live from the LiveKit voice assistant when it's connected; the Figma mock otherwise.
+/// In glasses mode it's G2 · Voice Command: what the assistant understood and the earcon instead of
+/// suggestions. Live from the LiveKit voice assistant when it's connected; the Figma mock otherwise.
 struct AgentSheet: View {
     @Environment(AppState.self) private var app
     @State private var heard = "Add it to my cart "
@@ -27,24 +28,37 @@ struct AgentSheet: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 10) {
-                Icon(name: "icon-glasses-accent", size: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(app.voice == nil ? "GLASSES WILL SAY" : "SPOTTED SAID")
+            if isGlasses, let request = app.parsedRequest {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("UNDERSTOOD")
                         .font(.spottedCaption)
                         .foregroundStyle(.labelTertiary)
-                    Text(reply)
-                        .font(.spottedCallout)
-                        .foregroundStyle(.labelPrimary)
+                    HStack(spacing: 8) {
+                        Text(request.action)
+                            .font(.spottedCaption)
+                            .foregroundStyle(.onAccent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.accent, in: Capsule())
+                        parsedChip("Target · \(request.target)")
+                        if let context = request.context { parsedChip(context) }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
-            .padding(.vertical, 12)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .accessibilityElement(children: .combine)
 
+            AssistantLine(label: app.voice == nil ? "GLASSES WILL SAY" : "SPOTTED SAID", text: reply)
+
+            if isGlasses {
+                HStack(spacing: 8) {
+                    Circle().fill(.accent).frame(width: 6, height: 6)
+                    Text("Earcon played · listening")
+                        .font(.spottedFootnote)
+                        .foregroundStyle(.labelTertiary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Try saying")
                     .font(.spottedFootnote)
@@ -76,6 +90,7 @@ struct AgentSheet: View {
 
             if let voice = app.voice, voice.isConnected {
                 typedInput(voice)
+            }
             }
 
             HStack(spacing: 16) {
@@ -115,8 +130,21 @@ struct AgentSheet: View {
         }
     }
 
+    private var isGlasses: Bool { app.captureMode == .glasses }
+
+    private func parsedChip(_ text: String) -> some View {
+        Text(text)
+            .font(.spottedCaption)
+            .foregroundStyle(.labelPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .fill(in: Capsule(), opacity: 0.1, stroke: 0.14)
+    }
+
     private var reply: String {
-        guard let voice = app.voice else { return "“Chair added. Lamp saved. Undo?”" }
+        guard let voice = app.voice else {
+            return isGlasses ? "“Lamp. Finding prices.”" : "“Chair added. Lamp saved. Undo?”"
+        }
         return voice.lastAssistantLine.map { "“\($0.text)”" } ?? "Look at something and ask."
     }
 
@@ -152,7 +180,12 @@ struct AgentSheet: View {
             }
             var said = AttributedString("“\(line.text)”")
             said.foregroundColor = line.isFinal ? .white : .white.opacity(0.7)
-            return said
+            return highlightingTarget(said)
+        }
+        if isGlasses {
+            var said = AttributedString("“Spotted, how much is that lamp?”")
+            said.foregroundColor = .white
+            return highlightingTarget(said)
         }
         var said = AttributedString("“\(heard)")
         said.foregroundColor = .white
@@ -162,8 +195,25 @@ struct AgentSheet: View {
     }
 }
 
+extension AgentSheet {
+    /// G2: the parsed target ("that lamp") in lime, so the user sees what the assistant will look up.
+    fileprivate func highlightingTarget(_ text: AttributedString) -> AttributedString {
+        guard let target = app.parsedRequest?.target else { return text }
+        var text = text
+        let plain = String(text.characters)
+        let phrase = plain.range(of: "that \(target)", options: .caseInsensitive)
+            ?? plain.range(of: target, options: .caseInsensitive)
+        if let phrase, let range = Range(NSRange(phrase, in: plain), in: text) {
+            text[range].foregroundColor = Color.accent
+        }
+        return text
+    }
+}
+
 /// Lime level meter. Animates while listening; static under Reduce Motion.
-private struct Waveform: View {
+struct Waveform: View {
+    /// 1 for the Listening sheet, 0.5 for G4's small "Listening for your answer".
+    var scale: CGFloat = 1
     private let heights: [CGFloat] = [10, 18, 28, 40, 26, 46, 34, 22, 38, 16, 28, 12, 20, 8]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -171,15 +221,15 @@ private struct Waveform: View {
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 4) {
+            HStack(spacing: 4 * scale) {
                 ForEach(heights.indices, id: \.self) { index in
                     let wobble = reduceMotion ? 1 : 0.7 + 0.3 * sin(t * 6 + Double(index) * 0.9)
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 3 * scale)
                         .fill(.accent)
-                        .frame(width: 5, height: heights[index] * wobble)
+                        .frame(width: 5 * scale, height: heights[index] * scale * wobble)
                 }
             }
-            .frame(height: 46)
+            .frame(height: 46 * scale)
         }
         .accessibilityHidden(true)
     }

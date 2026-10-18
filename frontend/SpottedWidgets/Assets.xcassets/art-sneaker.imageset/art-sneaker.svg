@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="200" height="170" viewBox="0 0 200 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame">
+<path id="Vector" d="M24 112C28 84 40.6667 68.6667 62 66L92 62C100 75.3333 112 84 128 88L168 98C178.667 102 183.333 109.333 182 120L180 126H24V112Z" fill="#F4F4F6"/>
+<path id="Vector_2" d="M22 126H182C183.333 134 180 138.667 172 140H32C24 138.667 20.6667 134 22 126Z" fill="#C8FF3D"/>
+<g id="Vector_3">
+<path d="M62 76L84 102ZM74 72L96 98Z" fill="black"/>
+<path d="M62 76L84 102M74 72L96 98" stroke-width="3" stroke-linecap="round" stroke="#1E1E24"/>
+</g>
+<path id="Vector_4" d="M108 92C122.667 100 140 104 160 104" stroke-width="5" stroke-linecap="round" stroke="#FF7A59"/>
+</g>
+</svg>

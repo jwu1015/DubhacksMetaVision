@@ -108,8 +108,38 @@ struct Candidate: Identifiable, Hashable {
     let price: Double
     let store: String
     let image: String
+    /// Where scene memory last saw it (glasses mode), e.g. "Seen 4 s ago · left".
+    var seen: String? = nil
 
     var id: String { detection.trackID }
+}
+
+// MARK: - Glasses mode
+
+/// Glasses connected: video is processed but not shown, and the user picks by voice.
+/// Phone: the live preview with hotspots to tap.
+enum CaptureMode {
+    case phone, glasses
+}
+
+/// One Look the user asked for: Spotted Today (G5) and the room recap (G7).
+struct Capture: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let price: Double?
+    let verdict: PriceVerdict?
+    let image: String
+    let room: String
+    let date: Date
+    /// The best match, so it can be added to the cart from the feed.
+    let product: Product?
+}
+
+/// What the assistant understood from a spoken request (G2's chips): "Price check · lamp".
+struct ParsedRequest: Hashable {
+    let action: String
+    let target: String
+    var context: String? = nil
 }
 
 struct SavedItem: Identifiable, Hashable {

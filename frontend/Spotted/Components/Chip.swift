@@ -38,13 +38,7 @@ struct VerdictChip: View {
         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private var color: Color {
-        switch verdict {
-        case .low: .success
-        case .fair, .unknown: .labelSecondary
-        case .high: .warning
-        }
-    }
+    private var color: Color { verdict.color }
 
     @ViewBuilder private var marker: some View {
         switch (verdict, detailed) {
@@ -91,6 +85,97 @@ struct GlassesSaidRow: View {
                 .font(.spottedFootnote)
                 .foregroundStyle(.labelPrimary)
                 .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension PriceVerdict {
+    /// Low = success, Fair = secondary, High = warning. Always shown with the word.
+    var color: Color {
+        switch self {
+        case .low: .success
+        case .fair, .unknown: .labelSecondary
+        case .high: .warning
+        }
+    }
+}
+
+/// "$189 · Fair price" with the verdict in its color.
+struct PriceVerdictLine: View {
+    let price: Double?
+    let verdict: PriceVerdict?
+    var suffix: String?
+
+    var body: some View {
+        Text(line).font(.spottedFootnote)
+    }
+
+    private var line: AttributedString {
+        var parts = AttributedString(price.map { Money.short($0) } ?? "No price yet")
+        parts.foregroundColor = Color.labelSecondary
+        if let verdict {
+            var dot = AttributedString(" · ")
+            dot.foregroundColor = Color.labelSecondary
+            var word = AttributedString(verdict.label)
+            word.foregroundColor = verdict.color
+            parts += dot + word
+        }
+        if let suffix {
+            var tail = AttributedString(" · \(suffix)")
+            tail.foregroundColor = Color.labelSecondary
+            parts += tail
+        }
+        return parts
+    }
+}
+
+/// The assistant's spoken line, mirrored on the phone: "GLASSES WILL SAY  “Lamp. Finding prices.”"
+struct AssistantLine: View {
+    let label: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Icon(name: "icon-glasses-accent", size: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.spottedCaption)
+                    .foregroundStyle(.labelTertiary)
+                Text(text)
+                    .font(.spottedCallout)
+                    .foregroundStyle(.labelPrimary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 16)
+        .padding(.vertical, 12)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Room name with a pin, used by Saved (04) and Spotted Today (G5).
+struct RoomHeader: View {
+    let name: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Icon(name: "icon-pin", size: 18)
+                .frame(width: 40, height: 40)
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.spottedHeadline)
+                    .foregroundStyle(.labelPrimary)
+                Text(subtitle)
+                    .font(.spottedFootnote)
+                    .foregroundStyle(.labelSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Icon(name: "icon-chevron", size: 16)
         }
         .accessibilityElement(children: .combine)
     }

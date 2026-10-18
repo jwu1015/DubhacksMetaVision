@@ -73,12 +73,79 @@ enum MockData {
         sourcesOK: [.amazon], item: finishedItem
     )
 
+    // MARK: Glasses mode (G1–G7)
+
+    /// G3: the lamp the user asked about by voice.
+    static let lampDetect = DetectResponse(
+        captureID: "cap_lamp",
+        imageURL: "asset:art-arc-lamp",
+        item: Item(category: "arc lamp", description: nil, style: nil, colors: [], materials: [],
+                   brandGuess: nil, confidence: 0, searchQueries: [], bbox: lamp.bbox,
+                   quickPhrase: "Lamp. Finding prices."),
+        segmentation: Segmentation(method: .sam3, bbox: lamp.bbox, maskScore: 0.88, cutoutPath: "",
+                                   cutoutURL: "asset:art-arc-lamp", maskPreviewURL: nil, latencyMS: 900),
+        quickPhrase: "Lamp. Finding prices.",
+        latencyMS: 1400
+    )
+
+    static let lampSearch = SearchResponse(
+        captureID: "cap_lamp",
+        bestMatch: Product(title: "Brass Arc Floor Lamp", store: "West Elm", price: 189, currency: "USD",
+                           url: "https://www.westelm.com", imageURL: "asset:art-arc-lamp", source: .shopping,
+                           tier: .new, sourceRank: 0, matchScore: nil, savingsPct: nil, matchReason: nil),
+        dupes: [
+            Product(title: "Arc Floor Lamp, Brass", store: "Amazon", price: 164, currency: "USD",
+                    url: "https://www.amazon.com", imageURL: "asset:art-arc-lamp", source: .amazon,
+                    tier: .dupe, sourceRank: 0, matchScore: nil, savingsPct: 13, matchReason: nil),
+        ],
+        used: [],
+        priceInsight: PriceInsight(typicalLow: 150, typicalHigh: 240, median: 189, sampleSize: 7,
+                                   bestMatchVerdict: .fair,
+                                   verdictText: "West Elm is within the typical $150–$240 range."),
+        spokenSummary: "West Elm has it for $189. Fair price.",
+        timingMS: [:],
+        sourcesOK: nil,
+        item: Item(category: "brass arc lamp", description: "Arc floor lamp with a brass shade",
+                   style: "mid-century", colors: ["brass", "white"], materials: ["brass", "marble"],
+                   brandGuess: "West Elm", confidence: 0.82, searchQueries: [], bbox: lamp.bbox,
+                   quickPhrase: "Lamp. Finding prices.")
+    )
+
+    /// G2: what the assistant understood from "Spotted, how much is that lamp?"
+    static let parsedRequest = ParsedRequest(action: "Price check", target: "lamp", context: "In view · centered")
+
+    /// G5 and G7: today's captures.
+    static let captures: [Capture] = {
+        let today = Calendar.current.startOfDay(for: .now)
+        func at(_ hour: Int, _ minute: Int) -> Date { today.addingTimeInterval(TimeInterval(hour * 3600 + minute * 60)) }
+        return [
+            Capture(id: "cap_lamp", title: "Brass arc lamp", price: 189, verdict: .fair, image: "asset:art-arc-lamp",
+                    room: "Maya’s apartment", date: at(16, 12), product: lampSearch.bestMatch),
+            Capture(id: "cap_7f3a", title: "Walnut lounge chair", price: 1299, verdict: .fair,
+                    image: "asset:art-lounge-chair", room: "Maya’s apartment", date: at(16, 8), product: search.bestMatch),
+            Capture(id: "cap_vase", title: "Ceramic bud vase", price: 64, verdict: .low, image: "asset:art-ceramic-vase",
+                    room: "Maya’s apartment", date: at(16, 1),
+                    product: Product(title: "Ceramic Bud Vase", store: "Heath Ceramics", price: 64, currency: "USD",
+                                     url: "https://www.heathceramics.com", imageURL: "asset:art-ceramic-vase",
+                                     source: .shopping, tier: .new, sourceRank: 0, matchScore: nil, savingsPct: nil,
+                                     matchReason: nil)),
+            Capture(id: "cap_shoe", title: "Court runner", price: 135, verdict: .high, image: "asset:art-sneaker",
+                    room: "Blue Bottle Coffee", date: at(11, 20),
+                    product: Product(title: "Court Runner", store: "Allbirds", price: 135, currency: "USD",
+                                     url: "https://www.allbirds.com", imageURL: "asset:art-sneaker",
+                                     source: .amazon, tier: .new, sourceRank: 0, matchScore: nil, savingsPct: nil,
+                                     matchReason: nil)),
+        ]
+    }()
+
     /// 07 uses tighter boxes than the stream so both options clear the taller card.
     static let candidates = [
         Candidate(detection: Detection(trackID: "t3", box: [0.234, 0.350, 0.763, 0.566], label: "chair", score: 0.52),
-                  title: "Walnut Lounge Chair", price: 1299, store: "Article", image: "asset:art-lounge-chair"),
+                  title: "Walnut Lounge Chair", price: 1299, store: "Article", image: "asset:art-lounge-chair",
+                  seen: "Seen 4 s ago · left"),
         Candidate(detection: Detection(trackID: "t4", box: [0.799, 0.371, 0.982, 0.561], label: "lamp", score: 0.48),
-                  title: "Brass Arc Lamp", price: 189, store: "West Elm", image: "asset:art-arc-lamp"),
+                  title: "Brass Arc Lamp", price: 189, store: "West Elm", image: "asset:art-arc-lamp",
+                  seen: "In view · centered"),
     ]
 
     static let rooms = [

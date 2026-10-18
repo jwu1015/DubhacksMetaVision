@@ -25,6 +25,8 @@ struct SpottedApp: App {
             RootView()
                 .environment(appState)
                 .preferredColorScheme(.dark)
+                // spotted://save, add and talk, from the Live Activity (G6).
+                .onOpenURL { appState.handle($0) }
         }
     }
 }

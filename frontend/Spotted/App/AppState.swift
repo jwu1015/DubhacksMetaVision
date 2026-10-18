@@ -26,11 +26,24 @@ final class AppState {
 
     // Live view
     var detections: [Detection] = MockData.detections
-    var scan: ScanState = .idle
+    var scan: ScanState = .idle {
+        didSet { scanChanged(from: oldValue) }
+    }
     var selectedTrackID: String?
     /// Sources that have answered while /search runs.
     var finishedSources: Set<ProductSource> = []
     var currentRoom = "Maya’s apartment"
+
+    // Glasses mode (G1–G7)
+    var captureMode: CaptureMode = .phone
+    /// "Glasses connected. Say “Spotted” to capture." on Glasses Home for a few seconds.
+    var modeBanner: String?
+    /// Every Look the user asked for: Spotted Today and the room recap.
+    var captures: [Capture] = []
+    /// What the assistant understood (G2). Mock only until the agent reports it.
+    var parsedRequest: ParsedRequest?
+    var isShowingRoomRecap = false
+    private let lookActivity = LookActivityController()
 
     // Sheets
     var isListening = false
@@ -78,10 +91,12 @@ final class AppState {
             live.select(trackID: detection.trackID)
             return
         }
+        let isLamp = detection.label == "lamp"
+        let (mockDetect, mockSearch) = isLamp ? (MockData.lampDetect, MockData.lampSearch) : (MockData.detect, MockData.search)
         Task {
             try? await Task.sleep(for: .seconds(0.8))
             guard scan == .looking, selectedTrackID == detection.trackID else { return }
-            scan = .detected(Look(MockData.detect))
+            scan = .detected(Look(mockDetect))
 
             try? await Task.sleep(for: .seconds(0.9))
             guard case .detected = scan, selectedTrackID == detection.trackID else { return }
@@ -90,7 +105,7 @@ final class AppState {
             try? await Task.sleep(for: .seconds(1.6))
             guard case let .detected(look) = scan, selectedTrackID == detection.trackID else { return }
             finishedSources = Set(ProductSource.searchable)
-            scan = .matched(look.finished(with: MockData.search), MockData.search)
+            scan = .matched(look.finished(with: mockSearch), mockSearch)
         }
     }
 
@@ -369,7 +384,7 @@ final class AppState {
     /// sheet, results or the pay sheet is up. The mic is transcribed the whole time it's connected.
     func updateVoice(appIsActive: Bool) {
         guard let voice else { return }
-        let inUse = tab == .live || isListening || isShowingDetail || isShowingCheckout
+        let inUse = tab == .live || isListening || isShowingDetail || isShowingCheckout || isShowingRoomRecap
         appIsActive && inUse ? voice.connect() : voice.disconnect()
     }
 
@@ -414,11 +429,117 @@ final class AppState {
         }
     }
 
+    // MARK: - Glasses mode
+
+    /// Switches modes from the glasses' connection state, with the toast from FRONTEND.md.
+    func setCaptureMode(_ mode: CaptureMode) {
+        guard mode != captureMode else { return }
+        captureMode = mode
+        clearScan()
+        switch mode {
+        case .glasses:
+            showModeBanner()
+        case .phone:
+            lookActivity.end()
+            showToast("Glasses disconnected. Using your phone camera.", canUndo: false)
+        }
+    }
+
+    private func showModeBanner() {
+        let text = "Glasses connected. Say “Spotted” to capture."
+        modeBanner = text
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            if modeBanner == text { modeBanner = nil }
+        }
+    }
+
+    /// The next-best object for "Not this one" (G3): the most confident one that isn't selected.
+    var nextBestDetection: Detection? {
+        detections.filter { $0.trackID != selectedTrackID }.max { $0.score < $1.score }
+    }
+
+    func notThisOne() {
+        guard let next = nextBestDetection else { return clearScan() }
+        select(next)
+    }
+
+    /// Live Activities can only start while the app is in front, so re-sync when it becomes active.
+    func appBecameActive() {
+        if captureMode == .glasses { lookActivity.update(for: scan) }
+    }
+
+    private func scanChanged(from old: ScanState) {
+        if case let .matched(look, search) = scan, !captures.contains(where: { $0.id == look.captureID }) {
+            captures.insert(Capture(id: look.captureID, title: look.name.sentenceCased, price: search.bestMatch?.price,
+                                    verdict: search.bestMatch == nil ? nil : search.priceInsight.bestMatchVerdict,
+                                    image: search.bestMatch?.imageURL ?? look.cutoutURL ?? "", room: currentRoom,
+                                    date: .now, product: search.bestMatch), at: 0)
+        }
+        if captureMode == .glasses {
+            lookActivity.update(for: scan)
+        }
+    }
+
+    func isSaved(_ capture: Capture) -> Bool { isSaved(capture.title) }
+
+    func toggleSave(_ capture: Capture) {
+        if isSaved(capture) {
+            saved.removeAll { $0.title == capture.title }
+        } else {
+            save(capture)
+        }
+    }
+
+    private func save(_ capture: Capture) {
+        guard !isSaved(capture) else { return }
+        let item = SavedItem(id: UUID().uuidString, title: capture.title, store: capture.product?.store ?? "",
+                             price: capture.price ?? 0, image: capture.image, room: capture.room)
+        saved.insert(item, at: 0)
+        undoStack.append(.saved(itemID: item.id))
+        showToast("Saved · \(capture.title)", canUndo: true)
+    }
+
+    /// The room recap (G7): what the user looked at in the current room.
+    var recapCaptures: [Capture] { captures.filter { $0.room == currentRoom } }
+
+    func saveRecap(_ ids: Set<String>) {
+        for capture in recapCaptures where ids.contains(capture.id) { save(capture) }
+        isShowingRoomRecap = false
+    }
+
+    /// Deep links from the Live Activity: spotted://save, spotted://add (with ?capture=ID), spotted://talk.
+    func handle(_ url: URL) {
+        guard url.scheme == "spotted" else { return }
+        let captureID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "capture" }?.value
+        let isCurrent = captureID == nil || captureID == currentLook?.captureID
+        let capture = captures.first { $0.id == captureID }
+        switch url.host() {
+        case "talk":
+            tab = .live
+            isListening = true
+        case "save":
+            if isCurrent, let look = currentLook { save(look) } else if let capture { save(capture) }
+        case "add":
+            if let product = isCurrent ? currentSearch?.bestMatch : capture?.product {
+                Task { await add(product) }
+            }
+        default:
+            break
+        }
+    }
+
     // MARK: - Mockup states
 
     /// Jumps straight to one of the Figma frames. Used by the Profile tab's state list and previews.
     func show(_ frame: MockFrame) {
         connection = .live
+        captureMode = .phone
+        modeBanner = nil
+        parsedRequest = nil
+        isShowingRoomRecap = false
+        lookActivity.end()
         isListening = false
         isShowingDetail = false
         isShowingCheckout = false
@@ -466,7 +587,33 @@ final class AppState {
         case .disconnected:
             clearScan()
             connection = .disconnected
+        case .glassesHome:
+            enterGlasses()
+            modeBanner = "Glasses connected. Say “Spotted” to capture."
+        case .voiceCommand:
+            show(.glassesHome)
+            parsedRequest = MockData.parsedRequest
+            isListening = true
+        case .captureCard, .liveActivity:
+            enterGlasses()
+            selectedTrackID = MockData.lamp.trackID
+            scan = .matched(Look(MockData.lampDetect).finished(with: MockData.lampSearch), MockData.lampSearch)
+        case .voiceWhichOne:
+            enterGlasses()
+            scan = .ambiguous(MockData.candidates)
+        case .spottedToday:
+            enterGlasses()
+            tab = .saved
+        case .roomRecap:
+            show(.glassesHome)
+            isShowingRoomRecap = true
         }
+    }
+
+    private func enterGlasses() {
+        clearScan()
+        captureMode = .glasses
+        captures = MockData.captures
     }
 
     /// The saved items and cart drawn in the 04 / 05 / 06 mockups.
@@ -490,6 +637,13 @@ enum MockFrame: String, CaseIterable, Identifiable {
     case checkout = "06 · Checkout"
     case whichOne = "07 · Which One?"
     case disconnected = "08 · Glasses Disconnected"
+    case glassesHome = "G1 · Glasses Home"
+    case voiceCommand = "G2 · Voice Command"
+    case captureCard = "G3 · Capture Card"
+    case voiceWhichOne = "G4 · Voice Which-One"
+    case spottedToday = "G5 · Spotted Today"
+    case liveActivity = "G6 · Live Activity"
+    case roomRecap = "G7 · Room Recap"
 
     var id: String { rawValue }
 }

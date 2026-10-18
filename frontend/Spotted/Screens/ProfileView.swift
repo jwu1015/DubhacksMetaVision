@@ -18,6 +18,29 @@ struct ProfileView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("GLASSES")
+                        .font(.spottedCaption)
+                        .tracking(0.72)
+                        .foregroundStyle(.labelTertiary)
+                    // Stands in for the glasses' connection state until the Meta DAT SDK is in.
+                    Toggle(isOn: Binding(get: { app.captureMode == .glasses },
+                                         set: { app.setCaptureMode($0 ? .glasses : .phone) })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Glasses connected")
+                                .font(.spottedCallout)
+                                .foregroundStyle(.labelPrimary)
+                            Text("Glasses mode: no preview, ask by voice")
+                                .font(.spottedFootnote)
+                                .foregroundStyle(.labelSecondary)
+                        }
+                    }
+                    .tint(.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
                     Text("MOCKUP STATES")
                         .font(.spottedCaption)
                         .tracking(0.72)

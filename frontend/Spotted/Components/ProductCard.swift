@@ -33,6 +33,8 @@ struct ProductCard: View {
                 }
                 if let cheapestUsed = search.used.map(\.price).min() {
                     Chip(title: "Used from \(Money.short(cheapestUsed))", icon: "icon-tag")
+                } else if let cheaper = search.dupes.min(by: { $0.price < $1.price }) {
+                    Chip(title: "\(cheaper.store) \(Money.short(cheaper.price))", icon: "icon-tag")
                 }
             }
 
