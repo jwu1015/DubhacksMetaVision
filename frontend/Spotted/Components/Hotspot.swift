@@ -39,3 +39,24 @@ struct Hotspot: View {
         .padding(.vertical, 6)
     }
 }
+
+/// A tracked object outside the top labels: a small highlighted dot at the center of its box.
+/// The visible dot is 6pt; the tap target around it is 28pt.
+struct HotspotDot: View {
+    /// What the object is, for VoiceOver.
+    let name: String
+
+    var body: some View {
+        Circle()
+            .fill(.white)
+            .frame(width: 6, height: 6)
+            // Keeps the dot visible on bright backgrounds.
+            .shadow(color: .black.opacity(0.5), radius: 2, y: 0.5)
+            .frame(width: 28, height: 28)
+            .contentShape(Circle())
+            .accessibilityElement()
+            .accessibilityLabel(name)
+            .accessibilityHint("Shows price and matches")
+            .accessibilityAddTraits(.isButton)
+    }
+}
