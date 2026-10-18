@@ -108,14 +108,20 @@ class SeenTest(unittest.TestCase):
         seen.update(look("described", uid=8, selected=False, item={"category": "vase", "description": "Blue glass."}))
         self.assertEqual((seen.described, seen.look), ({8: "vase Blue glass."}, None))
 
-    def test_a_reset_scene_memory_forgets_its_uids(self):  # a mode switch or a pause: new uids
+    def test_a_new_tracking_session_forgets_its_uids(self):  # a mode switch or a new category: uids start over
         seen = picked()
         self.assertEqual(seen.described, {3: "floor lamp Tripod floor lamp with a cream drum shade."})
         seen.ranked, seen.tried, seen.asked = [3, 4], [3], []
-        seen.update(scene())
+        seen.update({**scene(), "session": 2})
         self.assertEqual((seen.objects, seen.described, seen.ranked, seen.tried), ([], {}, [], []))
         self.assertIsNone(seen.look["uid"])  # its object is gone from scene memory
         self.assertEqual(seen.look["item"], ITEM)  # but it's still the item picked
+
+    def test_an_empty_view_keeps_what_was_learned(self):  # nothing tracked for a while: same session, same uids
+        seen = picked()
+        seen.update(scene())
+        self.assertEqual(seen.objects, [])
+        self.assertEqual((list(seen.described), seen.look["uid"]), ([3], 3))
 
 
 class ResolveTest(unittest.TestCase):
