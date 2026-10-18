@@ -98,7 +98,9 @@ def fake_server(latency: float = 0.0, max_sessions: int = 4) -> FastAPI:
         return {"status": "ok", "model": "fake", "device": "cpu", "sessions": len(sessions)}
 
     @app.post("/session/auto")
-    async def create_auto():
+    async def create_auto(body: dict = Body(default={})):
+        if not body.get("category"):  # like the real server since 18 Oct
+            raise HTTPException(400, 'category is required, e.g. "electronics"')
         return await create({"prompt": ", ".join(o[1] for o in FAKE_OBJECTS)})
 
     @app.post("/session")
@@ -153,9 +155,12 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         self.requests.append(request)
         path = request.url.path.removeprefix("/inference")
         if request.method == "POST" and path in ("/session", "/session/auto"):
-            if path == "/session" and not json.loads(request.content or b"{}").get("prompt"):
+            body = json.loads(request.content or b"{}")
+            if path == "/session" and not body.get("prompt"):
                 return httpx.Response(400, json={"detail": 'prompt is required: "cup, laptop" or ["cup", "laptop"] '
                                                            "(or use /session/auto)"})
+            if path == "/session/auto" and not body.get("category"):
+                return httpx.Response(400, json={"detail": 'category is required, e.g. "electronics"'})
             self.sessions += 1
             return httpx.Response(200, json={"session_id": f"s{self.sessions}", "labels": ["sofa"]})
         if request.method == "DELETE":
@@ -199,6 +204,7 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         t = Tracker(base_url=BASE, client=client, categories="")
         self.assertTrue(await t.start())
         self.assertEqual(self.calls(), ["POST /session/auto"])
+        self.assertEqual(json.loads(self.requests[0].content), {"category": config.SAM_AUTO_CATEGORY})
 
     async def test_send_creates_the_session_if_needed(self):
         t = self.tracker()
