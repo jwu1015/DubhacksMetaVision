@@ -5,8 +5,8 @@
   {"name": "person-bicycle-car", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/person-bicycle-car-detection.mp4"},
   {"name": "store-aisle", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/store-aisle-detection.mp4"},
   {"name": "bottle", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/bottle-detection.mp4"},
-  {"name": "table", "path": "table.mov", "category": "small buyable items"},
-  {"name": "table", "path": "table.mov", "category": "furniture"},
-  {"name": "table", "path": "table.mov", "category": "clothing"},
-  {"name": "table", "path": "table.mov", "category": "electronics"}
+  {"name": "table", "path": "table.mp4", "category": "small buyable items"},
+  {"name": "table", "path": "table.mp4", "category": "furniture"},
+  {"name": "table", "path": "table.mp4", "category": "clothing"},
+  {"name": "table", "path": "table.mp4", "category": "electronics"}
 ]

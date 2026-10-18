@@ -22,7 +22,7 @@ Streams test videos through the segmentation API the way the glasses would, then
 ```bash
 python run_tests.py                                  # every pass in videos.json
 python run_tests.py table bedroom                    # only these videos (all their passes)
-python run_tests.py --file my.mov --category furniture   # your own video, one pass
+python run_tests.py --file my.mp4 --category furniture   # your own video, one pass
 ```
 
 | Option | Default | Meaning |
@@ -48,8 +48,8 @@ The summary has latency, objects per frame, frames with no objects, and id stabi
 `videos.json` lists one entry per pass. A video listed several times with different `category` values runs once per category:
 
 ```json
-{"name": "table", "path": "table.mov", "category": "electronics"}
+{"name": "table", "path": "table.mp4", "category": "electronics"}
 {"name": "bedroom", "url": "https://…/bedroom.mp4", "category": "furniture"}
 ```
 
-`path` points to a file in `videos/` (`table.mov` is checked in). `url` entries are downloaded to `videos/` on first use. Entries without a `category` use `things to buy`, since the server requires one.
+`path` points to a local file in `videos/`. Videos are not committed, so put `table.mp4` there yourself. `url` entries are downloaded to `videos/` on first use. Entries without a `category` use `things to buy`, since the server requires one.

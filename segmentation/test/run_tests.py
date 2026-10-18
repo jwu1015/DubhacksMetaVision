@@ -41,8 +41,11 @@ AUTH = {
 
 
 def download(entry):
-    if "path" in entry:  # local file already in videos/
-        return VIDEOS / entry["path"]
+    if "path" in entry:  # local file, not committed: must be put in videos/ by hand
+        path = VIDEOS / entry["path"]
+        if not path.exists():
+            raise FileNotFoundError(f"{path} not found; put the video there (videos are not committed)")
+        return path
     path = VIDEOS / f"{entry['name']}.mp4"
     if not path.exists():
         VIDEOS.mkdir(exist_ok=True)
