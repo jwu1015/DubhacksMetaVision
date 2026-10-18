@@ -10,7 +10,7 @@ import logging
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, room_io
-from livekit.plugins import google
+from livekit.plugins import google, noise_cancellation
 
 from storefront import config
 from storefront.rtc.tokens import PHONE
@@ -47,8 +47,12 @@ async def entry(ctx: agents.JobContext):
     await ctx.connect()
     phone = await phone_in(ctx.room)
     session = AgentSession(llm=google.realtime.RealtimeModel(model=config.GEMINI_MODEL))
+    # The phone's mic hears the store too: other people's voices and the noise are taken out before Gemini
+    # hears them (LiveKit Cloud's background voice cancellation)
+    mic = room_io.AudioInputOptions(noise_cancellation=noise_cancellation.BVC())
     await session.start(agent=Assistant(seen), room=ctx.room,
-                        room_options=room_io.RoomOptions(participant_identity=phone.identity, video_input=True))
+                        room_options=room_io.RoomOptions(participant_identity=phone.identity, audio_input=mic,
+                                                         video_input=True))
     log.info("voice: listening to %s in room %s (%s)", phone.identity, ctx.room.name, config.GEMINI_MODEL)
 
 
