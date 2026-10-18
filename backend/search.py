@@ -41,9 +41,9 @@ log = logging.getLogger("gtl.search")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-# Per-source limits. 7s caps how long one slow search can hold up an item: real calls usually took 1-3s
-# (Shopping, Amazon), but Shopping sometimes hung for the whole limit. (Lens took 14-45s; it isn't called.)
-TIMEOUT_S = {"lens": 15.0, "shopping": 7.0, "ebay": 7.0, "amazon": 7.0}
+# Per-source limits. 5s caps how long one slow search can hold up an item: fresh calls took 0.7-2.6s
+# (Shopping, Amazon), but about 1 in 12 hung for the whole limit. (Lens took 17-64s; it isn't called.)
+TIMEOUT_S = {"lens": 15.0, "shopping": 5.0, "ebay": 5.0, "amazon": 5.0}
 # "all" (the default) returned only an ai_overview link and no visual_matches in our one test, so ask
 # for visual_matches directly. Compare again once Lens returns results.
 LENS_TYPE = "visual_matches"

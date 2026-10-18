@@ -196,14 +196,16 @@ def corners(box: dict) -> list[float]:
 
 
 SCENE_FIELDS = ("in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts")  # scene memory's
+QUICK_FIELDS = ("name", "price_low", "price_high")  # prefetch.py's quick label, once an object has one
 
 
 def detections(event: dict) -> dict:
     """A stream "objects" event as the phone's DetectionsMessage: every object scene memory holds, with
-    its scene fields. Those out of view (in_view false) aren't hotspots, but a voice command can name them."""
+    its scene fields and, once it has one, its quick label. Those out of view (in_view false) aren't
+    hotspots, but a voice command can name them."""
     return {"type": "detections", "ts": round(time.time() * 1000), "objects": [
         {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"],
-         **{k: o[k] for k in SCENE_FIELDS if k in o}}
+         **{k: o[k] for k in SCENE_FIELDS + QUICK_FIELDS if k in o}}
         for o in event["objects"]]}
 
 

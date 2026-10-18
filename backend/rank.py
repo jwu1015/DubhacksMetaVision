@@ -257,19 +257,22 @@ def build(item: Item, products: list[Product], insight: PriceInsight, picks: Pic
     else:
         best = None
 
-    # Found means a match score of FOUND_SCORE or more (unscored products can't be checked, so they pass).
-    # Below it, the highest-scoring product is the match if it clears the bar, else it's only the closest.
-    exact = best is None or best.match_score is None or best.match_score >= FOUND_SCORE
+    # Found means a match score of FOUND_SCORE or more. An unscored product can't be confirmed, so it only
+    # passes when nothing was scored at all (no scorer ran). Otherwise the best-scoring new product is the
+    # match if it clears the bar, then a used one that does; failing both, it's only the closest.
+    scored = any(p.match_score is not None for p in products)
+    exact = best is None or (best.match_score or 0) >= FOUND_SCORE or (best.match_score is None and not scored)
     if not exact:
-        top = max((p for p in new if p.match_score is not None), key=lambda p: p.match_score)
-        exact = top.match_score >= FOUND_SCORE
-        best = priced(top, "new", "Highest match score" if exact else NOT_EXACT_REASON, None)
+        top = max((p for p in new if p.match_score is not None), key=lambda p: p.match_score, default=None)
+        if top is not None and top.match_score >= FOUND_SCORE:
+            exact, best = True, priced(top, "new", "Highest match score", None)
     if not exact:  # no new listing is the item, but a used or refurbished one may be: that's still found
         found_used = max((p for p in products if p.tier == "used" and (p.match_score or 0) >= FOUND_SCORE),
                          key=lambda p: p.match_score, default=None)
         if found_used:
-            exact = True
-            best = priced(found_used, "used", USED_MATCH_REASON, None)
+            exact, best = True, priced(found_used, "used", USED_MATCH_REASON, None)
+        else:
+            best = priced(top or best, "new", NOT_EXACT_REASON, None)
 
     seen = {best.url} if best else set()
 
