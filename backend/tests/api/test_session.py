@@ -16,11 +16,16 @@ class FakeRooms:
     def __init__(self):
         self.current = None
         self.opened: list = []
+        self.voice_rooms: list[str] = []
 
     async def open(self, category=None):
         self.opened.append(category)
         self.current = SimpleNamespace(name=f"storefront-{len(self.opened)}")
         return self.current.name
+
+    async def open_voice(self):
+        self.voice_rooms.append(f"storefront-voice-{len(self.voice_rooms) + 1}")
+        return self.voice_rooms[-1]
 
 
 @pytest.fixture
@@ -56,13 +61,15 @@ def test_a_viewer_token_watches_the_current_room_hidden(client):
     assert viewer.video.hidden and not viewer.video.can_publish and not viewer.video.can_publish_data
 
 
-def test_the_legacy_voice_token_brings_the_agent(client):
-    c, _ = client
+def test_the_legacy_voice_token_opens_a_voice_room(client):
+    c, rooms = client
     r = c.post("/voice/token", json={"participant_identity": "phone-shiven", "room_name": "theirs"})
     voice = claims(r.json()["participant_token"])
     assert r.status_code == 201 and voice.identity == "phone-shiven"
-    assert voice.video.room.startswith("storefront-voice-")  # our room, not the one asked for
-    assert [a.agent_name for a in voice.room_config.agents] == [config.VOICE_AGENT]
+    assert voice.video.room == rooms.voice_rooms[0] == "storefront-voice-1"  # ours, not the one asked for
+    assert rooms.opened == []  # the session's room is left alone
+    other = claims(c.post("/voice/token").json()["participant_token"])
+    assert other.identity.startswith("phone-") and other.video.room == "storefront-voice-2"
 
 
 def test_not_set_up(client):

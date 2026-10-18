@@ -13,6 +13,10 @@ voice agent. POST /session/token opens a new room (Rooms.open): the backend join
 
 Someone joining gets the current state, sent to them alone. When the phone leaves for PHONE_GRACE_S,
 tracking stops.
+
+POST /voice/token opens a voice room instead (Rooms.open_voice), for the current app: its camera reaches the
+stream over the legacy WebRTC path, so the backend joins the room only to pass the same messages to the voice
+agent, and leaves tracking alone.
 """
 import asyncio
 import json
@@ -56,11 +60,14 @@ def is_phone(p: rtc.RemoteParticipant) -> bool:
 
 
 class Session:
-    """One room, joined as "vision"."""
+    """One room, joined as "vision". tracking: the phone's camera is in this room, so its video goes into the
+    stream and tracking stops when the phone leaves. False for a voice room, whose phone's camera reaches the
+    stream another way."""
 
     def __init__(self, name: str, room: rtc.Room, live: Stream, runner: Runner,
-                 livekit: Callable[[], api.LiveKitAPI]):
+                 livekit: Callable[[], api.LiveKitAPI], tracking: bool = True):
         self.name, self.room, self.live, self.runner, self.livekit = name, room, live, runner, livekit
+        self.tracking = tracking
         self.paused = False
         self._dispatch_id: str | None = None  # the voice agent's, while it's wanted
         self._grace: asyncio.Task | None = None
@@ -111,7 +118,7 @@ class Session:
 
     def _on_leave(self, p: rtc.RemoteParticipant):
         log.info("room %s: %s left", self.name, p.identity)
-        if is_phone(p) and not any(is_phone(o) for o in self.room.remote_participants.values()):
+        if self.tracking and is_phone(p) and not any(is_phone(o) for o in self.room.remote_participants.values()):
             self._grace = self._spawn(self._phone_gone())
 
     async def _phone_gone(self):
@@ -120,7 +127,7 @@ class Session:
         await self.live.stop()
 
     def _on_track(self, track: rtc.Track, publication: rtc.RemoteTrackPublication, p: rtc.RemoteParticipant):
-        if track.kind == rtc.TrackKind.KIND_VIDEO and is_phone(p):
+        if self.tracking and track.kind == rtc.TrackKind.KIND_VIDEO and is_phone(p):
             log.info("room %s: video from %s", self.name, p.identity)
             self._spawn(self._receive(track))
 
@@ -184,6 +191,12 @@ class Session:
         on = payload.get("on")
         if not isinstance(on, bool):
             return answer(False, "on must be true or false")
+        if not await self.voice(on):
+            return answer(False, "The voice assistant isn't available.")
+        return answer()
+
+    async def voice(self, on: bool) -> bool:
+        """Bring the voice agent in, or send it away. False if that failed."""
         try:
             async with self.livekit() as lk:
                 if on and not self._dispatch_id:
@@ -194,8 +207,8 @@ class Session:
                     await self._dismiss(lk)
         except Exception as e:
             log.warning("room %s: voice %s failed (%r)", self.name, on, e)
-            return answer(False, "The voice assistant isn't available.")
-        return answer()
+            return False
+        return True
 
     async def _dismiss(self, lk: api.LiveKitAPI):
         """Send the voice agent away: no new job, and the one in the room leaves."""
@@ -208,7 +221,7 @@ class Session:
     # ---------- the end ----------
 
     async def close(self):
-        """Leave the room and stop tracking. Never raises."""
+        """Leave the room and stop tracking (a voice room leaves tracking alone). Never raises."""
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -216,7 +229,8 @@ class Session:
             await self.room.disconnect()
         except Exception as e:
             log.warning("room %s: leaving failed (%r)", self.name, e)
-        await self.live.stop()
+        if self.tracking:
+            await self.live.stop()
         log.info("room %s: left", self.name)
 
 
@@ -231,12 +245,13 @@ def livekit_api() -> api.LiveKitAPI:
 
 
 class Rooms:
-    """One session at a time: opening a new one leaves the old one."""
+    """One session at a time, and one voice room: opening a new one leaves the old one."""
 
     def __init__(self, live: Stream, runner: Runner, join: Callable[[str], Awaitable[rtc.Room]] = join,
                  livekit: Callable[[], api.LiveKitAPI] = livekit_api):
         self.live, self.runner, self.join, self.livekit = live, runner, join, livekit
         self.current: Session | None = None
+        self.voice_room: Session | None = None
         self._lock = asyncio.Lock()
 
     async def open(self, category: str | None = None) -> str:
@@ -244,19 +259,38 @@ class Rooms:
         async with self._lock:
             await self._close()
             name = "storefront-" + uuid.uuid4().hex[:8]
-            async with self.livekit() as lk:
-                await lk.room.create_room(api.CreateRoomRequest(name=name, empty_timeout=EMPTY_TIMEOUT_S))
-            room = await self.join(name)
-            self.current = Session(name, room, self.live, self.runner, self.livekit)
+            self.current = await self._session(name, tracking=True)
             self.live.tracker.category = category or config.DEFAULT_CATEGORY
             log.info("room %s: open, tracking %r", name, self.live.tracker.category)
+            return name
+
+    async def open_voice(self) -> str:
+        """A new voice room for the current app (POST /voice/token), with the backend and the voice agent in it;
+        its name. The agent is sent for once the backend is in, so the first messages it gets are the state."""
+        async with self._lock:
+            await self._close_voice()
+            name = "storefront-voice-" + uuid.uuid4().hex[:8]
+            self.voice_room = await self._session(name, tracking=False)
+            await self.voice_room.voice(True)
+            log.info("room %s: open for the voice assistant", name)
             return name
 
     async def close(self):
         async with self._lock:
             await self._close()
+            await self._close_voice()
+
+    async def _session(self, name: str, tracking: bool) -> Session:
+        async with self.livekit() as lk:
+            await lk.room.create_room(api.CreateRoomRequest(name=name, empty_timeout=EMPTY_TIMEOUT_S))
+        return Session(name, await self.join(name), self.live, self.runner, self.livekit, tracking)
 
     async def _close(self):
         session, self.current = self.current, None
+        if session:
+            await session.close()
+
+    async def _close_voice(self):
+        session, self.voice_room = self.voice_room, None
         if session:
             await session.close()
