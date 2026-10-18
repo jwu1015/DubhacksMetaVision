@@ -67,7 +67,7 @@ class CurrentTest(unittest.TestCase):
     def setUp(self):
         self.seen = Seen()
 
-    def test_the_smallest_object_at_the_center(self):
+    def test_the_mug_in_front_of_the_sofa(self):
         self.seen.update(objects(SOFA, MUG, LAMP))
         self.assertIs(self.seen.current(), MUG)
 
@@ -94,6 +94,58 @@ class CurrentTest(unittest.TestCase):
         self.assertEqual((list(self.seen.labels), list(self.seen.looks)), (["1.1"], ["1.1"]))
         self.seen.update(objects(session=2))  # tracking restarted: uids start over
         self.assertEqual((self.seen.labels, self.seen.looks), ({}, {}))
+
+
+class AimTest(unittest.TestCase):
+    """What's in front when objects crowd the center: what the camera points at squarely, and keeps pointing at,
+    not the smallest box."""
+
+    def setUp(self):
+        self.clock = Clock()
+        self.seen = Seen(clock=self.clock)
+
+    def view(self, *things, seconds=0.1, steps=1):
+        """The tracker's objects messages for one view, `steps` of them over `seconds`."""
+        for _ in range(steps):
+            self.seen.update(objects(*things))
+            self.clock.now += seconds / steps
+
+    def test_the_speaker_in_front_not_the_charger_behind_it(self):
+        speaker = thing("2.0", "speaker", [0.30, 0.30, 0.70, 0.75])  # aimed at
+        charger = thing("2.1", "charger", [0.45, 0.15, 0.62, 0.55])  # smaller, covers the center, sticks out above
+        self.view(speaker, charger)
+        self.assertIs(self.seen.current(), speaker)  # the smallest box at the center was the charger
+        self.assertIsNone(self.seen.rival(speaker))
+
+    def test_a_tiny_box_isnt_what_they_point_at(self):
+        book = thing("2.0", "book", [0.35, 0.30, 0.68, 0.72])
+        coin = thing("2.1", "coin", [0.49, 0.49, 0.52, 0.52])  # right at the center, but 0.09% of the view
+        self.view(book, coin)
+        self.assertIs(self.seen.current(), book)
+        self.view(coin)
+        self.assertIs(self.seen.current(), coin)  # unless it's all there is
+
+    def test_what_they_keep_pointing_at_beats_what_passes_by(self):
+        bag = thing("2.0", "bag", [0.40, 0.38, 0.62, 0.66])        # held, a little off the middle
+        bottle = thing("2.1", "bottle", [0.44, 0.30, 0.56, 0.70])  # passes right through the middle
+        self.view(bag, seconds=1.5, steps=15)
+        self.view(bag, bottle)
+        self.assertIs(self.seen.current(), bag)
+        self.view(bag, bottle, seconds=1.5, steps=15)  # it stays there: now they may mean either
+        self.assertIs(self.seen.rival(self.seen.current()), bottle if self.seen.current() is bag else bag)
+
+    def test_after_a_pan_the_new_object_wins_within_a_second(self):
+        self.view(thing("2.0", "mug", [0.42, 0.40, 0.58, 0.60]), seconds=2.0, steps=20)
+        mug = thing("2.0", "mug", [0.28, 0.40, 0.44, 0.60])     # still near the center, off to the left
+        lamp = thing("2.1", "lamp", [0.42, 0.35, 0.58, 0.65])   # now in the middle
+        self.view(mug, lamp, seconds=0.8, steps=8)
+        self.assertIs(self.seen.current(), lamp)
+
+    def test_two_side_by_side_are_a_toss_up(self):
+        left = thing("2.0", "tumbler", [0.36, 0.38, 0.49, 0.70])
+        right = thing("2.1", "tumbler", [0.51, 0.38, 0.64, 0.70])
+        self.view(left, right)
+        self.assertIsNotNone(self.seen.rival(self.seen.current()))
 
 
 class FocusTest(unittest.TestCase):
@@ -229,6 +281,12 @@ class GetCurrentObjectTest(AssistantTest):
         self.seen.update(look("1.1", "failed"))
         data = app_data(await self.agent.get_current_object(None))
         self.assertEqual(data["store_prices"], "not found")
+
+    async def test_two_equally_in_front_ask_which(self):
+        self.seen.update(objects(thing("2.0", "speaker", [0.36, 0.38, 0.49, 0.70]),
+                                 thing("2.1", "charger", [0.51, 0.38, 0.64, 0.70])))
+        data = app_data(await self.agent.get_current_object(None))
+        self.assertEqual({data["tracked_as"], data["or_maybe"]}, {"speaker", "charger"})
 
     async def test_nothing_in_view(self):
         self.seen.update(objects(CHAIR))
