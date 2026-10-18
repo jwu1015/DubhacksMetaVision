@@ -17,12 +17,12 @@ SETTINGS = (
 os.environ["STOREFRONT_DOTENV"] = "0"  # config.py skips backend/.env
 for name in SETTINGS:
     os.environ.pop(name, None)
-logging.getLogger("gtl").setLevel(logging.CRITICAL)  # failure tests log expected warnings
+logging.getLogger("storefront").setLevel(logging.CRITICAL)  # failure tests log expected warnings
 
 
 @pytest.fixture(autouse=True)
 def pin_search_providers(monkeypatch):
     """Tests fake SerpAPI unless they choose OpenWeb Ninja themselves."""
-    import search
+    from storefront.pipeline import search
     monkeypatch.setattr(search, "SHOPPING_PROVIDER", "serpapi")
     monkeypatch.setattr(search, "AMAZON_PROVIDER", "serpapi")

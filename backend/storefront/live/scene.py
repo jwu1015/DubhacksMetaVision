@@ -15,8 +15,8 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image
 
-from models import BBox
-from tracker import TrackResult
+from storefront.live.tracker import TrackResult
+from storefront.models import BBox
 
 WINDOW_S = 15.0    # a track is forgotten this long after it was last seen
 MAX_GAP_S = 1.0    # a stall between tracked frames counts as at most this much viewing time

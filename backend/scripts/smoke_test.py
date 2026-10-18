@@ -1,6 +1,6 @@
 """Hit the HTTP routes of a running backend and check each response matches models.py.
 
-    python smoke_test.py [base_url]       # default http://localhost:8000
+    python scripts/smoke_test.py [base_url]       # default http://localhost:8000, from backend/
 """
 import json
 import sys
@@ -8,9 +8,11 @@ from pathlib import Path
 
 import httpx
 
-from models import Cart, CheckoutResponse, HealthResponse, Product
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-HERE = Path(__file__).resolve().parent
+from storefront.config import FIXTURES  # noqa: E402
+from storefront.models import Cart, CheckoutResponse, HealthResponse, Product  # noqa: E402
+
 failures = 0
 
 
@@ -26,7 +28,7 @@ def step(name, fn):
 def main():
     base = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
     c = httpx.Client(base_url=base, timeout=60, headers={"ngrok-skip-browser-warning": "1"})
-    product = Product.model_validate(json.loads((HERE / "fixtures" / "products_ranked_lamp.json").read_text())[0])
+    product = Product.model_validate(json.loads((FIXTURES / "products_ranked_lamp.json").read_text())[0])
 
     def health():
         h = HealthResponse.model_validate(c.get("/health").raise_for_status().json())

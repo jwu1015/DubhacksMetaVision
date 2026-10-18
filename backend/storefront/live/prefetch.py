@@ -5,9 +5,9 @@ stream.py hands every tracking result to observe():
   ("black insulated water bottle", $30-50). fields() adds them to the objects stream.py sends to the phone
   and the projector, so a hotspot can show them before anyone taps.
 - The PREFETCH_MAX objects in view the longest (at least PREFETCH_AFTER_S) get the whole Look in the
-  background through start_look, which is main.py's background_look(): Claude describes the object's crop,
+  background through start_look, which is looks.py's background_look(): Claude describes the object's crop,
   then the stores are searched on Claude's queries. When the user picks one of them (a tap, or the voice
-  assistant), main.py's look() takes that Look (claim()) instead of starting a new one.
+  assistant), looks.py's look() takes that Look (claim()) instead of starting a new one.
 
 Nothing here is written to disk or announced. Crops exist only in memory, while Claude (and match.py's
 score) look at them. What stays, by track id, is what came out of them: the tracker's label, the quick
@@ -28,12 +28,12 @@ from dataclasses import dataclass
 from PIL import Image
 from pydantic import BaseModel
 
-import vlm
-from models import BBox
-from scene import WINDOW_S
-from tracker import TrackResult
+from storefront.live.scene import WINDOW_S
+from storefront.live.tracker import TrackResult
+from storefront.models import BBox
+from storefront.pipeline import vlm
 
-log = logging.getLogger("gtl.prefetch")
+log = logging.getLogger("storefront.prefetch")
 
 ENABLED = os.getenv("PREFETCH", "true").strip().lower() in ("1", "true", "yes")
 QUICK_AFTER_S = 0.5      # in view this long before it gets a quick label, so flicker costs nothing
@@ -59,7 +59,7 @@ class QuickLabel(BaseModel):
 
 @dataclass
 class Background:
-    """A background Look (main.py's background_look). Its crop is in memory only, and gone once both are done."""
+    """A background Look (looks.py's background_look). Its crop is in memory only, and gone once both are done."""
     describe: asyncio.Task  # -> Claude's Item for the crop
     search: asyncio.Task    # -> the SearchResponse for that item, with capture_id "" (no capture yet)
     claimed: bool = False   # the user picked the object, and their Look awaits these tasks
@@ -75,7 +75,7 @@ class Background:
         return self.search.done() and (self.search.cancelled() or self.search.exception() is not None)
 
 
-# Set by main.py: starts a background Look on a tracked object; None if scene memory has no frame of it.
+# Set by app.py: starts a background Look on a tracked object; None if scene memory has no frame of it.
 start_look: Callable[[int], Background | None] | None = None
 clock = time.monotonic
 

@@ -1,6 +1,6 @@
 """Generate every fixture from one source of truth, then validate it against models.py.
 
-    python fixtures/make_fixtures.py        (run from backend/)
+    python scripts/make_fixtures.py        (from backend/)
 
 URLs served by our backend use the placeholder __BASE__, which readers swap for PUBLIC_BASE_URL.
 Product links point at example.com and thumbnails at placehold.co, so images load without fake store links.
@@ -12,10 +12,10 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from models import BBox, Item, PriceInsight, Product, SearchResponse  # noqa: E402
+from storefront.config import FIXTURES as HERE  # noqa: E402
+from storefront.models import BBox, Item, PriceInsight, Product, SearchResponse  # noqa: E402
 
 BASE = "__BASE__"
 CAPTURE_ID = "c_fixture"

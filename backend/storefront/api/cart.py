@@ -4,11 +4,11 @@
     GET    /cart                             -> Cart
     DELETE /cart/{i}   (i = index in items)  -> Cart
 
-main.py mounts this with app.include_router(cart.router).
+app.py mounts this with app.include_router(cart.router).
 """
 from fastapi import APIRouter, HTTPException
 
-from models import AddToCartRequest, Cart, Product
+from storefront.models import AddToCartRequest, Cart, Product
 
 router = APIRouter()
 

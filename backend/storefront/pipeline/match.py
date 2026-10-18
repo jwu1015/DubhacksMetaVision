@@ -18,11 +18,10 @@ import anthropic
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
-import config
-import net
-from models import Item, Product
+from storefront import config, net
+from storefront.models import Item, Product
 
-log = logging.getLogger("gtl.match")
+log = logging.getLogger("storefront.match")
 
 MODEL = "claude-sonnet-5-5"
 FOUND_SCORE = 75                  # on the scale below: the same model (maybe another color) or better

@@ -5,8 +5,8 @@ from typing import NamedTuple
 
 from PIL import Image, ImageDraw
 
-import config
-from models import BBox, Segmentation
+from storefront import config
+from storefront.models import BBox, Segmentation
 
 SAM_PAD = 0.08   # SAM's box is tight, so it gets a little padding
 MAX_EDGE = 1024  # crops and previews are capped at this size

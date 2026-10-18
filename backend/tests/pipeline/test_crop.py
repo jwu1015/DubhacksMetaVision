@@ -3,9 +3,9 @@ import io
 
 from PIL import Image
 
-import config
-import crop
-from models import BBox
+from storefront import config
+from storefront.models import BBox
+from storefront.pipeline import crop
 
 
 def test_pad_stays_inside_the_image():

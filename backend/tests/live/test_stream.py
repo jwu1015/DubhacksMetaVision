@@ -12,16 +12,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
-import config
-import stream
-import tracker
 from fakes.frames import image
 from fakes.tracking import fake_server
-from models import BBox
-from stream import Stream
-from tracker import Tracker
-
-logging.getLogger("gtl").setLevel(logging.CRITICAL)  # the failure tests log expected warnings
+from storefront import config
+from storefront.api import viewer
+from storefront.live import stream, tracker
+from storefront.live.stream import Stream
+from storefront.live.tracker import Tracker
+from storefront.models import BBox
 
 BASE = "http://sam.test/inference"
 HEADERS = {"CF-Access-Client-Id": "test-id", "CF-Access-Client-Secret": "test-secret"}
@@ -98,7 +96,7 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         async def fake_labels(image, category):
             picks.append((image.size, category, len(self.requests)))  # how many requests went before
             return list(picked)
-        patcher = mock.patch("labels.labels_or_fallback", fake_labels)
+        patcher = mock.patch("storefront.live.labels.labels_or_fallback", fake_labels)
         patcher.start()
         self.addCleanup(patcher.stop)
         client = httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
@@ -209,7 +207,7 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
                 self.requests.append(request)
                 return httpx.Response(status, headers={"Location": "https://login.test/cdn-cgi/access/login"})
             t = self.tracker(handler)
-            with self.assertLogs("gtl.tracker", logging.WARNING) as logs:
+            with self.assertLogs("storefront.tracker", logging.WARNING) as logs:
                 self.assertFalse(await t.start())
                 for _ in range(3):
                     self.assertIsNone(await t.send(image(320)))
@@ -547,7 +545,7 @@ class RouteTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         app = FastAPI()
-        app.include_router(stream.router)
+        app.include_router(viewer.router)
         self.app = app
 
     def client(self, host: str = "127.0.0.1") -> TestClient:

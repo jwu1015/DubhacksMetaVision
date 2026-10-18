@@ -6,9 +6,9 @@ import json
 import pytest
 from PIL import Image
 
-import config
-import match
-from models import Item, Product
+from storefront import config
+from storefront.models import Item, Product
+from storefront.pipeline import match
 
 ITEM = Item(category="water bottle", description="Green Owala FreeSip 24 oz bottle with a white lid.")
 CROP = "https://crop.example/c.jpg"

@@ -4,7 +4,7 @@ The verdict needs the best match, which isn't known yet; rank.choose fills it in
 """
 import statistics
 
-from models import PriceInsight, Product
+from storefront.models import PriceInsight, Product
 
 MIN_SCORE = 60   # "comparable" means a close visual match...
 MIN_SAMPLE = 4   # ...unless fewer than this many qualify; then every non-used product counts
