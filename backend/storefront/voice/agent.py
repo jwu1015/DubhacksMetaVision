@@ -10,11 +10,11 @@ import logging
 
 from livekit import agents, rtc
 from livekit.agents import AgentServer, AgentSession, room_io
-from livekit.plugins import google
 
 from storefront import config
 from storefront.rtc.tokens import PHONE
 from storefront.voice.assistant import Assistant
+from storefront.voice.debug import Flow, RealtimeModel, log_session
 from storefront.voice.seen import Seen
 
 log = logging.getLogger("storefront.voice")
@@ -45,8 +45,12 @@ async def entry(ctx: agents.JobContext):
     seen = Seen()
     seen.listen(ctx.room)
     await ctx.connect()
+    log.info("voice: in room %s, waiting for the phone", ctx.room.name)
     phone = await phone_in(ctx.room)
-    session = AgentSession(llm=google.realtime.RealtimeModel(model=config.GEMINI_MODEL))
+    tracks = [f"{rtc.TrackSource.Name(p.source)}{' (muted)' if p.muted else ''}" for p in phone.track_publications.values()]
+    log.info("voice: phone %s is in, publishing %s", phone.identity, tracks or "nothing yet")
+    session = AgentSession(llm=RealtimeModel(Flow(seen), model=config.GEMINI_MODEL))
+    log_session(session)
     await session.start(agent=Assistant(seen), room=ctx.room,
                         room_options=room_io.RoomOptions(participant_identity=phone.identity, video_input=True))
     log.info("voice: listening to %s in room %s (%s)", phone.identity, ctx.room.name, config.GEMINI_MODEL)

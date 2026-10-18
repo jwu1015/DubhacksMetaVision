@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections import Counter
 
 from livekit import rtc
 
@@ -27,6 +28,7 @@ class Seen:
         self.ranked: list[str] = []          # the uids the last resolve found, best first
         self.tried: list[str] = []           # those looked at since, the latest last
         self.asked: list[str] = []           # the two its question was about, until it's answered
+        self.received: Counter = Counter()   # message type -> how many came, for the debug logs (debug.py)
 
     def forget(self):
         """Tracking restarted (a mode switch, a pause, a new category): the old uids mean nothing now."""
@@ -38,6 +40,7 @@ class Seen:
     def update(self, m: dict):
         """Take one stream message."""
         kind = m.get("type")
+        self.received[kind] += 1
         if kind == "objects":
             self.objects = m["objects"]
             if not self.objects:
