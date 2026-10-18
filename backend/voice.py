@@ -434,11 +434,6 @@ class Seen:
             await asyncio.sleep(RECONNECT_S)
 
 
-def just(text: str) -> str:
-    """A tool's answer for Claude to say as is (left to itself, it adds an offer and runs past 12 words)."""
-    return f'Reply with just: "{text}"'
-
-
 async def phone_action(name: str, **args) -> dict:
     """Ask the phone app to do something (its RPC method "action"); its answer. ToolError if it can't."""
     room = get_job_context().room
@@ -464,9 +459,12 @@ async def phone_action(name: str, **args) -> dict:
 
 
 class Spotted(Agent):
-    def __init__(self, seen: Seen, backend: httpx.AsyncClient):
+    def __init__(self, seen: Seen, backend: httpx.AsyncClient, say: Callable[[str], object] | None = None):
         super().__init__(instructions=INSTRUCTIONS)
         self.seen, self.backend = seen, backend
+        # A tool's whole answer, said exactly, with nothing from Claude after it. (Handed a sentence to
+        # repeat, Claude read its "Reply with just: ..." wrapper aloud too.) Tests pass their own.
+        self.say_exactly = say or (lambda text: self.session.say(text))
 
     async def llm_node(self, chat_ctx: ChatContext, tools: list[llm.Tool], model_settings: ModelSettings):
         """Every Claude call (a spoken turn, or the reply after a tool) gets a fresh note of the current
@@ -529,7 +527,8 @@ class Spotted(Agent):
             exclude = [current] if current is not None else []
         found = seen.resolve(target, exclude)
         if not found.found:
-            return just(found.say)
+            self.say_exactly(found.say)
+            return None
         seen.ranked, seen.tried = [o["id"] for o in found.found], []
         seen.asked = seen.ranked[:2] if found.say else []
         if found.say:
@@ -554,7 +553,8 @@ class Spotted(Agent):
             seen.tried = seen.tried[-1:]
             left = [i for i in seen.ranked if i in present and i not in seen.tried]
         if not left:
-            return just("There's no other one in view or seen recently.")
+            self.say_exactly("There's no other one in view or seen recently.")
+            return None
         seen.asked = []
         return await self.look(present[left[0]])
 

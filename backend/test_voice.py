@@ -336,6 +336,7 @@ class FakeRoom:
 class ToolTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.posts: list[str] = []
+        self.said: list[str] = []  # what the agent said exactly, from inside a tool
         self.look_status = 200
 
         def backend(request: httpx.Request):
@@ -355,11 +356,12 @@ class ToolTest(unittest.IsolatedAsyncioTestCase):
         await self.backend.aclose()
 
     def agent(self, seen: voice.Seen) -> voice.Spotted:
-        return voice.Spotted(seen, self.backend)
+        return voice.Spotted(seen, self.backend, say=self.said.append)
 
     async def test_look_at_looks_at_what_they_mean(self):
         seen = voice.Seen()
-        self.assertEqual(await self.agent(seen).look_at(None, ""), 'Reply with just: "Nothing\'s in view right now."')
+        self.assertIsNone(await self.agent(seen).look_at(None, ""))
+        self.assertEqual(self.said, ["Nothing's in view right now."])  # said as is, nothing from Claude after
         seen.update(OBJECTS)  # an event from before scene memory
         self.assertIsNone(await self.agent(seen).look_at(None, ""))  # the app says what it found
         self.assertIsNone(await self.agent(seen).look_at(None, "couch"))
@@ -367,8 +369,8 @@ class ToolTest(unittest.IsolatedAsyncioTestCase):
         seen.update(scene(LAMP, CHAIR))
         self.assertIsNone(await self.agent(seen).look_at(None, "the chair I just passed"))  # out of view
         self.assertEqual(self.posts[-1], "/look/2")
-        self.assertEqual(await self.agent(seen).look_at(None, "mirror"),
-                         'Reply with just: "No mirror in view or seen recently."')
+        self.assertIsNone(await self.agent(seen).look_at(None, "mirror"))
+        self.assertEqual(self.said[-1], "No mirror in view or seen recently.")
         self.assertEqual(len(self.posts), 3)
 
     async def test_when_the_look_fails(self):
@@ -418,9 +420,10 @@ class ToolTest(unittest.IsolatedAsyncioTestCase):
         await say(agent.look_at_other, track_id=4)
 
         seen.update(scene(LAMP, CHAIR))
-        nothing = 'Reply with just: "There\'s no other one in view or seen recently."'
-        self.assertEqual(await agent.look_at_other(None), nothing)
-        self.assertEqual(await self.agent(voice.Seen()).look_at_other(None), nothing)
+        nothing = "There's no other one in view or seen recently."
+        self.assertIsNone(await agent.look_at_other(None))
+        self.assertIsNone(await self.agent(voice.Seen()).look_at_other(None))
+        self.assertEqual(self.said[-2:], [nothing, nothing])
 
     async def test_actions_go_to_the_phone(self):
         agent = self.agent(picked())
