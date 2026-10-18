@@ -43,6 +43,8 @@ LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 VOICE_AGENT = "storefront"  # the voice agent's dispatch name: tokens from /voice/token bring it into the room
+# The voice agent's model: Gemini Live, through LiveKit's Google plugin (it reads GOOGLE_API_KEY)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-live")
 
 
 def livekit_ready() -> bool:

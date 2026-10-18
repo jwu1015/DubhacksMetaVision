@@ -159,6 +159,57 @@ def test_voice_brings_the_agent_and_sends_it_away(session):
     asyncio.run(go())
 
 
+def test_a_voice_room_tells_the_agent_whats_tracked_and_leaves_tracking_alone(session, monkeypatch):
+    rooms, room, lk, live = session
+    videos = []
+    monkeypatch.setattr(room_module.rtc, "VideoStream", lambda track, format=None: videos.append(track))
+
+    async def go():
+        await live.start()  # the current app's camera feeds the stream over legacy WebRTC
+        name = await rooms.open_voice()
+        assert name.startswith("storefront-voice-") and rooms.voice_room.name == name and rooms.current is None
+        assert lk.calls == [("create_room", name, room_module.EMPTY_TIMEOUT_S),
+                            ("create_dispatch", config.VOICE_AGENT, name)]  # once the backend is in
+        live.publish({"type": "label", "uid": "1.4", "name": "brass lamp"})
+        await settle()
+        lp = room.local_participant
+        lp.sent.clear()
+        room.join(FakeParticipant("agent-1", rtc.ParticipantKind.PARTICIPANT_KIND_AGENT))
+        await settle()
+        assert [(m["type"], to) for _, m, to, _ in lp.sent] == [("status", ["agent-1"]), ("label", ["agent-1"])]
+        room.join(PHONE)
+        room.emit("track_subscribed", SimpleNamespace(kind=rtc.TrackKind.KIND_VIDEO), None, PHONE)
+        room.leave(PHONE.identity)
+        await asyncio.sleep(0.1)  # past the grace period
+        assert live.running and videos == []  # its video isn't this room's: the legacy path tracks it
+        await rooms.close()
+        assert room.disconnected and live.running
+        await live.stop()
+
+    asyncio.run(go())
+
+
+def test_the_voice_room_and_the_sessions_room_dont_replace_each_other(session):
+    rooms, _, _, _ = session
+    made = {}
+
+    async def join(name):
+        made[name] = FakeRoom()
+        return made[name]
+    rooms.join = join
+
+    async def go():
+        voice = await rooms.open_voice()
+        current = await rooms.open()
+        assert (rooms.voice_room.name, rooms.current.name, made[voice].disconnected) == (voice, current, False)
+        again = await rooms.open_voice()
+        assert made[voice].disconnected and not made[current].disconnected and rooms.voice_room.name == again
+        await rooms.close()
+        assert made[again].disconnected and made[current].disconnected
+
+    asyncio.run(go())
+
+
 def test_the_phones_video_feeds_the_stream_and_its_leaving_stops_tracking(session, monkeypatch):
     rooms, room, _, live = session
 
