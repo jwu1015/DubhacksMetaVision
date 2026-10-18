@@ -113,11 +113,11 @@ class DetectTest(unittest.TestCase):
         return c.post(f"/search/{cid}").json()["item"]
 
     def track(self, *objects: TrackedObject, frame: Image.Image | None = None):
-        """The live stream is tracking these objects in frame (lamp_room.jpg by default)."""
+        """The live stream is tracking these objects in frame (lamp_room.jpg by default): they're in scene
+        memory, with frame as their best one."""
         frame = frame or Image.open(io.BytesIO(PHOTO)).convert("RGB")
-        self.live._tracked = stream.Frame(frame, time.time(), 7)
-        self.live._result = TrackResult(frame_idx=12, width=640, height=480, latency_ms=900,
-                                        captured_at=time.time(), objects=list(objects))
+        self.live.scene.update(TrackResult(frame_idx=12, width=640, height=480, latency_ms=900,
+                                           captured_at=time.time(), objects=list(objects)), frame)
 
     # ---------- track_id ----------
 
