@@ -50,7 +50,11 @@ Fill in these fields:
 - quick_phrase: under 8 words, natural speech, e.g.
   "Mid-century floor lamp. Finding prices."
 If no shoppable item is visible, set category to null and leave the other
-fields empty or null."""
+fields empty or null.
+You may be told what the user is looking for (a category, e.g. "electronics") and
+what the tracker took the item for. Then the item is the object in that category,
+even if something else is more prominent: in "electronics", the phone, not its case
+or the desk under it. Describe and search for that object."""
 
 
 # The structured output Claude must return; to_item() maps it onto models.Item. (No docstring:
@@ -125,13 +129,18 @@ def to_item(out: VisionOut, size: tuple[int, int]) -> Item:
     )
 
 
-async def detect(image_bytes: bytes, hint: str | None = None) -> Item:
+async def detect(image_bytes: bytes, hint: str | None = None, category: str | None = None,
+                 label: str | None = None) -> Item:
     """Identify the main item. hint: what the user asked about (their voice command, e.g. "green floor
-    lamp"), as one line before the question. Unusable output twice -> Item(category=None); API errors raise."""
+    lamp"); category: what the user is looking for (the session's category); label: SAM's prompt that
+    found it. Each is one line before the question. Unusable output twice -> Item(category=None); API
+    errors raise."""
     b64, size = prepare(image_bytes)
-    question = "What is the main item in this photo?"
-    if hint:
-        question = f"The user asked about: {hint}\n{question}"
+    lines = [f"The user is looking for: {category}" if category else "",
+             f'The tracker found this as: "{label}"' if label else "",
+             f"The user asked about: {hint}" if hint else "",
+             "What is the main item in this photo?"]
+    question = "\n".join(line for line in lines if line)
     for attempt in (1, 2):
         t0 = time.perf_counter()
         try:

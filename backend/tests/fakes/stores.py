@@ -14,6 +14,7 @@ class Stores:
 
     def __init__(self, monkeypatch):
         self.described: list[bytes] = []
+        self.contexts: list[tuple] = []  # (category, label) Claude was told
         self.searched: list[tuple] = []  # (cutout, queries, look_id)
         self.gate = asyncio.Event()
         self.gate.set()
@@ -23,8 +24,9 @@ class Stores:
                                     (rerank, "rerank", self.rerank), (rank, "choose", self.choose)):
             monkeypatch.setattr(target, name, value)
 
-    async def detect(self, data, hint=None):
+    async def detect(self, data, hint=None, category=None, label=None):
         self.described.append(data)
+        self.contexts.append((category, label))
         if isinstance(self.item, Exception):
             raise self.item
         return self.item

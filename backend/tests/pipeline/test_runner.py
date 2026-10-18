@@ -39,8 +39,8 @@ def setup(monkeypatch, tmp_path):
     sent, labeled = [], []
     live.publish = sent.append
 
-    async def label(jpeg):
-        labeled.append(jpeg)
+    async def label(jpeg, category, sam_label):
+        labeled.append((jpeg, category, sam_label))
         return QuickLabel(name="green water bottle", price_low=30, price_high=50)
     runner = Runner(live, Looks(live.publish), Dwell(label_ms=500, look_ms=1000), label=label)
     return runner, sent, labeled
@@ -72,7 +72,8 @@ def test_a_quick_label_then_a_look_once_each_timer_is_up(setup):
     asyncio.run(go())
     assert sent[0] == {"type": "label", "uid": "1.7", "box": [0.1, 0.1, 0.4, 0.5], "name": "green water bottle",
                        "price_low": 30, "price_high": 50}
-    assert len(labeled) == 1 and labeled[0][:2] == b"\xff\xd8"  # one call, on a JPEG crop
+    assert len(labeled) == 1 and labeled[0][0][:2] == b"\xff\xd8"  # one call, on a JPEG crop
+    assert labeled[0][1:] == (config.DEFAULT_CATEGORY, "bottle")  # told the category and SAM's label
     assert [m["stage"] for m in sent if m["type"] == "look"] == ["started", "described", "results"]
 
 
@@ -129,7 +130,7 @@ def test_end_to_end_frames_to_labels_and_looks(monkeypatch, tmp_path):
         return ["sofa", "lamp", "table"]
     monkeypatch.setattr(labels, "labels_or_fallback", prompts)
 
-    async def label(jpeg):
+    async def label(jpeg, *context):
         return QuickLabel(name="gray sofa", price_low=300, price_high=900)
 
     async def go():

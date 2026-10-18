@@ -42,9 +42,18 @@ def test_a_look_describes_then_searches_on_claudes_queries(stores, tmp_path):
     assert sent[0]["box"] == [0.1, 0.2, 0.4, 0.6] and sent[0]["label"] == "bottle"
     assert sent[1]["item"]["category"] == CLAUDE_ITEM.category
     assert sent[2]["search"]["capture_id"] == sent[2]["look_id"] and sent[2]["search"]["item"] == sent[1]["item"]
-    assert stores.described == [JPEG]
+    assert stores.described == [JPEG] and stores.contexts == [(None, "bottle")]
     assert stores.searched == [(JPEG, CLAUDE_ITEM.search_queries, sent[0]["look_id"])]  # the crop itself, in memory
     assert list(tmp_path.iterdir()) == [] and not sent[2]["selected"]  # nobody picked it: nothing written
+
+
+def test_claude_is_told_the_category(stores):
+    async def go():
+        Looks(lambda m: None).start("1.7", "phone", BOX, JPEG, category="electronics")
+        await settle()
+
+    run(go())
+    assert stores.contexts == [("electronics", "phone")]
 
 
 def test_claude_failing_searches_the_label(stores):

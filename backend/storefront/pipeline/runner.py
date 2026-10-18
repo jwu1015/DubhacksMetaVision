@@ -21,7 +21,7 @@ log = logging.getLogger("storefront.runner")
 
 class Runner:
     def __init__(self, live: Stream, looks: Looks, dwell: Dwell,
-                 label: Callable[[bytes], Awaitable[quick_label.QuickLabel | None]] = quick_label.quick_label):
+                 label: Callable[[bytes, str, str], Awaitable[quick_label.QuickLabel | None]] = quick_label.quick_label):
         self.live, self.looks, self.dwell, self.label = live, looks, dwell, label
         self._labeling: dict[str, asyncio.Task] = {}
 
@@ -47,7 +47,8 @@ class Runner:
                 return None
             frame, track = best
             self.dwell.looked(uid)
-            self.looks.start(uid, track.label, track.frame_box, crop.sam_cutout(frame, track.frame_box))
+            self.looks.start(uid, track.label, track.frame_box, crop.sam_cutout(frame, track.frame_box),
+                             self.live.tracker.category)
         return self.looks.select(uid)
 
     def reset(self):
@@ -59,11 +60,11 @@ class Runner:
         self.looks.reset()
 
     def _start_look(self, o: TrackedObject, frame: Image.Image):
-        self.looks.start(o.uid, o.label, o.box, crop.sam_cutout(frame, o.box))
+        self.looks.start(o.uid, o.label, o.box, crop.sam_cutout(frame, o.box), self.live.tracker.category)
 
     async def _quick_label(self, o: TrackedObject, frame: Image.Image):
         jpeg = await asyncio.to_thread(crop.sam_cutout, frame, o.box, quick_label.EDGE)
-        q = await self.label(jpeg)
+        q = await self.label(jpeg, self.live.tracker.category, o.label)
         self._labeling.pop(o.uid, None)
         log.info("runner: %s labeled %r", o.uid, q.name if q else None)
         if q:
