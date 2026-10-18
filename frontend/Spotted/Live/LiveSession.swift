@@ -25,6 +25,8 @@ final class LiveSession: NSObject, UpdateSource {
 
     var onUpdate: ((Update) -> Void)?
     var onConnectionChange: ((Bool) -> Void)?
+    /// After every join, the first included: each one is a new room.
+    var onJoin: (() -> Void)?
 
     /// One room for the app's lifetime, rejoined as needed, so the handlers registered on it stay.
     let room = LiveKit.Room()
@@ -129,6 +131,7 @@ final class LiveSession: NSObject, UpdateSource {
                 // The backend's state for this room starts now: tell it ours.
                 send("mode", ["mode": Self.name(of: mode)])
                 if isPaused { send("pause", ["paused": true]) }
+                onJoin?()
             } catch {
                 guard !Task.isCancelled else { return }
                 print("[Live] joining failed: \(error)")

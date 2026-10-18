@@ -157,7 +157,7 @@ struct SearchResponse: Codable, Hashable, Identifiable {
     let dupes: [Product]         // cheaper lookalikes, cheapest savings first; can be empty
     let used: [Product]          // pre-owned listings; can be empty
     let priceInsight: PriceInsight
-    let spokenSummary: String    // speak when the cards appear
+    let spokenSummary: String    // the results in one line
     let timingMS: [String: Int]  // per-step timings, for debugging
     let item: Item?              // the finished item: Claude's name, description and style
 
@@ -261,10 +261,12 @@ struct Look: Codable, Hashable {
     let item: Item?              // from "described" on
     let search: SearchResponse?  // "results"
     let message: String?         // "failed": why, in a short sentence
+    var pickedAt: Int64? = nil   // when it was last picked (Unix ms), by a tap or by voice; the latest pick shows
 
     enum CodingKeys: String, CodingKey {
         case uid, stage, label, box, selected, item, search, message
         case lookID = "look_id"
+        case pickedAt = "picked_at"
         case cropURL = "crop_url"
     }
 }
@@ -358,6 +360,7 @@ struct VoiceAction: Codable, Hashable {
         case showResults = "show_results"
         case undoLast = "undo_last"
         case startCheckout = "start_checkout"
+        case selectItem = "select_item"
         case unknown
 
         init(from decoder: Decoder) throws {
@@ -369,9 +372,10 @@ struct VoiceAction: Codable, Hashable {
     let captureID: String?       // save_item: the Look to save
     let product: Product?        // add_to_cart: send it to POST /cart as-is
     let tab: ResultsTab?         // show_results
+    let uid: String?             // select_item: the object to open, as a tap on its label does
 
     enum CodingKeys: String, CodingKey {
-        case name, product, tab
+        case name, product, tab, uid
         case captureID = "capture_id"
     }
 }
