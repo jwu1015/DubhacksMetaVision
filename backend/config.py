@@ -32,6 +32,11 @@ def segmentation_headers() -> dict[str, str]:
 USE_FIXTURES = _flag("USE_FIXTURES")
 DEMO_MODE = _flag("DEMO_MODE")
 WARMUP = _flag("WARMUP", "true")  # one vision call at startup so the first real request is fast
+# LiveKit Cloud, for the voice assistant (voice.py) and the phone's token for it (POST /voice/token)
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+VOICE_AGENT = "spotted"  # the voice agent's dispatch name: tokens from /voice/token bring it into the room
 
 UPLOADS = ROOT / "uploads"
 LOGS = ROOT / "logs"

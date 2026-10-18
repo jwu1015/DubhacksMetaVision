@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager, contextmanager
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from livekit import api as livekit_api
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 import config
@@ -31,7 +32,8 @@ import stream
 import webrtc
 from models import (
     BBox, Capture, CheckoutRequest, CheckoutResponse, DetectResponse, HealthResponse,
-    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation,
+    IdentifyResponse, Item, PriceInsight, Product, SearchResponse, Segmentation, VoiceTokenRequest,
+    VoiceTokenResponse,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -452,6 +454,25 @@ async def look_route(track_id: int):
     if resp is None:
         raise HTTPException(404, f"the stream isn't tracking object {track_id}")
     return resp
+
+
+@app.post("/voice/token", response_model=VoiceTokenResponse, status_code=201)
+async def voice_token_route(req: VoiceTokenRequest | None = None):
+    """The phone's ticket to the voice assistant (voice.py), in LiveKit's standard token-endpoint format,
+    so the app can use its SDK's endpoint token source. Every call opens a new room: LiveKit dispatches
+    the agent when a room is created."""
+    if not (config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET):
+        raise HTTPException(503, "voice isn't set up: LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are unset")
+    req = req or VoiceTokenRequest()
+    room = "spotted-" + uuid.uuid4().hex[:8]
+    token = (livekit_api.AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
+             .with_identity(req.participant_identity or "phone-" + uuid.uuid4().hex[:6])
+             .with_name(req.participant_name or "Spotted user")
+             .with_grants(livekit_api.VideoGrants(room_join=True, room=room))
+             .with_room_config(livekit_api.RoomConfiguration(
+                 agents=[livekit_api.RoomAgentDispatch(agent_name=config.VOICE_AGENT)])))
+    log.info("voice: token for room %s", room)
+    return VoiceTokenResponse(server_url=config.LIVEKIT_URL, participant_token=token.to_jwt())
 
 
 @app.get("/health", response_model=HealthResponse)

@@ -460,15 +460,19 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
             self.stream.publish(event)
         self.assertEqual([await anext(self.events) for _ in sent], sent)  # listening: everything, once
 
+        def replayed(event):
+            return {**event, "replay": True}
         fresh = self.stream.subscribe()
         self.assertEqual(await anext(fresh), {"type": "status", "tracking": "stopped"})
-        self.assertEqual([await anext(fresh), await anext(fresh)], [look("detected", "c_b"), look("results", "c_b")])
+        self.assertEqual([await anext(fresh), await anext(fresh)],
+                         [replayed(look("detected", "c_b")), replayed(look("results", "c_b"))])
         await fresh.aclose()
+        self.assertNotIn("replay", self.stream._look[0])  # the marker is only on what's replayed
 
         self.stream.publish(look("nothing", "c_c"))  # a photo with nothing to buy is a new Look too
         fresh = self.stream.subscribe()
         self.assertEqual([await anext(fresh), await anext(fresh)],
-                         [{"type": "status", "tracking": "stopped"}, look("nothing", "c_c")])
+                         [{"type": "status", "tracking": "stopped"}, replayed(look("nothing", "c_c"))])
         await fresh.aclose()
 
     async def test_stop_deletes_the_session_and_clears_the_boxes(self):
