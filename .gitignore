@@ -138,3 +138,7 @@ backend/uploads/*
 !backend/logs/
 backend/logs/*
 !backend/logs/.gitkeep
+
+# ---- Frontend local config (backend base URL is secret; repo is public) ----
+frontend/**/Config.xcconfig
+frontend/**/Config.swift
