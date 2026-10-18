@@ -65,6 +65,10 @@ async def embed(cutout_url: str, urls: list[str], client: httpx.AsyncClient) -> 
 async def rerank(cutout_url: str, products: list[Product],
                  client: httpx.AsyncClient | None = None) -> list[Product]:
     """Scored products best first (dropping those under MIN_SCORE), then unscored ones in input order."""
+    if not EMBED_URL:  # no CLIP service: keep the scores search set (match.py, Claude), best first
+        ranked = sorted((p for p in products if p.match_score is not None), key=lambda p: -p.match_score)
+        return ([p for p in ranked if p.match_score >= MIN_SCORE]
+                + [p for p in products if p.match_score is None])
     t0 = time.perf_counter()
     with_thumb = sorted((i for i, p in enumerate(products) if p.image_url),
                         key=lambda i: products[i].source_rank)

@@ -1,0 +1,1727 @@
+{
+  "search_metadata": {
+    "id": "6ad422f9e52c05986ccf287d",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/YkWytTKW2GpRgdcHTmTmdNk6e7IK7vSbFrhLO_ALEGs/6ad422f9e52c05986ccf287d.json",
+    "markdown_endpoint": "https://serpapi.com/searches/YkWytTKW2GpRgdcHTmTmdNk6e7IK7vSbFrhLO_ALEGs/6ad422f9e52c05986ccf287d.md",
+    "created_at": "2026-10-18 01:38:01 UTC",
+    "processed_at": "2026-10-18 01:38:01 UTC",
+    "amazon_url": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white",
+    "raw_html_file": "https://serpapi.com/searches/YkWytTKW2GpRgdcHTmTmdNk6e7IK7vSbFrhLO_ALEGs/6ad422f9e52c05986ccf287d.html",
+    "total_time_taken": 1.59
+  },
+  "search_parameters": {
+    "engine": "amazon",
+    "k": "Apple AirPods 3rd generation charging case white",
+    "amazon_domain": "amazon.com",
+    "device": "desktop"
+  },
+  "search_information": {
+    "total_results": 279,
+    "query_displayed": "Apple AirPods 3rd generation charging case white",
+    "store": "gateway",
+    "page": 1
+  },
+  "product_ads": {
+    "video_thumbnail": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/3f0632a7-2dc8-4bb5-a94c-7ec78615de16.mp4/r/THUMBNAIL_360P_FRAME_3_CAPTURE_2.JPG",
+    "video_src": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/3f0632a7-2dc8-4bb5-a94c-7ec78615de16.mp4/productVideoOptimized.mp4",
+    "video_link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&_encoding=UTF8&p=eAFVkD9v00AAxRUqoLKCQBkoyoKUIUOli30XYztBVmXH1yakJMZOAnSxLr7zHzWxnbtLAwzZWVhA4hMxsCEGPgA7H4ANQZEQP73hSb_hSU85P_z56cu3W407zmzhe-PR-IXm4aBVg_37xnqiX2WzkfZ8Pn29cb0tLIqXaVDvog7SrA40ex3t4kboLg8dPBviYBQ2jpTblIlLWVaN-nwS4MH0bDK6wF7zfU05_G0iIpOGQtbkTVl04nLdfCCWYFvkSc4oEIzwOAMVSRmArZusiObhcU8swVVOWQkqXtJtLEFcrlYslnlZgL9jICacClCRvJCMg7gsJCskehi6i8j3_MgNnImHvSj0nWB8jiMPh-PZ1G-dKDXt3ruvP76__ew1j8hWlkBUhF-uGMgEAZJJnovWXaRpUO-ayDAsQzchOpiHXv9g4A-Ox43HnusMqtMRMJ29u7kmdfbuMxEukOH8z95N_8S5Ls36IMWvzhyc7paYoY815UMtk7ISfVXd7XadfzepaaWSnUpVVxs-mT2Fp4vhSUUjTqNqlVFuy3YmSBTzKKe21t7k1IZmDyHL1C3YFtyGAIKExVoXajowEgiBjnQErMTsAfgoIQxZPSMxjHZuk0q0CWeJPY83CzqjLua_ADaOq-Q&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fgp%2Faw%2Fd%2FB0HJTM1FVH%3Fpd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26qid%3D1792287481%26sr%3D1-1-fec03104-6f11-4242-8f79-15fae2896f66%26i%3Daps%26aref%3DUcqVdTdBEr&pd_rd_i=B0HJTM1FVH&ref_=sxts_sparkle_sbv&ref_=sbx_be_s_sparkle_ssd_vid&qid=&pd_rd_w=7VN2z&content-id=amzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9%3Aamzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_p=22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=FJzcE&pd_rd_r=9dc37a36-eee0-4e4e-befb-d9f331f09d96",
+    "store_page": "Shop Plump",
+    "store_page_link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&p=eAF1kb9uE0EQxpVEQGQFgVwAcoPlwkWktff-5GwHnaJd3zo2ThzHd3ZCmtP6dnN3inO33l3HhCI9DQ3PhASiQRQ8AD0PQIecIKEUfJpiNKNPM_ObwsHm70_ffjwsPkbBZOj1e_1T6JFRZc3YfeZcDuyrJOjBk_HR9Rx7CyPL3sSjLcusmbBZMxqtGjxb9_F0E5GgS0Y9v_i88IhxdaFzUdwaD0akfbQ_6J0Rr_RxrbC56oRUnxcL9JK-y7NalF-WXqgpWGTpecoZUJzKKAGCxhwYlQc8C8f-dktNwVXKeA6EzNki0iDKZzMe6TTPwN9hIKKSKSBommkuQZRnmmfafOnjSTj0hiEeoYFHvNAfolH_gIQe8fvB0bCyV1iDTz98__Xz_Rev9JwudA6UoPJixkGiKNBcy1RVnpgQGrbVMB2n6dgNw9wY-97uRnvY3u4XX3kYtUWnBxroBs_vFKMbfKz8iemg-7rB8W2gu6S01Y7J231E4uWUcPPreuHzeqK1ULv1-nK5rP3DVFc6l1zVV2jqnkkgNJENGs2dHWC3jCbAHYwAJJbZxq1Op4HtvVtDKPm5u4KADGg5jmWPiNXtB8enJzvIAQg60DZalu-ftE4Du3-Id_argoWShWKWMOnqaqJoGMkwZS6szkRIVZopF8Pu6-DQ6Ey6q9p8weW1i4SY8TJK5TBnqmxJVo55xiVdfakcJVTGaRaXI6p4eZmkmq-capZr9z_Qq4qJkLIwlvlCuBaEpm00TdtwzBa0q6lLharS1XXjaD5hAcNE3l_9D8eu6qQ&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fstores%2Fpage%2FD2E002A4-7855-4918-BFBA-0E32CB9FF7B4%3Fstore_ref%3DSBV_A1036634RE3HKTQXW5A6-A0604193SSW9XT4KMB5G%26pd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26lp_asins%3DB0HJTM1FVH%26lp_query%3DApple%20AirPods%203rd%20generation%20charging%20case%20white%26lp_slot%3Dauto-sparkle-hsa-tetris%26sdp_ad_group%3D300241824162904%26i%3Daps%26aref%3DUcqVdTdBEr%26pd_rd_plhdr%3Dt&pd_rd_i=B0HJTM1FVH&ref_=sbx_be_s_sparkle_ssd_cta&store_ref=SBV_A1036634RE3HKTQXW5A6-A0604193SSW9XT4KMB5G&lp_asins=B0HJTM1FVH&pd_rd_w=7VN2z&content-id=amzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9%3Aamzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_p=22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=FJzcE&pd_rd_r=9dc37a36-eee0-4e4e-befb-d9f331f09d96",
+    "products": [
+      {
+        "position": 1,
+        "asin": "B0HJTM1FVH",
+        "sponsored": true,
+        "title": "Wireless Airpod Charging Case for AirPods 3rd Generation | Air Pod Gen 3 Charger Case with Fast Pairing Sync Button, White Lighting Charging Port Compatible with AirPods 3, No Earbuds",
+        "link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&p=eAFVkD9v00AAxRUqoLKCQBkoyoKUIUOli30XYztBVmXH1yakJMZOAnSxLr7zHzWxnbtLAwzZWVhA4hMxsCEGPgA7H4ANQZEQP73hSb_hSU85P_z56cu3W407zmzhe-PR-IXm4aBVg_37xnqiX2WzkfZ8Pn29cb0tLIqXaVDvog7SrA40ex3t4kboLg8dPBviYBQ2jpTblIlLWVaN-nwS4MH0bDK6wF7zfU05_G0iIpOGQtbkTVl04nLdfCCWYFvkSc4oEIzwOAMVSRmArZusiObhcU8swVVOWQkqXtJtLEFcrlYslnlZgL9jICacClCRvJCMg7gsJCskehi6i8j3_MgNnImHvSj0nWB8jiMPh-PZ1G-dKDXt3ruvP76__ew1j8hWlkBUhF-uGMgEAZJJnovWXaRpUO-ayDAsQzchOpiHXv9g4A-Ox43HnusMqtMRMJ29u7kmdfbuMxEukOH8z95N_8S5Ls36IMWvzhyc7paYoY815UMtk7ISfVXd7XadfzepaaWSnUpVVxs-mT2Fp4vhSUUjTqNqlVFuy3YmSBTzKKe21t7k1IZmDyHL1C3YFtyGAIKExVoXajowEgiBjnQErMTsAfgoIQxZPSMxjHZuk0q0CWeJPY83CzqjLua_ADaOq-Q&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fgp%2Faw%2Fd%2FB0HJTM1FVH%3Fpd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26qid%3D1792287481%26sr%3D1-1-fec03104-6f11-4242-8f79-15fae2896f66%26i%3Daps%26aref%3DUcqVdTdBEr&pd_rd_i=B0HJTM1FVH&ref_=sbx_be_s_sparkle_ssd_img&qid=&pd_rd_w=7VN2z&content-id=amzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9%3Aamzn1.sym.22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_p=22e060df-ce87-467b-805a-61b8bd37fbe9&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=FJzcE&pd_rd_r=9dc37a36-eee0-4e4e-befb-d9f331f09d96",
+        "link_clean": "https://www.amazon.com/dp/B0HJTM1FVH/",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HJTM1FVH&device=desktop&engine=amazon_product",
+        "thumbnail": "https://m.media-amazon.com/images/I/21M2Ssdq4gL._AC_SR250,250_QL65_.jpg",
+        "rating": 4.6,
+        "reviews": 35
+      }
+    ],
+    "logo": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/edc5a981-cf0c-451a-9e9e-97618d3a2f0d._AC_SX175_SY100_QL70_.jpg"
+  },
+  "organic_results": [
+    {
+      "position": 1,
+      "asin": "B0H3P63L4W",
+      "sponsored": true,
+      "title": "Replacement Charging Case for Airpod 3rd Gen",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfYXRmOjMwMTQ4NDM0ODA3ODUwMjo6MDo6&url=%2FReplacement-Charging-Case-Airpod-3rd%2Fdp%2FB0H3P63L4W%2Fref%3Dsr_1_1_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-1-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9hdGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0H3P63L4W/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0H3P63L4W&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51GWefaX-NL._AC_UY218_.jpg",
+      "rating": 4.0,
+      "reviews": 308,
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tue, Oct 20",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "asin": "B0GTLQF19Z",
+      "sponsored": true,
+      "options": "2 sizes",
+      "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfYXRmOjMwMTU0NDYzMDA3MTcwMjo6MDo6&url=%2FReplacement-Charging-Generation-Compatible-Bluetooth%2Fdp%2FB0GTLQF19Z%2Fref%3Dsr_1_2_sspa_vo_sr_l_dp%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-2-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9hdGY%26psc%3D1",
+      "title": "Replacement Charging Case for AirPods 3rd Gen (Not pro 3), L-Port",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfYXRmOjMwMTU0NDYzMDA3MTcwMjo6MDo6&url=%2FReplacement-Charging-Generation-Compatible-Bluetooth%2Fdp%2FB0GTLQF19Z%2Fref%3Dsr_1_2_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-2-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9hdGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0GTLQF19Z/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0GTLQF19Z&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51j0avXBJRL._AC_UY218_.jpg",
+      "rating": 4.6,
+      "reviews": 51,
+      "price": "$33.99",
+      "extracted_price": 33.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tue, Oct 20",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$33.99",
+          "extracted_primary_price": 33.99
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "asin": "B0HJTM1FVH",
+      "options": "3 sizes",
+      "options_link": "https://www.amazon.com/Wireless-Charging-Generation-Lighting-Compatible/dp/B0HJTM1FVH/ref=vo_sr_l_dp?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-3",
+      "title": "Wireless Airpod Charging Case for AirPods 3rd Generation",
+      "link": "https://www.amazon.com/Wireless-Charging-Generation-Lighting-Compatible/dp/B0HJTM1FVH/ref=sr_1_3?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-3",
+      "link_clean": "https://www.amazon.com/Wireless-Charging-Generation-Lighting-Compatible/dp/B0HJTM1FVH/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HJTM1FVH&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51y-abhafKL._AC_UY218_.jpg",
+      "rating": 4.6,
+      "reviews": 35,
+      "bought_last_month": "100+ bought in past month",
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "asin": "B0GP86MSHS",
+      "options": "See options",
+      "options_link": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP86MSHS/ref=sr_1_4_so_HEADPHONES?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sbo=GW1QB%2BmqAsHTPf1jTZRSDA%3D%3D&sr=8-4",
+      "variants": {
+        "options": [
+          {
+            "position": 1,
+            "asin": "B0GP86MSHS",
+            "title": "White/ Replacement Charging Case",
+            "link": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP86MSHS/ref=cs_sr_dp_loc_1?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sbo=GW1QB%2BmqAsHTPf1jTZRSDA%3D%3D&sr=8-4"
+          },
+          {
+            "position": 2,
+            "asin": "B0GP8X5WND",
+            "title": "White/ Left Replacement",
+            "link": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP8X5WND/ref=cs_sr_dp_loc_2?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sbo=GW1QB%2BmqAsHTPf1jTZRSDA%3D%3D&sr=8-4"
+          },
+          {
+            "position": 3,
+            "asin": "B0GP8ZJJLY",
+            "title": "White/ Right Replacement",
+            "link": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP8ZJJLY/ref=cs_sr_dp_loc_3?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sbo=GW1QB%2BmqAsHTPf1jTZRSDA%3D%3D&sr=8-4"
+          }
+        ]
+      },
+      "title": "Apple AirPods 3rd Gen - Replacement Charging Case (A2566) - White (Renewed)",
+      "link": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP86MSHS/ref=sr_1_4?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sbo=GW1QB%2BmqAsHTPf1jTZRSDA%3D%3D&sr=8-4",
+      "link_clean": "https://www.amazon.com/Apple-AirPods-3rd-Gen-Replacement/dp/B0GP86MSHS/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0GP86MSHS&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/61AE+UwJTmL._AC_UY218_.jpg",
+      "rating": 3.6,
+      "reviews": 19,
+      "price": "$34.95",
+      "extracted_price": 34.95,
+      "delivery": [
+        "FREE delivery Mon, Oct 26",
+        "Or fastest delivery Wed, Oct 21"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$34.95",
+          "extracted_primary_price": 34.95
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "asin": "B0FKCQ3ZBN",
+      "title": "Wirelss Charging Case Compatible with AirPod 3, Replacement 3rd Generation Charger Case with Bluetooth Pairing Sync Button (Beige White) Style3",
+      "link": "https://www.amazon.com/Replacement-Compatible-Generation-Bluetooth-Beige-White/dp/B0FKCQ3ZBN/ref=sr_1_5?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-5",
+      "link_clean": "https://www.amazon.com/Replacement-Compatible-Generation-Bluetooth-Beige-White/dp/B0FKCQ3ZBN/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FKCQ3ZBN&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/41bWpSMynnL._AC_UY218_.jpg",
+      "rating": 4.5,
+      "reviews": 13,
+      "bought_last_month": "50+ bought in past month",
+      "price": "$13.99",
+      "extracted_price": 13.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tue, Oct 20",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "stock": "Only 11 left in stock - order soon.",
+      "purchase_options": [
+        {
+          "primary_price": "$13.99",
+          "extracted_primary_price": 13.99
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "asin": "B09F53WL39",
+      "variants": {
+        "options": [
+          {
+            "position": 1,
+            "asin": "B09F53WL39",
+            "title": "White",
+            "link": "https://www.amazon.com/Replacement-Compatible-Wireless-Charging-Bluetooth/dp/B09F53WL39/ref=cs_sr_dp_loc_1?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-6"
+          },
+          {
+            "position": 2,
+            "asin": "B0B4HNZ1WL",
+            "title": "Black",
+            "link": "https://www.amazon.com/Replacement-Compatible-Wireless-Charging-Bluetooth/dp/B0B4HNZ1WL/ref=cs_sr_dp_loc_2?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-6"
+          }
+        ]
+      },
+      "title": "Wireless Charging Case Replacement Compatible with AirPod 3rd Generation, Air Pod 3 Charger Case with Bluetooth Pairing Sync Button Without Earbuds, White",
+      "link": "https://www.amazon.com/Replacement-Compatible-Wireless-Charging-Bluetooth/dp/B09F53WL39/ref=sr_1_6?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-6",
+      "link_clean": "https://www.amazon.com/Replacement-Compatible-Wireless-Charging-Bluetooth/dp/B09F53WL39/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B09F53WL39&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51jsIFD8-5L._AC_UY218_.jpg",
+      "rating": 3.6,
+      "reviews": 1200,
+      "price": "$25.99",
+      "extracted_price": 25.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "more_buying_choices": "$18.73 (3 used & new offers)",
+      "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B09F53WL39/ref=sr_1_6_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-6",
+      "purchase_options": [
+        {
+          "primary_price": "$25.99",
+          "extracted_primary_price": 25.99,
+          "more_buying_choices": "$18.73 (3 used & new offers)",
+          "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B09F53WL39/ref=sr_1_6_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-6"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "asin": "B0HKVST35J",
+      "sponsored": true,
+      "title": "Replacement Charging Case for AirPods 3rd Gen, L-Port (Not Pro 3)",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfbXRmOjMwMTU5NDEwMzIwNzIwMjo6MDo6&url=%2FReplacement-Charging-Case-AirPods-L-Port%2Fdp%2FB0HKVST35J%2Fref%3Dsr_1_7_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-7-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9tdGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0HKVST35J/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HKVST35J&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51d59ndDXML._AC_UY218_.jpg",
+      "rating": 5.0,
+      "reviews": 3,
+      "bought_last_month": "New on Amazon in past month",
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "asin": "B09T3HB7SG",
+      "title": "Charger Case for AirPod 3rd Generation Charging Case with Magsafe, Replacement Charging Case for Airpods Gen 3 Support to Wireless Sync Pairing (Beige-White)",
+      "link": "https://www.amazon.com/Wireless-Charging-Replacement-Charger-Support/dp/B09T3HB7SG/ref=sr_1_8?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-8",
+      "link_clean": "https://www.amazon.com/Wireless-Charging-Replacement-Charger-Support/dp/B09T3HB7SG/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B09T3HB7SG&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51FAT6Tl5iL._AC_UY218_.jpg",
+      "rating": 4.0,
+      "reviews": 152,
+      "price": "$17.99",
+      "extracted_price": 17.99,
+      "delivery": [
+        "FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+        "Or fastest delivery Wed, Oct 21"
+      ],
+      "stock": "Only 2 left in stock - order soon.",
+      "purchase_options": [
+        {
+          "primary_price": "$17.99",
+          "extracted_primary_price": 17.99
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "asin": "B0H25PB6J3",
+      "title": "A3122 Charging Case Replacement for AirPods Pro 3rd Generation, Case Only",
+      "link": "https://www.amazon.com/Charging-Replacement-Generation-Compatible-Original/dp/B0H25PB6J3/ref=sr_1_9?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-9",
+      "link_clean": "https://www.amazon.com/Charging-Replacement-Generation-Compatible-Original/dp/B0H25PB6J3/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0H25PB6J3&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/41gv8aNpZzL._AC_UY218_.jpg",
+      "rating": 4.0,
+      "reviews": 7,
+      "bought_last_month": "100+ bought in past month",
+      "price": "$29.99",
+      "extracted_price": 29.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "more_buying_choices": "$26.99 (3 used & new offers)",
+      "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0H25PB6J3/ref=sr_1_9_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-9",
+      "purchase_options": [
+        {
+          "primary_price": "$29.99",
+          "extracted_primary_price": 29.99,
+          "more_buying_choices": "$26.99 (3 used & new offers)",
+          "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0H25PB6J3/ref=sr_1_9_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-9"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "asin": "B0H4FGPBJZ",
+      "options": "4 sizes",
+      "options_link": "https://www.amazon.com/Wireless-Replacement-Generation-Compatible-Blue-Tooth/dp/B0H4FGPBJZ/ref=vo_sr_l_dp?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-10",
+      "title": "Wireless Charging Case Replacement Charging Case for AirPods 3rd Generation Charging case, Only Compatible with AirPod 3rd Gen Charging Case (Not Pro 3), with Blue-Tooth Sync Button,(L-Port)",
+      "link": "https://www.amazon.com/Wireless-Replacement-Generation-Compatible-Blue-Tooth/dp/B0H4FGPBJZ/ref=sr_1_10?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-10",
+      "link_clean": "https://www.amazon.com/Wireless-Replacement-Generation-Compatible-Blue-Tooth/dp/B0H4FGPBJZ/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0H4FGPBJZ&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51hJ0qxmquL._AC_UY218_.jpg",
+      "rating": 4.8,
+      "reviews": 13,
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 11,
+      "asin": "B0GCFHWB8P",
+      "title": "Replacement Charging Case for AirPods 3rd Generation (A2897/A2566/A2565/A2564/A2563) \u2013 USB-C & Qi Wireless Charging \u2013 Bluetooth Pairing Button \u2013 Case Only (No Earbuds)",
+      "link": "https://www.amazon.com/Replacement-Charging-AirPods-Generation-A2897/dp/B0GCFHWB8P/ref=sr_1_11?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-11",
+      "link_clean": "https://www.amazon.com/Replacement-Charging-AirPods-Generation-A2897/dp/B0GCFHWB8P/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0GCFHWB8P&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/41iAaFAQ0ZL._AC_UY218_.jpg",
+      "rating": 3.2,
+      "reviews": 20,
+      "bought_last_month": "100+ bought in past month",
+      "price": "$29.99",
+      "extracted_price": 29.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tomorrow, Oct 18",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "more_buying_choices": "$26.99 (4+ used & new offers)",
+      "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0GCFHWB8P/ref=sr_1_11_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-11",
+      "purchase_options": [
+        {
+          "primary_price": "$29.99",
+          "extracted_primary_price": 29.99,
+          "more_buying_choices": "$26.99 (4+ used & new offers)",
+          "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0GCFHWB8P/ref=sr_1_11_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-11"
+        }
+      ]
+    },
+    {
+      "position": 12,
+      "asin": "B0HC3JN2HR",
+      "sponsored": true,
+      "title": "Replacement Charging Case for AirPods 3rd Generation, AirPods 3rd Generation with Bluetooth Button for Pairing, No Earbuds AirPods 3rd Generation Case Replacement",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfbXRmOjMwMTQ2OTk4OTE2MjEwMjo6MDo6&url=%2FReplacement-Charging-AirPods-Generation-Bluetooth%2Fdp%2FB0HC3JN2HR%2Fref%3Dsr_1_12_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-12-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9tdGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0HC3JN2HR/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HC3JN2HR&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51dU-CJNojL._AC_UY218_.jpg",
+      "rating": 4.5,
+      "reviews": 3000,
+      "bought_last_month": "300+ bought in past month",
+      "price": "$29.99",
+      "extracted_price": 29.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tue, Oct 20",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$29.99",
+          "extracted_primary_price": 29.99
+        }
+      ]
+    },
+    {
+      "position": 13,
+      "asin": "B0FQ5JL83X",
+      "title": "OLEBAND Case Compatible with AirPods 3rd Gen Wireless Charging Case",
+      "link": "https://www.amazon.com/Replacement-Wireless-Compatible-Generation-Lightning/dp/B0FQ5JL83X/ref=sr_1_13?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-13",
+      "link_clean": "https://www.amazon.com/Replacement-Wireless-Compatible-Generation-Lightning/dp/B0FQ5JL83X/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FQ5JL83X&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51xIhHO86iL._AC_UY218_.jpg",
+      "rating": 3.8,
+      "reviews": 80,
+      "price": "$23.99",
+      "extracted_price": 23.99,
+      "old_price": "$27.99",
+      "extracted_old_price": 27.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$23.99",
+          "extracted_primary_price": 23.99,
+          "old_primary_price": "$27.99",
+          "extracted_old_primary_price": 27.99
+        }
+      ]
+    },
+    {
+      "position": 14,
+      "asin": "B0CCH21QXD",
+      "title": "Wireless Charging Case Replacement Compatible with AirPods 3",
+      "link": "https://www.amazon.com/Upqiany-Wireless-Charging-Replacement-Built/dp/B0CCH21QXD/ref=sr_1_14?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-14",
+      "link_clean": "https://www.amazon.com/Upqiany-Wireless-Charging-Replacement-Built/dp/B0CCH21QXD/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0CCH21QXD&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51BkOoP07uL._AC_UY218_.jpg",
+      "rating": 4.0,
+      "reviews": 582,
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 15,
+      "asin": "B0GZVTBZWV",
+      "options": "2 sizes",
+      "options_link": "https://www.amazon.com/Replacement-Charging-Case-Compatible-Airpod/dp/B0GZVTBZWV/ref=vo_sr_l_dp?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-15",
+      "title": "Replacement Charging Case Only Compatible with Airpod 3 Gen",
+      "link": "https://www.amazon.com/Replacement-Charging-Case-Compatible-Airpod/dp/B0GZVTBZWV/ref=sr_1_15?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-15",
+      "link_clean": "https://www.amazon.com/Replacement-Charging-Case-Compatible-Airpod/dp/B0GZVTBZWV/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0GZVTBZWV&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51JCBt80YeL._AC_UY218_.jpg",
+      "rating": 4.4,
+      "reviews": 37,
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tomorrow, Oct 18",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 16,
+      "asin": "B0FDQRQZJB",
+      "title": "Replacement Charging Case for AirPods 3 with USB-C & Reset Button",
+      "link": "https://www.amazon.com/Replacement-Case-3rd-Lightning-Auto-Pairing/dp/B0FDQRQZJB/ref=sr_1_16?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-16",
+      "link_clean": "https://www.amazon.com/Replacement-Case-3rd-Lightning-Auto-Pairing/dp/B0FDQRQZJB/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FDQRQZJB&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51oc-XVy47L._AC_UY218_.jpg",
+      "rating": 3.6,
+      "reviews": 36,
+      "price": "$18.99",
+      "extracted_price": 18.99,
+      "old_price": "$19.99",
+      "extracted_old_price": 19.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$18.99",
+          "extracted_primary_price": 18.99,
+          "old_primary_price": "$19.99",
+          "extracted_old_primary_price": 19.99
+        }
+      ]
+    },
+    {
+      "position": 17,
+      "asin": "B0HJTM1FVH",
+      "sponsored": true,
+      "options": "3 sizes",
+      "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfbXRmOjMwMTUzNDI1MjUxOTEwMjo6MDo6&url=%2FWireless-Charging-Generation-Lighting-Compatible%2Fdp%2FB0HJTM1FVH%2Fref%3Dsr_1_17_sspa_vo_sr_l_dp%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-17-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9tdGY%26psc%3D1",
+      "title": "Wireless Airpod Charging Case for AirPods 3rd Generation",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfbXRmOjMwMTUzNDI1MjUxOTEwMjo6MDo6&url=%2FWireless-Charging-Generation-Lighting-Compatible%2Fdp%2FB0HJTM1FVH%2Fref%3Dsr_1_17_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-17-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9tdGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0HJTM1FVH/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HJTM1FVH&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51y-abhafKL._AC_UY218_.jpg",
+      "rating": 4.6,
+      "reviews": 35,
+      "bought_last_month": "100+ bought in past month",
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 18,
+      "asin": "B0FYV4S4BK",
+      "variants": {
+        "options": [
+          {
+            "position": 1,
+            "asin": "B0FYV4S4BK",
+            "title": "White Air Pod Pro 3 Charging Case",
+            "link": "https://www.amazon.com/Charging-Case-Pro-Air-Pod/dp/B0FYV4S4BK/ref=cs_sr_dp_loc_1?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-18"
+          },
+          {
+            "position": 2,
+            "asin": "B0F8TWH5TW",
+            "title": "Air Pod Charging Case",
+            "link": "https://www.amazon.com/Charging-Case-Pro-Air-Pod/dp/B0F8TWH5TW/ref=cs_sr_dp_loc_2?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-18"
+          }
+        ]
+      },
+      "title": "Wireless Charging Case Compatible with AirPod Pro 3, Air Pod Pro 3rd Generation Charger Case Replacement with Bluetooth Pairing Function, No Earbuds,White",
+      "link": "https://www.amazon.com/Charging-Case-Pro-Air-Pod/dp/B0FYV4S4BK/ref=sr_1_18?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-18",
+      "link_clean": "https://www.amazon.com/Charging-Case-Pro-Air-Pod/dp/B0FYV4S4BK/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FYV4S4BK&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/513iYnojTeL._AC_UY218_.jpg",
+      "rating": 4.0,
+      "reviews": 111,
+      "price": "$19.99",
+      "extracted_price": 19.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$19.99",
+          "extracted_primary_price": 19.99
+        }
+      ]
+    },
+    {
+      "position": 19,
+      "asin": "B0HC3JN2HR",
+      "title": "Replacement Charging Case for AirPods 3rd Generation, AirPods 3rd Generation with Bluetooth Button for Pairing, No Earbuds AirPods 3rd Generation Case Replacement",
+      "link": "https://www.amazon.com/Replacement-Charging-AirPods-Generation-Bluetooth/dp/B0HC3JN2HR/ref=sr_1_19?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-19",
+      "link_clean": "https://www.amazon.com/Replacement-Charging-AirPods-Generation-Bluetooth/dp/B0HC3JN2HR/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HC3JN2HR&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51dU-CJNojL._AC_UY218_.jpg",
+      "rating": 4.5,
+      "reviews": 3000,
+      "bought_last_month": "300+ bought in past month",
+      "price": "$29.99",
+      "extracted_price": 29.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tue, Oct 20",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$29.99",
+          "extracted_primary_price": 29.99
+        }
+      ]
+    },
+    {
+      "position": 20,
+      "asin": "B0HFX3416P",
+      "title": "Wireless Charging Case for AirPods 3rd Gen, with Lightning Port (Only Case)",
+      "link": "https://www.amazon.com/Wireless-Charging-Case-AirPods-Lightning/dp/B0HFX3416P/ref=sr_1_20?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-20",
+      "link_clean": "https://www.amazon.com/Wireless-Charging-Case-AirPods-Lightning/dp/B0HFX3416P/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HFX3416P&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51XtGftX6VL._AC_UY218_.jpg",
+      "rating": 4.1,
+      "reviews": 112,
+      "bought_last_month": "300+ bought in past month",
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Tomorrow, Oct 18",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    },
+    {
+      "position": 21,
+      "asin": "B0HFRZKLV4",
+      "title": "Replacement Charging Case for AirPods 3rd Gen (Not Pro 3), L-Port",
+      "link": "https://www.amazon.com/Replacement-Charging-AirPods-Earbuds-Wireless/dp/B0HFRZKLV4/ref=sr_1_21?dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&dib_tag=se&keywords=Apple+AirPods+3rd+generation+charging+case+white&qid=1792287481&sr=8-21",
+      "link_clean": "https://www.amazon.com/Replacement-Charging-AirPods-Earbuds-Wireless/dp/B0HFRZKLV4/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HFRZKLV4&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51z33795IGL._AC_UY218_.jpg",
+      "rating": 4.8,
+      "reviews": 22,
+      "bought_last_month": "400+ bought in past month",
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "more_buying_choices": "$27.54 (2 used & new offers)",
+      "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0HFRZKLV4/ref=sr_1_21_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-21",
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99,
+          "more_buying_choices": "$27.54 (2 used & new offers)",
+          "more_buying_choices_link": "https://www.amazon.com/gp/offer-listing/B0HFRZKLV4/ref=sr_1_21_olp?keywords=Apple+AirPods+3rd+generation+charging+case+white&dib_tag=se&dib=eyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns&qid=1792287481&sr=8-21"
+        }
+      ]
+    },
+    {
+      "position": 22,
+      "asin": "B0HN46BZ1V",
+      "sponsored": true,
+      "title": "Charging Case for AirPods Pro 1st/2nd Generation USB-C",
+      "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MTM1OTAxMzEwMDYzNzUxOjE3OTIyODc0ODE6c3BfYnRmOjMwMTQ3NTk4NDg0OTkwMjo6MDo6&url=%2FCharging-Generation-Compatible-Replacement-Bluetooth%2Fdp%2FB0HN46BZ1V%2Fref%3Dsr_1_22_sspa%3Fdib%3DeyJ2IjoiMSJ9.V6CmfSw7cix_ONgjmivzJI3h898MY5fRyOskm-aawIsh7o9JwQplOYS3tFsMF5P-e0dhTcbLNWblEUAU7dhZimA6oZeIfisv4OdOS-FArucoPVhUjEt1bp6C41tXjowGNJpCD1CYZY93tUG5NzUNZlLwsh7U_jOZSyV5zGOHKJ0sf8QkG_lbg8wIxARyeQmqn7YI9JdSujZfyGr7-qZ8QPGejoci627O7WGhZ74Av0k.PY18Y8xZf12erliQHhr7LU_EvcbdFojGQh9LnlKtDns%26dib_tag%3Dse%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26qid%3D1792287481%26sr%3D8-22-spons%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9idGY%26psc%3D1",
+      "link_clean": "https://www.amazon.com/dp/B0HN46BZ1V/",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HN46BZ1V&device=desktop&engine=amazon_product",
+      "thumbnail": "https://m.media-amazon.com/images/I/51Q3U4jHRjL._AC_UY218_.jpg",
+      "rating": 5.0,
+      "reviews": 17,
+      "price": "$28.99",
+      "extracted_price": 28.99,
+      "delivery": [
+        "Join Prime to get FREE delivery Mon, Oct 19",
+        "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+      ],
+      "purchase_options": [
+        {
+          "primary_price": "$28.99",
+          "extracted_primary_price": 28.99
+        }
+      ]
+    }
+  ],
+  "featured_products": [
+    {
+      "title": "Customers frequently viewed",
+      "products": [
+        {
+          "position": 1,
+          "asin": "B0HC3JN2HR",
+          "sponsored": true,
+          "title": "Replacement Charging Case for AirPods 3rd Generation, AirPods 3rd Generation with Bluetooth Button for Pairing, No Earbuds AirPods 3rd Generation Case Replacement",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMTQ2OTk4OTE2MjEwMjo6MDo6&url=%2FReplacement-Charging-AirPods-Generation-Bluetooth%2Fdp%2FB0HC3JN2HR%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0HC3JN2HR%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-1-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3DOMa7wxZDaY%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=OMa7wxZDaY",
+          "link_clean": "https://www.amazon.com/dp/B0HC3JN2HR/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HC3JN2HR&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/51dU-CJNojL._AC_UL320_.jpg",
+          "rating": 4.5,
+          "reviews": 3000,
+          "bought_last_month": "300+ bought in past month",
+          "price": "$29.99",
+          "extracted_price": 29.99,
+          "delivery": [
+            "Join Prime to get FREE delivery Tue, Oct 20Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tue, Oct 20",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$29.99",
+              "extracted_primary_price": 29.99
+            }
+          ]
+        },
+        {
+          "position": 2,
+          "asin": "B0GTLQF19Z",
+          "sponsored": true,
+          "title": "Replacement Charging Case for AirPods 3rd Gen (Not pro 3), L-Port",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMTU0NDYzMDA3MTcwMjo6MTo6&url=%2FReplacement-Charging-Generation-Compatible-Bluetooth%2Fdp%2FB0GTLQF19Z%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0GTLQF19Z%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-2-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3DONHGTOfxcV%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=ONHGTOfxcV",
+          "link_clean": "https://www.amazon.com/dp/B0GTLQF19Z/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0GTLQF19Z&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/51j0avXBJRL._AC_UL320_.jpg",
+          "rating": 4.6,
+          "reviews": 51,
+          "price": "$33.99",
+          "extracted_price": 33.99,
+          "delivery": [
+            "Join Prime to get FREE delivery Tue, Oct 20Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tue, Oct 20",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$33.99",
+              "extracted_primary_price": 33.99
+            }
+          ]
+        },
+        {
+          "position": 3,
+          "asin": "B0HL81VTY5",
+          "sponsored": true,
+          "title": "Wireless Charging Case Replacement Compatible with AirPod 3rd Gen",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMDg4NjExMzg3NzYwMjo6Mjo6&url=%2FWireless-Charging-Replacement-Compatible-AirPod%2Fdp%2FB0HL81VTY5%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0HL81VTY5%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-3-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3DwJkBG8FJmO%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=wJkBG8FJmO",
+          "link_clean": "https://www.amazon.com/dp/B0HL81VTY5/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0HL81VTY5&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/418ZyAPr6zL._AC_UL320_.jpg",
+          "rating": 4.7,
+          "reviews": 28,
+          "price": "$28.99",
+          "extracted_price": 28.99,
+          "delivery": [
+            "Join Prime to get FREE delivery Mon, Oct 19Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Mon, Oct 19",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$28.99",
+              "extracted_primary_price": 28.99
+            }
+          ]
+        },
+        {
+          "position": 4,
+          "asin": "B0F485Y26N",
+          "sponsored": true,
+          "variants": {
+            "more_variants": "+1 other color/pattern",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMTM2NTkwNzkxNDQwMjo6Mzo6&url=%2FULAK-Compatible-Transparent-Shockproof-Protective%2Fdp%2FB0F485Y26N%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0F485Y26N%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-4-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3Dhwzg6DZnHq%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=hwzg6DZnHq"
+          },
+          "title": "ULAK Compatible with AirPods 3 Case for Women Girls, Pink",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMTM2NTkwNzkxNDQwMjo6Mzo6&url=%2FULAK-Compatible-Transparent-Shockproof-Protective%2Fdp%2FB0F485Y26N%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0F485Y26N%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-4-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3Dhwzg6DZnHq%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=hwzg6DZnHq",
+          "link_clean": "https://www.amazon.com/dp/B0F485Y26N/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0F485Y26N&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/619JOxEIenL._AC_UL320_.jpg",
+          "rating": 4.2,
+          "reviews": 970,
+          "price": "$8.39",
+          "extracted_price": 8.39,
+          "delivery": [
+            "Join Prime to get FREE delivery Tomorrow, Oct 18Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tomorrow, Oct 18",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$8.39",
+              "extracted_primary_price": 8.39
+            }
+          ]
+        },
+        {
+          "position": 5,
+          "asin": "B0DGXLJHJ9",
+          "sponsored": true,
+          "variants": {
+            "more_variants": "+141 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMDg4MzQwMDMwNjMwMjo6NDo6&url=%2FMagnetic-Compatible-Generation-Carabiner-Protection%2Fdp%2FB0DGXLJHJ9%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0DGXLJHJ9%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-5-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3DNqXozF2VUK%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=NqXozF2VUK"
+          },
+          "title": "R-FUN for AirPods 3 Case with Lock Phone Stand Magnetic Lid, White+Blue",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MToxODQxNzY4MTg3OTY0Njc5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljOjMwMDg4MzQwMDMwNjMwMjo6NDo6&url=%2FMagnetic-Compatible-Generation-Carabiner-Protection%2Fdp%2FB0DGXLJHJ9%2Fref%3Dsxin_16_pa_sp_search_thematic_sspa%3Fcontent-id%3Damzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%253Aamzn1.sym.1fbff90f-c587-49b5-bb89-4db04aaac46e%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0DGXLJHJ9%26pd_rd_r%3Dd4b422a2-f9a6-4c9d-9f78-cd77104cfd36%26pd_rd_w%3DxXfPw%26pd_rd_wg%3Di72Wx%26pf_rd_p%3D1fbff90f-c587-49b5-bb89-4db04aaac46e%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-5-6024b2a3-78e4-4fed-8fed-e1613be3bcce-spons%26aref%3DNqXozF2VUK%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWM%26psc%3D1&aref=NqXozF2VUK",
+          "link_clean": "https://www.amazon.com/dp/B0DGXLJHJ9/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0DGXLJHJ9&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/7197cA6CDBL._AC_UL320_.jpg",
+          "rating": 4.2,
+          "reviews": 18000,
+          "price": "$9.98",
+          "extracted_price": 9.98,
+          "offers": [
+            "Save 5% on 2 select item(s)"
+          ],
+          "delivery": [
+            "FREE delivery Oct 24 - 31 on $35 of items shipped by AmazonOr fastest delivery Oct 24 - 29",
+            "FREE delivery Oct 24 - 31 on $35 of items shipped by Amazon",
+            "Or fastest delivery Oct 24 - 29"
+          ],
+          "climate_pledge_friendly": true,
+          "sustainability_features": [
+            {
+              "position": 1,
+              "name": "Recycled materials",
+              "snippet": "Contains at least 50% recycled material.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            },
+            {
+              "position": 2,
+              "name": "Safer chemicals",
+              "snippet": "Made with chemicals safer for human health and the environment.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            },
+            {
+              "position": 3,
+              "name": "Worker well-being",
+              "snippet": "Manufactured on farms or in facilities that protect the rights and/or health of workers.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            }
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$9.98",
+              "extracted_primary_price": 9.98
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Today's deals",
+      "products": [
+        {
+          "position": 1,
+          "asin": "B0H4KQ91D6",
+          "sponsored": true,
+          "badges": [
+            "Limited time deal"
+          ],
+          "variants": {
+            "more_variants": "+10 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDE1MjI1NDIzNjM5MDI6OjA6Og&url=%2FORNARTO-AirPods-Pro-Compatible-MagSafe%2Fdp%2FB0H4KQ91D6%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0H4KQ91D6%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-1-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DVRoNLkDS4x%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=VRoNLkDS4x"
+          },
+          "title": "ORNARTO for AirPods Pro 3 Case 2025, Compatible with MagSafe, White",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDE1MjI1NDIzNjM5MDI6OjA6Og&url=%2FORNARTO-AirPods-Pro-Compatible-MagSafe%2Fdp%2FB0H4KQ91D6%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0H4KQ91D6%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3DRZvfv%252F%252FHxDF%252BO5021pAnSA%253D%253D%26sr%3D1-1-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DVRoNLkDS4x%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=VRoNLkDS4x",
+          "link_clean": "https://www.amazon.com/dp/B0H4KQ91D6/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0H4KQ91D6&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/61esBLXo36L._AC_UL320_.jpg",
+          "rating": 4.5,
+          "reviews": 107,
+          "price": "$17.99",
+          "extracted_price": 17.99,
+          "old_price": "$20.99",
+          "extracted_old_price": 20.99,
+          "offers": [
+            "Save 10% on 2 select item(s)"
+          ],
+          "delivery": [
+            "Join Prime to get FREE delivery Tomorrow, Oct 18Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tomorrow, Oct 18",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "climate_pledge_friendly": true,
+          "sustainability_features": [
+            {
+              "position": 1,
+              "name": "Recycled materials",
+              "snippet": "Contains at least 50% recycled material.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            },
+            {
+              "position": 2,
+              "name": "Safer chemicals",
+              "snippet": "Made with chemicals safer for human health and the environment.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            },
+            {
+              "position": 3,
+              "name": "Worker well-being",
+              "snippet": "Manufactured on farms or in facilities that protect the rights and/or health of workers.",
+              "thumbnail": "https://m.media-amazon.com/images/I/51IhSrucIyL._SS200_.png",
+              "certified_by": "Global Recycled Standard",
+              "certified_info": "Global Recycled Standard (GRS) certified products contain recycled content (>50%) that has been independently verified at each stage of the supply chain, from the source to the final product and meet social, environmental, and chemical requirements. The purchase of Global Recycled Standard (GRS) certified products supports the use of recycled content in the supply chain."
+            }
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$17.99",
+              "extracted_primary_price": 17.99,
+              "old_primary_price": "$20.99",
+              "extracted_old_primary_price": 20.99
+            }
+          ]
+        },
+        {
+          "position": 2,
+          "asin": "B0FY5GT6YJ",
+          "sponsored": true,
+          "options": "See options",
+          "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTU1NjU1OTM4MDI6OjE6Og&url=%2FVISOOM-Generation-Silicone-Designer-Protector%2Fdp%2FB0FY5GT6YJ%2Fref%3Dsxbs_pa_sp_search_thematic_btf_so_PORTABLE_ELECTRONIC_DEVICE_COV%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FY5GT6YJ%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-2-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DNueWVk1QZm%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=NueWVk1QZm",
+          "variants": {
+            "more_variants": "+5 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTU1NjU1OTM4MDI6OjE6Og&url=%2FVISOOM-Generation-Silicone-Designer-Protector%2Fdp%2FB0FY5GT6YJ%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FY5GT6YJ%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-2-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DNueWVk1QZm%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=NueWVk1QZm"
+          },
+          "title": "VISOOM Apple Airpods Pro 3 Case Retro Camera iPods 3 Cover for Women Men",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTU1NjU1OTM4MDI6OjE6Og&url=%2FVISOOM-Generation-Silicone-Designer-Protector%2Fdp%2FB0FY5GT6YJ%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FY5GT6YJ%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-2-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DNueWVk1QZm%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=NueWVk1QZm",
+          "link_clean": "https://www.amazon.com/dp/B0FY5GT6YJ/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FY5GT6YJ&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/61gP7HvZp-L._AC_UL320_.jpg",
+          "rating": 4.6,
+          "reviews": 603,
+          "price": "$13.29",
+          "extracted_price": 13.29,
+          "old_price": "$13.99",
+          "extracted_old_price": 13.99,
+          "offers": [
+            "Exclusive Prime price"
+          ],
+          "delivery": [
+            "Join Prime to get FREE delivery Tomorrow, Oct 18Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tomorrow, Oct 18",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$13.29",
+              "extracted_primary_price": 13.29,
+              "old_primary_price": "$13.99",
+              "extracted_old_primary_price": 13.99
+            }
+          ]
+        },
+        {
+          "position": 3,
+          "asin": "B0CNR3JF38",
+          "sponsored": true,
+          "options": "See options",
+          "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDAyODM4MTA2NzYxMDI6OjI6Og&url=%2FOlytop-Glitter-Generation-Protective-Keychain%2Fdp%2FB0CNR3JF38%2Fref%3Dsxbs_pa_sp_search_thematic_btf_so_PORTABLE_ELECTRONIC_DEVICE_COV%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0CNR3JF38%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-3-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DwzGXFiEyjt%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=wzGXFiEyjt",
+          "variants": {
+            "more_variants": "+7 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDAyODM4MTA2NzYxMDI6OjI6Og&url=%2FOlytop-Glitter-Generation-Protective-Keychain%2Fdp%2FB0CNR3JF38%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0CNR3JF38%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-3-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DwzGXFiEyjt%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=wzGXFiEyjt"
+          },
+          "title": "Olytop for Cute Glitter Airpods 3rd Generation Case with Cleaner Pen, Shell Pattern Apple Airpods iPod 3rd Gen Case Cover Protective Skin Girl Women with Luxury Pearl Keychain - Pink",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDAyODM4MTA2NzYxMDI6OjI6Og&url=%2FOlytop-Glitter-Generation-Protective-Keychain%2Fdp%2FB0CNR3JF38%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0CNR3JF38%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-3-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DwzGXFiEyjt%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=wzGXFiEyjt",
+          "link_clean": "https://www.amazon.com/dp/B0CNR3JF38/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0CNR3JF38&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/61pB0JjmCVL._AC_UL320_.jpg",
+          "rating": 4.3,
+          "reviews": 1300,
+          "price": "$7.21",
+          "extracted_price": 7.21,
+          "old_price": "$7.59",
+          "extracted_old_price": 7.59,
+          "offers": [
+            "Save 5% on 2 select item(s)"
+          ],
+          "delivery": [
+            "Join Prime to get FREE delivery Tomorrow, Oct 18Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tomorrow, Oct 18",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$7.21",
+              "extracted_primary_price": 7.21,
+              "old_primary_price": "$7.59",
+              "extracted_old_primary_price": 7.59
+            }
+          ]
+        },
+        {
+          "position": 4,
+          "asin": "B0FQBR1ZWL",
+          "sponsored": true,
+          "options": "See options",
+          "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDE0Mzc0NTA1MzIxMDI6OjM6Og&url=%2FAirpods-VISOOM-Jewerly-Rhinestone-Keychain%2Fdp%2FB0FQBR1ZWL%2Fref%3Dsxbs_pa_sp_search_thematic_btf_so_PORTABLE_ELECTRONIC_DEVICE_COV%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FQBR1ZWL%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-4-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DmAjZnoVaPE%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=mAjZnoVaPE",
+          "variants": {
+            "more_variants": "+11 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDE0Mzc0NTA1MzIxMDI6OjM6Og&url=%2FAirpods-VISOOM-Jewerly-Rhinestone-Keychain%2Fdp%2FB0FQBR1ZWL%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FQBR1ZWL%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-4-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DmAjZnoVaPE%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=mAjZnoVaPE"
+          },
+          "title": "Case for Apple Airpods Pro 3 Case Cover 2025, VISOOM Bling Jewerly Airpods iPods Pro3 Cases Cute Glitter Diamond Airpod iPod Pro3 Cases Rhinestone AirPods iPods Pro 3rd Gen Cas with Keychain for Women",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDE0Mzc0NTA1MzIxMDI6OjM6Og&url=%2FAirpods-VISOOM-Jewerly-Rhinestone-Keychain%2Fdp%2FB0FQBR1ZWL%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB0FQBR1ZWL%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-4-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3DmAjZnoVaPE%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=mAjZnoVaPE",
+          "link_clean": "https://www.amazon.com/dp/B0FQBR1ZWL/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B0FQBR1ZWL&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/81LHCHJQ3rL._AC_UL320_.jpg",
+          "rating": 4.3,
+          "reviews": 4000,
+          "price": "$17.09",
+          "extracted_price": 17.09,
+          "old_price": "$17.99",
+          "extracted_old_price": 17.99,
+          "offers": [
+            "Exclusive Prime price"
+          ],
+          "delivery": [
+            "Join Prime to get FREE delivery Tomorrow, Oct 18Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Join Prime to get FREE delivery Tomorrow, Oct 18",
+            "Or Non-members get FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$17.09",
+              "extracted_primary_price": 17.09,
+              "old_primary_price": "$17.99",
+              "extracted_old_primary_price": 17.99
+            }
+          ]
+        },
+        {
+          "position": 5,
+          "asin": "B09G2X8M89",
+          "sponsored": true,
+          "options": "See options",
+          "options_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTMyNTQ3OTE5MDI6OjQ6Og&url=%2FCase-Airpods-Silicone-Accessories-Generation%2Fdp%2FB09G2X8M89%2Fref%3Dsxbs_pa_sp_search_thematic_btf_so_PORTABLE_ELECTRONIC_DEVICE_COV%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB09G2X8M89%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-5-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3Dgkr8DzmFD1%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=gkr8DzmFD1",
+          "variants": {
+            "more_variants": "+21 other colors/patterns",
+            "more_variants_link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTMyNTQ3OTE5MDI6OjQ6Og&url=%2FCase-Airpods-Silicone-Accessories-Generation%2Fdp%2FB09G2X8M89%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB09G2X8M89%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-5-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3Dgkr8DzmFD1%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=gkr8DzmFD1"
+          },
+          "title": "VISOOM Case for Airpods 3 Pink Airpods 3rd Cases 2021 Silicone for iPod 3 Earbuds Case Cover Women Wireless Charging Case with Accessories Bling Keychain for Apple Ear Buds 3rd Generation",
+          "link": "https://www.amazon.com/sspa/click?ie=UTF8&spc=MTo3MDgzMTQzNjg1MzMyODQ5OjE3OTIyODc0ODI6c3Bfc2VhcmNoX3RoZW1hdGljX2J0ZjozMDEyOTMyNTQ3OTE5MDI6OjQ6Og&url=%2FCase-Airpods-Silicone-Accessories-Generation%2Fdp%2FB09G2X8M89%2Fref%3Dsxbs_pa_sp_search_thematic_btf_sspa%3Fcontent-id%3Damzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%253Aamzn1.sym.e7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26cv_ct_cx%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26keywords%3DApple%2BAirPods%2B3rd%2Bgeneration%2Bcharging%2Bcase%2Bwhite%26pd_rd_i%3DB09G2X8M89%26pd_rd_r%3D1d50c45e-ecf6-4103-8bd9-4f756d3ac076%26pd_rd_w%3D3GUXj%26pd_rd_wg%3DlhRbH%26pf_rd_p%3De7ad43e7-a94e-4fc7-9810-ad4004b5b2c3%26pf_rd_r%3DT5B9F123MF4YXC94GQ0B%26qid%3D1792287481%26sbo%3D9ZOMT9Jm0JH%252Ft%252BWi68iDSA%253D%253D%26sr%3D1-5-a0bb3594-e9cc-4300-954e-d46629cde54b-spons%26aref%3Dgkr8DzmFD1%26sp_csd%3Dd2lkZ2V0TmFtZT1zcF9zZWFyY2hfdGhlbWF0aWNfYnRm%26psc%3D1&aref=gkr8DzmFD1",
+          "link_clean": "https://www.amazon.com/dp/B09G2X8M89/",
+          "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&asin=B09G2X8M89&device=desktop&engine=amazon_product",
+          "thumbnail": "https://m.media-amazon.com/images/I/61cBZQyQbML._AC_UL320_.jpg",
+          "rating": 4.6,
+          "reviews": 6800,
+          "price": "$8.54",
+          "extracted_price": 8.54,
+          "old_price": "$8.99",
+          "extracted_old_price": 8.99,
+          "offers": [
+            "Exclusive Prime price"
+          ],
+          "delivery": [
+            "FREE delivery Thu, Oct 22 on $35 of items shipped by AmazonOr fastest delivery Wed, Oct 21",
+            "FREE delivery Thu, Oct 22 on $35 of items shipped by Amazon",
+            "Or fastest delivery Wed, Oct 21"
+          ],
+          "purchase_options": [
+            {
+              "primary_price": "$8.54",
+              "extracted_primary_price": 8.54,
+              "old_primary_price": "$8.99",
+              "extracted_old_primary_price": 8.99
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sponsored_brands": {
+    "title": "Brands related to your search",
+    "brands": [
+      {
+        "position": 1,
+        "image": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/33729e06-a82d-4056-a34c-92ce6bf8a326._CR0,0,1200,628_SX920_CB1169409_QL70_.jpg",
+        "name": "Bitrue",
+        "headline": "Custom Personalized Case for Airpods",
+        "link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&p=eAFdUctu00AUVVsBVVRElUWRsooikUXFJONxYietLOTHpHnUiRsn6WNjTeyJ49ax3ZlJU1j0A-B_kNiwY4HUBSs-gY9ghdKCEBzdxZHuPbrn3pMLtn9--fb9af65Ppo4Vq_TO4MWHpY2pP29GU2iW--2f94ajydOK7ZN1mbwYE-V1bYVXPvJpaDLri2TU3eJV8MdGVUQbFQktVmBF5uuMd3W8aiNhx03_zL3LKD8SqRZfmfcH2JzcNTvXGCr8H4jt73ueFMxy-fIgrxLk4qfLgqv5pwARv10saBJQESUJoBTdhP5FHBKmD8HUzErPaGJN3b30WIZiwhMGUkC4DNKRHRDwe-VwCcs4CAjUSIoA36aCJoItGsbpic77rFnYbc3GjilRm4D7n68__Hh02ersPtHvTYiZzwuvUAQQkVtNlQFIaRKaGvsWgdbpmPu9_KHlqGbWasDVP3OuH5EqN8ZJ9ydIEX_F3dG-FD6IynsmCG-PdJxuJpiiu43c18350Jk_KBaXa1Wlb9vqXKRMsqrGQlptQFNWK_V6qClNhGo6Q0DGE3JAliCLWhApKBm482DwGN0prmGp8O6VGtCRe6PcA_Xx12sDCygQ6muIhkN4Om5M7Rxe2B2y1ngscDL4nnANFGec-L5zIsCDZbjzCM8SrhmwNbkuF2XrN5rA7Ya3aZ94qBHqpy1bXs9eb2k7K2mZ1lMi3rEnDTgRZkFxZAmlD2kWvTnhIVREhZ9wmlxNY8EXSt5nArt_wzKPMg8EnghS5eZJsO1c0VWIFJqsFaONJLxMlkfe3XZT21mD4eXvwCqsur9&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fstores%2Fpage%2F80C05445-F792-4A8B-B91D-E10F0B026298%3Fstore_ref%3DSB_A05149063NTEKE5UJE6OD-A0157232O0WYPRMEHOCJ%26pd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26lp_asins%3DB0FVLH51DK%2CB0F8J9MQP2%2CB0F8J6XHMM%26lp_query%3DApple%20AirPods%203rd%20generation%20charging%20case%20white%26lp_slot%3Ddesktop-hsa-3psl%26sdp_ad_group%3D300157636026404%26i%3Daps%26aref%3DkjNoMrMRRj&ref_=sbx_be_s_3psl_mbd_mb0_bkgd&pd_rd_w=tzsYU&content-id=amzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463%3Aamzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_p=dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=cmmEK&pd_rd_r=56172dfe-0709-42a2-9b39-429077a1b3f0",
+        "logo": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/02c31800-e411-40f5-8cf6-f3e2776315ef._CR0,0,1564,720_AC_SX278_SY200_CB1169409_QL70_.jpg"
+      },
+      {
+        "position": 2,
+        "image": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/52686d68-cfc2-46da-946e-e589e6ae110c._CR0,0,1800,942_SX920_CB1169409_QL70_.jpg",
+        "name": "ORNARTO",
+        "headline": "Get the best one of simple yet premium",
+        "link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&p=eAFdUctu00AUVVsBVVRElUWRsooikUXFJGM7duwiC_nZpGlS104Czcaa2BPbwrGnM9Om7aIfwJ5vYMkHsGaBxIIVn8AHsGSF0oIQHN3Fke49uufeU4m3f376-u1h9bExnnr2oD94DW3Hb2wI-3sLXGRX4dXozJ1Mpp6bDy3ao_Bgz4Ov7M51dETM4gQUXBUWl35v5e9IYkuEakvoai042wzM-bbhjHuO3w-qTyuPYsze8JJUdyYj37FODkf9mWPX3m5UttedcM4X1QpaopuyaEXlsvYsZQhQHJXLJS5ixLOyAAzTyyzCgGFEoxTM-aLxABfhJNgXlxc5z8CcoiIGEcWIZ5cY_F4JIkRjBgjKCo4piMqC44KLu0PTCiUvOA5tJxiMT7yGWtkQdr__-PDu_Ue7tvtHvTYiEZY3nkgQQk1UFBVqagcq4tYksA-2LM_aH1Rf2KZhEbcPusateX6PxLg1T1kwFRXjX9yayV0Z96S2YyXO1aHhJKu5g8Uvm5XPmynnhB2026vVqvX3LW3GS4pZm6AEt1XbEk0bCkAUOgrouLYKVNW0gCCZhiZrsuto8OWdIKR4oQdmaEBVkxQou4dHA-f4uOufCkNgwG5HhIIsad2xNPW7xqntwSaJQxqHJE9jqvNmylAY0TCLddjMSYhYVjDdhO7Qd-VgKD5f04F9JvXce2pplna2njy_wPRaNwjJcd3IqFfGrC7RuJ7gAtO7VOtRimiSFUk9QgzXV2nG8VrJ8pLr_2fQZDEJURwmtLwgugShIMmyKMmypsBOM9MRYU20PnY0u1niaOZQ6RcjXurA&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fstores%2Fpage%2F8DC2BD01-2146-4FD8-88BC-13BA9595FE90%3Fstore_ref%3DSB_A0893605FGJKELL7RQ1M-A0742015397T3VR7AQDP0%26pd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26lp_asins%3DB0FMRF5SM2%2CB0FMKDY3HF%2CB0FMKC9C9Y%26lp_query%3DApple%20AirPods%203rd%20generation%20charging%20case%20white%26lp_slot%3Ddesktop-hsa-3psl%26sdp_ad_group%3D300135523559604%26i%3Daps%26aref%3DNZzmecZEr3&ref_=sbx_be_s_3psl_mbd_mb1_bkgd&pd_rd_w=tzsYU&content-id=amzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463%3Aamzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_p=dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=cmmEK&pd_rd_r=56172dfe-0709-42a2-9b39-429077a1b3f0",
+        "logo": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/3b6f2c66-e18e-4433-a932-8ab391318f9c._CR0,0,600,600_AC_SX278_SY200_CB1169409_QL70_.png"
+      },
+      {
+        "position": 3,
+        "image": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/fd0aad09-5040-458a-8ef4-5063b191717e._CR0,0,1200,628_SX920_CB1169409_QL70_.jpg",
+        "name": "Sophie McKay",
+        "headline": "Happiness Grows in the Garden - Gift It This Year",
+        "link": "https://sponsored-ads.amazon.com/clk/?_encoding=UTF8&p=eAFdkc9q20AQxklC22BSGnxIwSdjqA-BtXe1siQniKK_sWPHUSzb1LmItbSWRGxJ2d3Ebg95gL5OoIfSa3vuqQ_RRygUipOW0n7MYZjhx8x8U4p2f3z--u1p-bkxmnh2r9t7A21nWNtChwdzmqXrYD2YuuPxxHMXZxbrMHh0oCXXfIq6ExBa5vRkPVeuhleWMdzDUkOCWgOp7Qa83PbN2a7hjDrOsOuXX5aeRZRfibwo740HQ8c6Pxl0Lx278n6rtLvpBDMxL5fIkrzLs0aYLyuvEk4Ao2G-XNIsIiLNM8Apu01DCjglLEzATMxrT2gWjP1DaXmzECmYMZJFIGSUiPSWgt8jQUhYxEFB0kxQBsI8EzQT0v6ZaQXY8_uB7fi90blX00pb0v6Xn9_vP320K_t_6M0iuOCL2gsMIdTaWINYQhpUpJ2xbx_tWJ512Csf26ZhFW4XqMadef2o2LgzL7g_kRTjX92Z8UMYj0llz4qd9YnhxKuZQ6UP26X77USIgh81m6vVqvHXliYXOaO8WZCYNrEj21ixVCBDiIAMkQraro2BixRFtswWMlzl9QMQMDrXfTMwIG5h3FZOB9oITU_Vvif3gAElGWuyKvWVC7c_nXZGquzWiyhgUVAskojpop5wEoQsSCMd1hdFQHiacR21kaIoEtK0Te36hrK3ulEUC1o1UublEa9iFlVjmlH28L9qmBAWp1lcDQmn1VWSCroh-SIX-v9u13lUBCQKYpbfFDqGEGEot3ALIQTleqqTgtfJ5qzxgHidMO9P-C_XfuRY&v=c1&r=https%3A%2F%2Fwww.amazon.com%2Fstores%2Fpage%2F3E4D36C7-4001-4017-9FD3-F1664CB51AF6%3Fstore_ref%3DSB_A0353396JN8T1YJ7LP4K-A02438472L6QFLYYHT74F%26pd_rd_plhdr%3Dt%26hsa_cr_id%3D0%26lp_asins%3D1916662188%26lp_query%3DApple%20AirPods%203rd%20generation%20charging%20case%20white%26lp_slot%3Ddesktop-hsa-3psl%26sdp_ad_group%3D300130453511104%26i%3Daps%26aref%3DUNaPHcoLVs&ref_=sbx_be_s_3psl_mbd_mb2_bkgd&pd_rd_w=tzsYU&content-id=amzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463%3Aamzn1.sym.dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_p=dc82d3ee-4909-44d1-b96c-93b0e5479463&pf_rd_r=T5B9F123MF4YXC94GQ0B&pd_rd_wg=cmmEK&pd_rd_r=56172dfe-0709-42a2-9b39-429077a1b3f0",
+        "logo": "https://m.media-amazon.com/images/S/al-na-9d5791cf-3faf/3f08dc11-ca2c-4819-b600-2dbbf4d97e58._CR0,0,1080,1080_AC_SX278_SY200_CB1169409_QL70_.jpg"
+      }
+    ]
+  },
+  "categories": [
+    {
+      "position": 1,
+      "name": "Audible",
+      "link": "https://www.amazon.com/Audible-Books-and-Originals/b/?ie=UTF8&node=18145289011&ref_=nav_cs_audible",
+      "node": "18145289011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=18145289011"
+    },
+    {
+      "position": 2,
+      "name": "Pet Supplies",
+      "link": "https://www.amazon.com/pet-shops-dogs-cats-hamsters-kittens/b/?ie=UTF8&node=2619533011&ref_=nav_cs_pets",
+      "node": "2619533011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=2619533011"
+    },
+    {
+      "position": 3,
+      "name": "Amazon Home",
+      "link": "https://www.amazon.com/home-garden-kitchen-furniture-bedding/b/?ie=UTF8&node=1055398&ref_=nav_cs_home",
+      "node": "1055398",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=1055398"
+    },
+    {
+      "position": 4,
+      "name": "Automotive",
+      "link": "https://www.amazon.com/automotive-auto-truck-replacements-parts/b/?ie=UTF8&node=15684181&ref_=nav_cs_automotive",
+      "node": "15684181",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=15684181"
+    },
+    {
+      "position": 5,
+      "name": "Beauty & Personal Care",
+      "link": "https://www.amazon.com/Beauty-Makeup-Skin-Hair-Products/b/?ie=UTF8&node=3760911&ref_=nav_cs_beauty",
+      "node": "3760911",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=3760911"
+    },
+    {
+      "position": 6,
+      "name": "Video Games",
+      "link": "https://www.amazon.com/computer-video-games-hardware-accessories/b/?ie=UTF8&node=468642&ref_=nav_cs_video_games",
+      "node": "468642",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=468642"
+    },
+    {
+      "position": 7,
+      "name": "Fashion",
+      "link": "https://www.amazon.com/amazon-fashion/b/?ie=UTF8&node=7141123011&ref_=nav_cs_fashion",
+      "node": "7141123011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=7141123011"
+    },
+    {
+      "position": 8,
+      "name": "Baby",
+      "link": "https://www.amazon.com/baby-car-seats-strollers-bedding/b/?ie=UTF8&node=165796011&ref_=nav_cs_baby",
+      "node": "165796011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=165796011"
+    },
+    {
+      "position": 9,
+      "name": "Toys & Games",
+      "link": "https://www.amazon.com/toys/b/?ie=UTF8&node=165793011&ref_=nav_cs_toys",
+      "node": "165793011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=165793011"
+    },
+    {
+      "position": 10,
+      "name": "Smart Home",
+      "link": "https://www.amazon.com/Smart-Home/b/?ie=UTF8&node=6563140011&ref_=nav_cs_smart_home",
+      "node": "6563140011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=6563140011"
+    },
+    {
+      "position": 11,
+      "name": "Custom Products",
+      "link": "https://www.amazon.com/Amazon-Custom/b/?ie=UTF8&node=11032013011&ref_=nav_cs_custom",
+      "node": "11032013011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=11032013011"
+    },
+    {
+      "position": 12,
+      "name": "Kindle Books",
+      "link": "https://www.amazon.com/Kindle-eBooks/b/?ie=UTF8&node=154606011&ref_=nav_cs_kindle_books",
+      "node": "154606011",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=154606011"
+    },
+    {
+      "position": 13,
+      "name": "Books",
+      "link": "https://www.amazon.com/books-used-books-textbooks/b/?ie=UTF8&node=283155&ref_=nav_cs_books",
+      "node": "283155",
+      "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&node=283155"
+    }
+  ],
+  "filters": {
+    "eligible_for_free_shipping": [
+      {
+        "position": 1,
+        "name": "Free Shipping by Amazon",
+        "description": "Get FREE Shipping on eligible orders shipped by Amazon",
+        "rh": "p_76:1249137011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_76%3A1249137011&dc&qid=1792287481&rnid=1249135011&ref=sr_nr_p_76_1&ds=v1%3ADj%2F8lcYX34hCGBLaDpDMxWzLTsO%2FVyMbfo%2BbMahkcdI",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_76%3A1249137011"
+      }
+    ],
+    "delivery_day": [
+      {
+        "position": 1,
+        "name": "Get It by Tomorrow",
+        "rh": "p_90:8308921011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_90%3A8308921011&dc&qid=1792287481&rnid=8308919011&ref=sr_nr_p_90_1&ds=v1%3AFOl9jqsF26PYBtNBqO7WT6Qp5oSXXOO%2FCUZZXEDoZEk",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_90%3A8308921011"
+      }
+    ],
+    "customer_reviews": [
+      {
+        "position": 1,
+        "name": "& Up",
+        "rh": "p_72:1248879011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_72%3A1248879011&dc&qid=1792287481&rnid=1248877011&ref=sr_nr_p_72_1&ds=v1%3AQRrdcKz2z2%2Bco88q7%2BIcWFucv65Jri4cR7hbOI%2FjtPc",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_72%3A1248879011"
+      }
+    ],
+    "brands": [
+      {
+        "position": 1,
+        "name": "Spigen",
+        "rh": "p_123:2385",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_123%3A2385&dc&qid=1792287481&rnid=85457740011&ref=sr_nr_p_123_1&ds=v1%3A9fN1He%2BOdeLezB8A7aUx6oIUCf2ZKVHeGLC4BGX9dN0",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_123%3A2385"
+      }
+    ],
+    "price": [
+      {
+        "position": 1,
+        "name": "All Discounts",
+        "rh": "p_n_deal_type:23566065011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A23566065011&dc&qid=1792287481&rnid=23566063011&ref=sr_nr_p_n_deal_type_1&ds=v1%3A05MOfI2vhZmhyPlNnFVQqQz89glh3B5k78e3ueooQYA",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A23566065011"
+      },
+      {
+        "position": 2,
+        "name": "Buy More, Save More",
+        "rh": "p_n_deal_type:210906365011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A210906365011&dc&qid=1792287481&rnid=23566063011&ref=sr_nr_p_n_deal_type_2&ds=v1%3AFiiFldLQ87pIg84WMoLJqTWybnyo3DCicHfPPmlgJb8",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A210906365011"
+      },
+      {
+        "position": 3,
+        "name": "Coupons",
+        "rh": "p_n_deal_type:210906366011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A210906366011&dc&qid=1792287481&rnid=23566063011&ref=sr_nr_p_n_deal_type_3&ds=v1%3ACCANCwt4LwWOT3mbip7MzmMSCzuOxMcVozdwvjja43s",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A210906366011"
+      },
+      {
+        "position": 4,
+        "name": "Today's Deals",
+        "rh": "p_n_deal_type:23566064011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A23566064011&dc&qid=1792287481&rnid=23566063011&ref=sr_nr_p_n_deal_type_4&ds=v1%3AbLPVNG7TAExNeJ1CUaSlHpBfnRes0gi46mx5hJR9JfQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_deal_type%3A23566064011"
+      }
+    ],
+    "condition": [
+      {
+        "position": 1,
+        "name": "New",
+        "rh": "p_n_condition-type:2224371011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_condition-type%3A2224371011&dc&qid=1792287481&rnid=2224369011&ref=sr_nr_p_n_condition-type_1&ds=v1%3AdStOcwEs2UUwqux12S4LnhvCHneNPbgj%2BNZm0avWg1U",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_condition-type%3A2224371011"
+      },
+      {
+        "position": 2,
+        "name": "Used",
+        "rh": "p_n_condition-type:2224373011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_condition-type%3A2224373011&dc&qid=1792287481&rnid=2224369011&ref=sr_nr_p_n_condition-type_2&ds=v1%3AbCgtmwqVDBN8%2BzsprW1xoPGkfKO9vTFcGkZ0yEt%2F4Ow",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_condition-type%3A2224373011"
+      }
+    ],
+    "color": [
+      {
+        "position": 1,
+        "name": "White",
+        "image": "https://m.media-amazon.com/images/G/01/nav2/images/gui/clothingcolorsprite._CB437558320_.png",
+        "rh": "p_n_g-1001308742111:2972996011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972996011&dc&qid=1792287481&rnid=2972980011&ref=sr_nr_p_n_g-1001308742111_1&ds=v1%3AnRdb8AM7xcZb98XNt%2FCLg%2FCZn16o28xq4hZeEV3I1HE",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972996011"
+      },
+      {
+        "position": 2,
+        "name": "Multi",
+        "image": "https://m.media-amazon.com/images/G/01/nav2/images/gui/clothingcolorsprite._CB437558320_.png",
+        "rh": "p_n_g-1001308742111:2972990011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972990011&dc&qid=1792287481&rnid=2972980011&ref=sr_nr_p_n_g-1001308742111_2&ds=v1%3AMEiERTtcIUSalUXBh8dIG1jNCnoVB5IZ7Qr2JFdBl0s",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972990011"
+      },
+      {
+        "position": 3,
+        "name": "Pink",
+        "image": "https://m.media-amazon.com/images/G/01/nav2/images/gui/clothingcolorsprite._CB437558320_.png",
+        "rh": "p_n_g-1001308742111:2972992011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972992011&dc&qid=1792287481&rnid=2972980011&ref=sr_nr_p_n_g-1001308742111_3&ds=v1%3Au33xS7rQ7UjVMa64vZ4GiaA9rfe4yC75U%2Bujd4FG67I",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972992011"
+      },
+      {
+        "position": 4,
+        "name": "Black",
+        "image": "https://m.media-amazon.com/images/G/01/nav2/images/gui/clothingcolorsprite._CB437558320_.png",
+        "rh": "p_n_g-1001308742111:2972982011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972982011&dc&qid=1792287481&rnid=2972980011&ref=sr_nr_p_n_g-1001308742111_4&ds=v1%3ArGEuTVk%2FCd01e%2BgM0Ggzc0OF9pPjjp1HmlvBzRa6IDQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972982011"
+      },
+      {
+        "position": 5,
+        "name": "Blue",
+        "image": "https://m.media-amazon.com/images/G/01/nav2/images/gui/clothingcolorsprite._CB437558320_.png",
+        "rh": "p_n_g-1001308742111:2972983011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972983011&dc&qid=1792287481&rnid=2972980011&ref=sr_nr_p_n_g-1001308742111_5&ds=v1%3A5XyQfe5KSkAwgG0VrKDvvpJAUk6O1mriK7%2BHIgPBsYw",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1001308742111%3A2972983011"
+      }
+    ],
+    "features": [
+      {
+        "position": 1,
+        "name": "Wireless Charging Compatible",
+        "rh": "p_n_g-1003347686111:23981114011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981114011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_1&ds=v1%3Aso0PDXh0WOSl6aucW%2BMCJKU8Q2R%2FNhI6X4U%2BkWnj09o",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981114011"
+      },
+      {
+        "position": 2,
+        "name": "Heavy Duty Protection",
+        "rh": "p_n_g-1003347686111:23981135011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981135011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_2&ds=v1%3AqitzngfFiNUbGKmjzaM%2FVzSw9AH3rAjxaG6pMkAjeTk",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981135011"
+      },
+      {
+        "position": 3,
+        "name": "Shockproof",
+        "rh": "p_n_g-1003347686111:115246449011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246449011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_3&ds=v1%3AWXWg6LltIywWdsJKstz8aWLb1nQLy0x7wCpjNS4bHQE",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246449011"
+      },
+      {
+        "position": 4,
+        "name": "Adjustable Stand",
+        "rh": "p_n_g-1003347686111:23981115011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981115011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_4&ds=v1%3ARb7JG82bd0V%2B8eAh0mTCj1JLfw0M2Qx2KC4G9PDZlU0",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981115011"
+      },
+      {
+        "position": 5,
+        "name": "Adjustable Strap",
+        "rh": "p_n_g-1003347686111:23981121011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981121011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_5&ds=v1%3APPX2e6w1Hov8rvVSiQ5L4kdkrwtVkHyWOg6vtl4vGqk",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981121011"
+      },
+      {
+        "position": 6,
+        "name": "Anti-Fingerprint",
+        "rh": "p_n_g-1003347686111:23981124011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981124011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_6&ds=v1%3A9WxQnhKAy3cx53tghxmDahwQioQVF5TBDV8pmLS1YcM",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981124011"
+      },
+      {
+        "position": 7,
+        "name": "Anti-Slip",
+        "rh": "p_n_g-1003347686111:23981139011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981139011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_7&ds=v1%3AeI5Hak1cJ5YjNI8tzC30kHj9xnGghH%2B999uOLtO02i8",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981139011"
+      },
+      {
+        "position": 8,
+        "name": "Flexible",
+        "rh": "p_n_g-1003347686111:23981127011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981127011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_8&ds=v1%3AMdGb7CCglKQZW3yHDFoejopX950Kq3%2FwTKKmc4rqnWA",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981127011"
+      },
+      {
+        "position": 9,
+        "name": "Kickstand",
+        "rh": "p_n_g-1003347686111:23981120011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981120011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_9&ds=v1%3A%2B0sLJ5XGupZxqjPt%2FDAhjekTpuN0iJSUkrR5AacZIgw",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981120011"
+      },
+      {
+        "position": 10,
+        "name": "Lanyard",
+        "rh": "p_n_g-1003347686111:23981118011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981118011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_10&ds=v1%3AOAT0Z2ep9avMQo83sYc7k6jzf50b8hkleje8scyM9LM",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981118011"
+      },
+      {
+        "position": 11,
+        "name": "Lightweight",
+        "rh": "p_n_g-1003347686111:23981126011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981126011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_11&ds=v1%3Av2LT5XXfuHri5ncHOmcntYvn%2BE6h5rxR2BhJxWhncag",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981126011"
+      },
+      {
+        "position": 12,
+        "name": "Scratch Resistant",
+        "rh": "p_n_g-1003347686111:23981128011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981128011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_12&ds=v1%3AIEAnyxHRlsITktC5dYyuFurEUxozyhwtsco0TzDygjQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A23981128011"
+      },
+      {
+        "position": 13,
+        "name": "Dust Resistant",
+        "rh": "p_n_g-1003347686111:115246455011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246455011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_13&ds=v1%3ATBMXgJidiCoeBJUyx3AD4wtBaK3zXJ8yDy3EIXqGLxQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246455011"
+      },
+      {
+        "position": 14,
+        "name": "Shatterproof",
+        "rh": "p_n_g-1003347686111:122341506011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A122341506011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_14&ds=v1%3ApPZSKvIO87qPuzJnwAtgvdD1ax2jP7FuuFzL2IqXCq8",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A122341506011"
+      },
+      {
+        "position": 15,
+        "name": "Stain Resistant",
+        "rh": "p_n_g-1003347686111:122341505011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A122341505011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_15&ds=v1%3A%2Bcr%2FvJIfNSJTsaAs5Y9KImaFnTLJXRzwAtpUlXQhFX0",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A122341505011"
+      },
+      {
+        "position": 16,
+        "name": "Sweat Resistant",
+        "rh": "p_n_g-1003347686111:115246453011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246453011&dc&qid=1792287481&rnid=23981111011&ref=sr_nr_p_n_g-1003347686111_16&ds=v1%3AybacmK9G%2B1O6d2%2F6dcfRn1nF1JP%2FiQoksmaWPTUq1XQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003347686111%3A115246453011"
+      }
+    ],
+    "seller": [
+      {
+        "position": 1,
+        "name": "dongyufushi",
+        "rh": "p_6:A197QQEUTT49WL",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA197QQEUTT49WL&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_1&ds=v1%3AWtYv3Evabr67ZP1%2B3T2UoN9350qbpDoSz5loZJqoL%2FA",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA197QQEUTT49WL"
+      },
+      {
+        "position": 2,
+        "name": "OTM Essentials",
+        "rh": "p_6:A13UMK2ZT3SPTV",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA13UMK2ZT3SPTV&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_2&ds=v1%3ApMXMU3dh83F3hfta40ArvfxSHibAGb3V2igWWLToQqY",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA13UMK2ZT3SPTV"
+      },
+      {
+        "position": 3,
+        "name": "Aircawin",
+        "rh": "p_6:A2LRD499MDKD0",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA2LRD499MDKD0&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_3&ds=v1%3AI2Wy%2B9%2F1CuHarb9rUKG3wD7TKuC7pR%2FC9LH1WvYyqFM",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA2LRD499MDKD0"
+      },
+      {
+        "position": 4,
+        "name": "ATUAT\u00ae",
+        "rh": "p_6:A1WLITLVX3ETH9",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA1WLITLVX3ETH9&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_4&ds=v1%3A8g2zg%2Bm3zRRqRvJosAxS7rWtgVT5NEgsNLx5iC9EmJ4",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA1WLITLVX3ETH9"
+      },
+      {
+        "position": 5,
+        "name": "ORNARTO",
+        "rh": "p_6:A13WQOYZ9GS51P",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA13WQOYZ9GS51P&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_5&ds=v1%3AN1%2BqdlZUh152i1gr9JaM2DZ4aun6NT2bRnqHgXxmBrE",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA13WQOYZ9GS51P"
+      },
+      {
+        "position": 6,
+        "name": "Haul Storefront",
+        "rh": "p_6:A1539940HN6ITG",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA1539940HN6ITG&dc&qid=1792287481&rnid=303116011&ref=sr_nr_p_6_6&ds=v1%3AfeuKFeEeetvJuWALAfAcc8PFZehtDrJsi%2ByzopRlhlA",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_6%3AA1539940HN6ITG"
+      }
+    ],
+    "top_brands": [
+      {
+        "position": 1,
+        "name": "Top Brands",
+        "rh": "p_n_g-101014971069111:119653281011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101014971069111%3A119653281011&dc&qid=1792287481&rnid=119653280011&ref=sr_nr_p_n_g-101014971069111_1&ds=v1%3Au6oNwE13ncBPntE6dKomw5hsyllziH92UfR3qaso0l0",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101014971069111%3A119653281011"
+      }
+    ],
+    "material": [
+      {
+        "position": 1,
+        "name": "Plastic",
+        "rh": "p_n_g-1003506632111:32912465011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912465011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_1&ds=v1%3Akkys1Yogsg6Xoi4jXeGzBb9sj6ea41QRzkC%2FCkchtTQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912465011"
+      },
+      {
+        "position": 2,
+        "name": "Polyester",
+        "rh": "p_n_g-1003506632111:32912472011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912472011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_2&ds=v1%3A6H2nu85eA0t2thp5X3gBVHulsHVGXXZiBZSOdAcvXwk",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912472011"
+      },
+      {
+        "position": 3,
+        "name": "Thermoplastic Polyurethane",
+        "rh": "p_n_g-1003506632111:32912454011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912454011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_3&ds=v1%3AE9dDuigNLPPZM%2FxT9NgeTdHLhqyp2R5ag2G%2FZTs%2Bc9Q",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912454011"
+      },
+      {
+        "position": 4,
+        "name": "Polycarbonate",
+        "rh": "p_n_g-1003506632111:32912464011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912464011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_4&ds=v1%3ARR4QSSaHHLU9MdOYL%2FvjuuAdqqpiVnZXtXp23O2k4Ec",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912464011"
+      },
+      {
+        "position": 5,
+        "name": "Rubber",
+        "rh": "p_n_g-1003506632111:32912476011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912476011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_5&ds=v1%3AKu3z5g82uVEScFZjgMHOanScUTg1tGMZLOA3ZwtMSSs",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912476011"
+      },
+      {
+        "position": 6,
+        "name": "Silicone",
+        "rh": "p_n_g-1003506632111:32912435011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912435011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_6&ds=v1%3AtMTLOm8kr0GIGm2rnuVipVpn3merHLIeAbIkAolsHJs",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912435011"
+      },
+      {
+        "position": 7,
+        "name": "Acrylonitrile Butadiene Styrene",
+        "rh": "p_n_g-1003506632111:32912471011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912471011&dc&qid=1792287481&rnid=32912004011&ref=sr_nr_p_n_g-1003506632111_7&ds=v1%3Ai6Cio5LwwbivsXOF6lvZpD9Oce7oRe9OXCMH0VqsH0o",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003506632111%3A32912471011"
+      }
+    ],
+    "compatibility": [
+      {
+        "position": 1,
+        "name": "Headphones",
+        "rh": "p_n_g-101015163785111:120791111011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101015163785111%3A120791111011&dc&qid=1792287481&rnid=120791106011&ref=sr_nr_p_n_g-101015163785111_1&ds=v1%3AfncvqHq2e9Qmwv2a4xpZk60UWDVD%2BHpcESArb8SYc0w",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101015163785111%3A120791111011"
+      }
+    ],
+    "shell_type": [
+      {
+        "position": 1,
+        "name": "Hard",
+        "rh": "p_n_g-1003083826111:23700669011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700669011&dc&qid=1792287481&rnid=23700666011&ref=sr_nr_p_n_g-1003083826111_1&ds=v1%3AApGug4A1X28K54feAJyoBN%2FuX7MZlmW9C8A%2FfD%2BueVQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700669011"
+      },
+      {
+        "position": 2,
+        "name": "Hybrid",
+        "rh": "p_n_g-1003083826111:23700668011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700668011&dc&qid=1792287481&rnid=23700666011&ref=sr_nr_p_n_g-1003083826111_2&ds=v1%3Atb7kYw%2BohHzVteNt%2BNTM7WPGNEvqlK9m59uwRO74AJ4",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700668011"
+      },
+      {
+        "position": 3,
+        "name": "Soft",
+        "rh": "p_n_g-1003083826111:23700667011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700667011&dc&qid=1792287481&rnid=23700666011&ref=sr_nr_p_n_g-1003083826111_3&ds=v1%3ALA4ln8FGcPrYEzuEIi0fb9Q%2FwjHn5kJEUjaPyq%2BU8ko",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003083826111%3A23700667011"
+      }
+    ],
+    "sustainability_features": [
+      {
+        "position": 1,
+        "name": "Any Feature",
+        "rh": "p_n_cpf_labels:121136630011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A121136630011&dc&qid=1792287481&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_1&ds=v1%3Alz%2FYk28UhOoSZOUPMKZgYa4EGruZBQEyz7bpz6CDE7U",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A121136630011"
+      },
+      {
+        "position": 2,
+        "name": "Recycled Materials",
+        "rh": "p_n_cpf_labels:116845689011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845689011&dc&qid=1792287481&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_2&ds=v1%3Ab5mn%2Fgz0Hf8q3Wzj4rOqdG1GBdkggD5R6fIWWKF6ICM",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845689011"
+      },
+      {
+        "position": 3,
+        "name": "Safer Chemicals",
+        "rh": "p_n_cpf_labels:116845683011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845683011&dc&qid=1792287481&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_3&ds=v1%3Au87KOKIoliQexhpdPQ0VTaI1mBz6tZXI0jWtJg28UEY",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845683011"
+      },
+      {
+        "position": 4,
+        "name": "Worker Wellbeing",
+        "rh": "p_n_cpf_labels:116845686011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845686011&dc&qid=1792287481&rnid=116845681011&ref=sr_nr_p_n_cpf_labels_4&ds=v1%3Am48aCUwhVpWSzJaveADj1MLGSIaQnwJ8lC7F2iJDwBY",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_cpf_labels%3A116845686011"
+      }
+    ],
+    "water_resistance_level": [
+      {
+        "position": 1,
+        "name": "Moisture Resistant",
+        "rh": "p_n_g-1004246264091:212335664011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A212335664011&dc&qid=1792287481&rnid=11636674011&ref=sr_nr_p_n_g-1004246264091_1&ds=v1%3Ar22%2FXk4KY14CcwnJJv94HD60d4LgBgcEzhT%2FqNUK8EI",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A212335664011"
+      },
+      {
+        "position": 2,
+        "name": "Not Water Resistant",
+        "rh": "p_n_g-1004246264091:23484212011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A23484212011&dc&qid=1792287481&rnid=11636674011&ref=sr_nr_p_n_g-1004246264091_2&ds=v1%3AWRN9snZhlR%2BFO1lmklmKTsrJYhc9A3tebHC925PQFe4",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A23484212011"
+      },
+      {
+        "position": 3,
+        "name": "Water-Resistant",
+        "rh": "p_n_g-1004246264091:11636675011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A11636675011&dc&qid=1792287481&rnid=11636674011&ref=sr_nr_p_n_g-1004246264091_3&ds=v1%3AJzBCaQwPM6TObY4xrppkaTlf7fbpZlptUAVFIkGUTxQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A11636675011"
+      },
+      {
+        "position": 4,
+        "name": "Waterproof",
+        "rh": "p_n_g-1004246264091:11636676011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A11636676011&dc&qid=1792287481&rnid=11636674011&ref=sr_nr_p_n_g-1004246264091_4&ds=v1%3A%2FGkxB8JaNlvDUzHZJbvB3ti2XMYfvyqHWUXAH7xm%2F1Y",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246264091%3A11636676011"
+      }
+    ],
+    "display_size": [
+      {
+        "position": 1,
+        "name": "Under 7 Inches",
+        "rh": "p_n_g-1004162281091:7817235011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004162281091%3A7817235011&dc&qid=1792287481&rnid=1254615011&ref=sr_nr_p_n_g-1004162281091_1&ds=v1%3APBNtqieRZc725C8wLrX9z5JziA7rsDrRa0tVhAMMTTo",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004162281091%3A7817235011"
+      },
+      {
+        "position": 2,
+        "name": "7 to 7.9 Inches",
+        "rh": "p_n_g-1004162281091:7817236011"
+      },
+      {
+        "position": 3,
+        "name": "8 to 8.9 Inches",
+        "rh": "p_n_g-1004162281091:7817237011"
+      },
+      {
+        "position": 4,
+        "name": "9 to 9.9 Inches",
+        "rh": "p_n_g-1004162281091:7817238011"
+      },
+      {
+        "position": 5,
+        "name": "10 to 10.9 Inches",
+        "rh": "p_n_g-1004162281091:7817239011"
+      },
+      {
+        "position": 6,
+        "name": "11 Inches & Up",
+        "rh": "p_n_g-1004162281091:7817240011"
+      }
+    ],
+    "included_components": [
+      {
+        "position": 1,
+        "name": "Handle",
+        "rh": "p_n_g-101017247352111:213811381011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101017247352111%3A213811381011&dc&qid=1792287481&rnid=213811375011&ref=sr_nr_p_n_g-101017247352111_1&ds=v1%3AzvSUYJClv1GvtZXTAY0A7YSME67e1dL%2B%2FsULzjUvJCE",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101017247352111%3A213811381011"
+      }
+    ],
+    "compatible_models": [
+      {
+        "position": 1,
+        "name": "iPhone",
+        "rh": "p_n_g-101016656349111:207023706011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101016656349111%3A207023706011&dc&qid=1792287481&rnid=207023686011&ref=sr_nr_p_n_g-101016656349111_1&ds=v1%3AaHeeVpViEZg44b3Gh5c5oC%2BtXBz0%2BwO%2FFrsFKHB2d10",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-101016656349111%3A207023706011"
+      }
+    ],
+    "theme": [
+      {
+        "position": 1,
+        "name": "Animal",
+        "rh": "p_n_g-1003197265111:23743219011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743219011&dc&qid=1792287481&rnid=23743200011&ref=sr_nr_p_n_g-1003197265111_1&ds=v1%3AoTPdEF6b82Gr7v030E%2Bmj%2FUh4UaIctIkpvd%2FZKNFfcY",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743219011"
+      },
+      {
+        "position": 2,
+        "name": "Sport",
+        "rh": "p_n_g-1003197265111:23743207011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743207011&dc&qid=1792287481&rnid=23743200011&ref=sr_nr_p_n_g-1003197265111_2&ds=v1%3AB2iMdoXnzyVe9WvkYuUl17V1iAqQgu5nFfZM9je7sxo",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743207011"
+      },
+      {
+        "position": 3,
+        "name": "Cartoon",
+        "rh": "p_n_g-1003197265111:23743201011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743201011&dc&qid=1792287481&rnid=23743200011&ref=sr_nr_p_n_g-1003197265111_3&ds=v1%3Aol6Qy8sr3R0Er%2BBGVFkGmWMZ6pfSe6X%2BnHob0D7DqsM",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743201011"
+      },
+      {
+        "position": 4,
+        "name": "Music",
+        "rh": "p_n_g-1003197265111:23743214011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743214011&dc&qid=1792287481&rnid=23743200011&ref=sr_nr_p_n_g-1003197265111_4&ds=v1%3AgJoYCl4XfeywPjfe1anrmeirNoZPo7ut%2FiRap97bKWQ",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1003197265111%3A23743214011"
+      }
+    ],
+    "form_factor": [
+      {
+        "position": 1,
+        "name": "Case",
+        "rh": "p_n_g-1002405510111:23508946011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1002405510111%3A23508946011&dc&qid=1792287481&rnid=23508901011&ref=sr_nr_p_n_g-1002405510111_1&ds=v1%3A9rSYHnfWvDtjB3tvlduMpIOoYnBilqs5XuNSzlJI67s",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1002405510111%3A23508946011"
+      },
+      {
+        "position": 2,
+        "name": "Sleeve",
+        "rh": "p_n_g-1002405510111:23508949011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1002405510111%3A23508949011&dc&qid=1792287481&rnid=23508901011&ref=sr_nr_p_n_g-1002405510111_2&ds=v1%3AydUxcT2731w%2BDz%2Bgxs10o9NKDLSZC8yMPkBtrKQ38l8",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1002405510111%3A23508949011"
+      }
+    ],
+    "department": [
+      {
+        "position": 1,
+        "name": "Women",
+        "rh": "p_n_g-1004246260091:10075312011",
+        "link": "https://www.amazon.com/s?k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246260091%3A10075312011&dc&qid=1792287481&rnid=10075310011&ref=sr_nr_p_n_g-1004246260091_1&ds=v1%3AMFeO6MlBHQOHCUIAcWYVz3ReDd3PfY9%2FM7p7hQRUB%2Fk",
+        "serpapi_link": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&rh=p_n_g-1004246260091%3A10075312011"
+      }
+    ]
+  },
+  "serpapi_pagination": {
+    "current": 1,
+    "next": "https://serpapi.com/search.json?amazon_domain=amazon.com&device=desktop&engine=amazon&k=Apple+AirPods+3rd+generation+charging+case+white&page=2"
+  }
+}
