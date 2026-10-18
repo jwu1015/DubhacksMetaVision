@@ -84,8 +84,10 @@ def describe(e: Exception) -> str:
 
 
 class Tracker:
-    def __init__(self, base_url: str | None = None, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep):
+    def __init__(self, base_url: str | None = None, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep,
+                 categories: str | None = None):
         self.base_url = (config.MODEL_SERVICE_URL if base_url is None else base_url).rstrip("/")
+        self.categories = config.SAM_CATEGORIES if categories is None else categories  # "": the server's own
         self.client = client  # None: the shared net.client()
         self.sleep = sleep
         self.session_id: str | None = None
@@ -109,7 +111,11 @@ class Tracker:
         return r
 
     async def _create(self):
-        r = await self._request("POST", "/session", json={})  # {}: the server's default shopping categories
+        # The server needs to be told what to track (17 Oct): our categories, or /session/auto for its own.
+        if self.categories:
+            r = await self._request("POST", "/session", json={"prompt": self.categories})
+        else:
+            r = await self._request("POST", "/session/auto", json={})
         r.raise_for_status()
         self.session_id = r.json()["session_id"]
         log.info("tracker: session %s started", self.session_id[:8])

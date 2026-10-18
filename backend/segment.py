@@ -17,7 +17,6 @@ import io
 import json
 import logging
 import math
-import os
 import sys
 import time
 from typing import NamedTuple
@@ -43,8 +42,7 @@ SAM_FIRST_TIMEOUT = 2.5  # seconds, SAM first: about Claude's own time, so a bus
 # SAM first asks only about these: the server checks each category separately, so its full default
 # list took ~1.9s per photo against ~0.8s for these 12 (17 Oct). Anything else falls back to Claude,
 # which then asks SAM about its exact category. SAM_CATEGORIES="" uses the server's own list.
-SAM_CATEGORIES = os.getenv(
-    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
+SAM_CATEGORIES = config.SAM_CATEGORIES
 SAM_EDGE = 640       # the server resizes internally, so bigger photos only cost upload time
 MAX_EDGE = 1024      # saved images are capped at this size
 

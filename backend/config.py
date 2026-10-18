@@ -18,6 +18,10 @@ MODEL_SERVICE_TOKEN = os.getenv("MODEL_SERVICE_TOKEN", "")  # bearer token for t
 # The segmentation server sits behind Cloudflare Access: every request needs this service token.
 CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", "")
 CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", "")
+# What SAM looks for, in photos (segment.py) and live tracking (tracker.py), comma-separated; empty = the
+# segmentation server's own list
+SAM_CATEGORIES = os.getenv(
+    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
 
 
 def segmentation_headers() -> dict[str, str]:
