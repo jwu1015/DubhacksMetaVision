@@ -70,6 +70,9 @@ class Stream:
         self._status = "stopped"  # the last status published
         self._look: list[dict] = []  # the latest Look's events, replayed to new subscribers
         self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
+        # Set by main.py (prefetch.py): told about every tracking result, and adds fields to each object sent out.
+        self.on_objects: Callable[[TrackResult, Image.Image], None] | None = None
+        self.object_fields: Callable[[int], dict] | None = None
 
     # ---------- frames in, results out ----------
 
@@ -130,6 +133,11 @@ class Stream:
                 continue
             if result:
                 self._result, self._tracked = result, frame
+                if self.on_objects:
+                    try:
+                        self.on_objects(result, frame.image)
+                    except Exception:  # labels and prefetching must never stop tracking
+                        log.exception("stream: on_objects failed")
                 self.publish(self._objects_event())
             self._publish_status()
 
@@ -151,7 +159,8 @@ class Stream:
         return {
             "type": "objects", "frame_idx": r.frame_idx, "width": r.width, "height": r.height,
             "age_ms": round((time.time() - r.captured_at) * 1000),  # how old the frame these boxes describe is
-            "objects": [{"id": o.id, "label": o.label, "score": o.score, "box": o.box.model_dump()}
+            "objects": [{"id": o.id, "label": o.label, "score": o.score, "box": o.box.model_dump(),
+                         **(self.object_fields(o.id) if self.object_fields else {})}
                         for o in r.objects],
         }
 

@@ -188,10 +188,14 @@ def corners(box: dict) -> list[float]:
     return [box["x"], box["y"], min(round(box["x"] + box["w"], 4), 1.0), min(round(box["y"] + box["h"], 4), 1.0)]
 
 
+QUICK_FIELDS = ("name", "price_low", "price_high")  # prefetch.py's quick label, once an object has one
+
+
 def detections(event: dict) -> dict:
     """A stream "objects" event as the phone's DetectionsMessage."""
     return {"type": "detections", "ts": round(time.time() * 1000), "objects": [
-        {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"]}
+        {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"],
+         **{k: o[k] for k in QUICK_FIELDS if k in o}}
         for o in event["objects"]]}
 
 

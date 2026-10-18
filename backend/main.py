@@ -29,6 +29,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 import cart
 import config
 import net
+import prefetch
 import stream
 import webrtc
 from models import (
@@ -55,6 +56,8 @@ captures: dict[str, Capture] = {}
 search_tasks: dict[str, asyncio.Task] = {}
 # capture -> the live-stream object it looked at, so the projector can highlight that box
 capture_tracks: dict[str, int] = {}
+# prefetch.py's background Looks: announced only once the user taps their object (replay())
+quiet_captures: set[str] = set()
 
 STAGES = ("vision", "segment", "search", "rerank", "pricing", "rank")
 
@@ -135,6 +138,8 @@ def empty_search(capture_id: str, item: Item | None = None) -> SearchResponse:
 def announce(cap: Capture, step: str, **extra):
     """Tell the projector page (and anyone following the stream) how a Look is going. Steps:
     "detected" (label + crop), "described" (Claude's name), "results" (the cards), "failed", "nothing"."""
+    if cap.capture_id in quiet_captures:
+        return
     stream.live.publish({"type": "look", "stage": step, "capture_id": cap.capture_id,
                          "track_id": capture_tracks.get(cap.capture_id), **extra})
 
@@ -170,15 +175,18 @@ def parse_hint(hint_box: str | None, hint_label: str | None):
 
 # ---------- pipeline ----------
 
-async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> DetectResponse:
+async def run_detect(data: bytes, hint=None, track_id: int | None = None, quiet: bool = False) -> DetectResponse:
     """hint: a segment.Found for the object the user picked (a tapped hotspot, or a tracked object);
-    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any."""
+    it replaces SAM's guess. track_id: the live-stream object this capture looks at, if any.
+    quiet: announce nothing until replay() (prefetch.py's background Looks)."""
     t0 = time.perf_counter()
     img = load_image(data)
     if config.USE_FIXTURES:
         return DetectResponse.model_validate(fixture("detect_response.json"))
 
     capture_id = "c_" + uuid.uuid4().hex[:8]
+    if quiet:
+        quiet_captures.add(capture_id)
     if track_id is not None:
         capture_tracks[capture_id] = track_id
     image_path = f"uploads/{capture_id}.jpg"
@@ -344,10 +352,14 @@ async def search_pipeline(cap: Capture) -> SearchResponse:
     return resp
 
 
-async def look(track_id: int) -> DetectResponse | None:
+async def look(track_id: int, quiet: bool = False) -> DetectResponse | None:
     """The user picked a tracked object (the phone's "select" message, or POST /look/{id}). The crop
     comes from the frame its box describes, so SAM isn't asked again; the projector follows along
-    through the "look" events. None if the stream isn't tracking that object."""
+    through the "look" events. None if the stream isn't tracking that object.
+    quiet: prefetch.py's background Look, announced only if the user taps the object. A tap on an object
+    prefetch.py already looked at takes that Look instead."""
+    if not quiet and (capture_id := prefetch.claim(track_id)) in captures:
+        return replay(captures[capture_id])
     frame, result = stream.live.tracked_frame(), stream.live.latest_objects()
     obj = next((o for o in result.objects if o.id == track_id), None) if result else None
     if frame is None or obj is None:
@@ -356,7 +368,26 @@ async def look(track_id: int) -> DetectResponse | None:
     buf = io.BytesIO()
     frame.convert("RGB").save(buf, format="JPEG", quality=90)
     hint = stage("segment").Found(obj.box, obj.score, obj.label)
-    return await run_detect(buf.getvalue(), hint=hint, track_id=track_id)
+    return await run_detect(buf.getvalue(), hint=hint, track_id=track_id, quiet=quiet)
+
+
+def replay(cap: Capture) -> DetectResponse:
+    """The user tapped an object prefetch.py already looked at: announce the steps that Look has finished
+    now; the ones still running announce themselves when they finish."""
+    quiet_captures.discard(cap.capture_id)
+    announce_detected(cap)
+    if cap.item.description:  # Claude has described it
+        announce(cap, "described", item=cap.item.model_dump(mode="json"))
+    task = search_tasks.get(cap.capture_id)
+    if task is not None and task.done() and not task.cancelled():
+        if task.exception() is None:
+            announce(cap, "results", search=task.result().model_dump(mode="json"))
+        else:
+            announce(cap, "failed", message="Couldn't get prices for that one.")
+    log.info("look %s: replayed a background Look (search %s)", cap.capture_id,
+             "done" if task is not None and task.done() else "still running")
+    return DetectResponse(capture_id=cap.capture_id, image_url=cap.image_url, item=cap.item,
+                          segmentation=cap.segmentation, quick_phrase=cap.item.quick_phrase, latency_ms=0)
 
 
 async def warm_up():
@@ -476,6 +507,10 @@ app.include_router(stream.router)
 # Look (its DetectResponse isn't needed: the steps go to the phone and the projector as "look" events).
 app.include_router(webrtc.router)
 webrtc.select_handler = look
+# Instant labels on the stream's objects, and background Looks so a tap shows results right away (prefetch.py)
+stream.live.on_objects = prefetch.observe
+stream.live.object_fields = prefetch.fields
+prefetch.start_look = lambda track_id: look(track_id, quiet=True)
 
 
 _checkout = None if config.USE_FIXTURES else stage("checkout")
