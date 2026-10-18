@@ -96,10 +96,14 @@ OVERRIDES="MODEL_SERVICE_URL='$SEG_URL' CF_ACCESS_CLIENT_ID= CF_ACCESS_CLIENT_SE
 tmux list-windows -t "$SESSION" -F '#W' | grep -qx server || tmux new-window -t "$SESSION" -n server
 tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' && ${EXTRA_ENV}$OVERRIDES uvicorn storefront.app:app --host 127.0.0.1 --port $BACKEND_PORT --timeout-graceful-shutdown 1" Enter
 
+# The worker waits for the backend to send for it (voice on, in the app), so it runs all the time; Gemini only
+# runs while voice is on. It restarts if it exits.
 if [ -n "$(env_value "$ENV_FILE" GOOGLE_API_KEY)" ] && [ -n "$(env_value "$ENV_FILE" LIVEKIT_URL)" ]; then
     tmux new-window -t "$SESSION" -n voice
-    tmux send-keys -t "$SESSION:voice" "cd '$DIR' && source '$VENV/bin/activate' && python -m storefront.voice.agent start" Enter
+    tmux send-keys -t "$SESSION:voice" "cd '$DIR' && source '$VENV/bin/activate' && while true; do python -m storefront.voice.agent start; echo 'voice agent exited; restarting in 3s'; sleep 3; done" Enter
     echo "Started the voice agent (window '$SESSION:voice')"
+else
+    echo "warning: no voice agent: GOOGLE_API_KEY and LIVEKIT_URL must be set in backend/.env" >&2
 fi
 
 echo "Started backend on 127.0.0.1:$BACKEND_PORT -> segmentation at $SEG_URL (attach: tmux attach -t $SESSION)"
