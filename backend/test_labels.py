@@ -1,65 +1,59 @@
-"""Tests for labels.py (Claude's SAM labels), with the Anthropic client faked: no network.
+"""Tests for labels.py (Claude's SAM labels), with Claude faked (vlm.VLM.call): no network.
 
     python -m unittest test_labels -v      (from backend/)
 """
+import base64
+import io
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
 from PIL import Image
 
 import labels
+import vlm
 
 PHOTO = Image.new("RGB", (1024, 768), "white")
 
 
-class FakeMessages:
-    def __init__(self, out=None, error=None):
-        self.out, self.error, self.calls = out, error, []
-
-    async def parse(self, **kw):
-        self.calls.append(kw)
-        if self.error:
-            raise self.error
-        return SimpleNamespace(parsed_output=self.out)
-
-
 class LabelsTest(unittest.IsolatedAsyncioTestCase):
-    def fake(self, out=None, error=None) -> FakeMessages:
-        messages = FakeMessages(out, error)
-        for p in (mock.patch.object(labels, "client", lambda: SimpleNamespace(messages=messages)),
-                  mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"})):
-            p.start()
-            self.addCleanup(p.stop)
-        return messages
+    def fake(self, out=None, error=None) -> mock.AsyncMock:
+        """Claude answers `out` (labels.LabelsOut) or raises `error`, every time."""
+        call = mock.AsyncMock(side_effect=error, return_value=out.model_dump_json() if out else None)
+        patcher = mock.patch.object(vlm.haiku, "call", call)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return call
 
     async def test_labels_are_one_general_word_each_without_repeats(self):
-        messages = self.fake(labels.LabelsOut(labels=["Desk Lamp", "lamp", "cell phone", "cable", ""]))
+        call = self.fake(labels.LabelsOut(labels=["Desk Lamp", "lamp", "cell phone", "cable", ""]))
         self.assertEqual(await labels.generate(PHOTO, "electronics"), ["lamp", "phone", "cable"])
-        call = messages.calls[0]
-        self.assertEqual(call["model"], labels.MODEL)
-        self.assertEqual(call["output_format"], labels.LabelsOut)
-        self.assertIn("Category: electronics", call["messages"][0]["content"][1]["text"])
+        system, content, schema, max_tokens, timeout = call.await_args.args
+        self.assertEqual((system, schema), (labels.SYSTEM, labels.LabelsOut))
+        self.assertEqual(content[0]["type"], "image")
+        self.assertIn("Category: electronics", content[1]["text"])
 
     async def test_at_most_max_labels(self):
         self.fake(labels.LabelsOut(labels=[f"thing{i}" for i in range(labels.MAX_LABELS + 5)]))
         self.assertEqual(len(await labels.generate(PHOTO, "stuff")), labels.MAX_LABELS)
 
     async def test_failures_fall_back_to_the_category(self):
-        for why, kw in (("api error", {"error": RuntimeError("overloaded")}),
+        for why, kw in (("api error", {"error": ValueError("stop_reason=refusal")}),
                         ("no labels", {"out": labels.LabelsOut(labels=[])})):
             with self.subTest(why):
                 self.fake(**kw)
-                with self.assertRaises(labels.LabelError):
+                with self.assertRaises(vlm.VLMError):
                     await labels.generate(PHOTO, "Kitchen Utensils")
                 self.assertEqual(await labels.labels_or_fallback(PHOTO, "Kitchen Utensils"), ["kitchen utensils"])
 
-    async def test_no_key_falls_back_without_calling_claude(self):
-        messages = self.fake()
+    async def test_no_key_falls_back_to_the_category(self):
         with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
             self.assertEqual(await labels.labels_or_fallback(PHOTO, "furniture"), ["furniture"])
-        self.assertEqual(messages.calls, [])
+
+    async def test_the_photo_is_sent_small(self):
+        block = vlm.image(PHOTO, labels.EDGE)
+        sent = Image.open(io.BytesIO(base64.b64decode(block["source"]["data"])))
+        self.assertEqual((sent.format, sent.size), ("JPEG", (512, 384)))
 
 
 if __name__ == "__main__":
