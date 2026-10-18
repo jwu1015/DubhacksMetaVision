@@ -1,0 +1,6 @@
+# downloaded test videos; table.mov is checked in
+videos/*
+!videos/table.mov
+output/
+.env
+__pycache__/
