@@ -115,6 +115,8 @@ const MOVE_MS = 150;      // a label glides to its new position
 const FADE_IN_MS = 80;
 const FADE_OUT_MS = 200;  // a label missing from the latest update fades out
 const DIM = 0.35;         // the other labels, while one is picked
+const PULSE_MS = 700;     // the ring around a newly picked object
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const TOP = 4;            // labels shown in full; the other labeled objects get a dot
 const W_SCORE = 0.2, W_SIZE = 0.8; // how labels are ranked: SAM's score and the box's share of the frame
 
@@ -194,7 +196,8 @@ function showLook(ev) {
   const fresh = !look || ev.look_id !== look.look_id || at > look.picked_at;
   const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
   look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
-           price: best ? money(best.price, best.currency) : null, picked_at: at };
+           price: best ? money(best.price, best.currency) : null, picked_at: at,
+           since: fresh ? performance.now() : look.since };
   const panel = $("look");
   panel.hidden = false;
   if (fresh) { // a new pick: back to its top, and a short flash so it's seen to change
@@ -326,7 +329,8 @@ function drawLabel(t, b, alpha, v, font, full, picked) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.fill();
   } else {
-    const name = picked ? picked.name : cap(q.name), price = picked ? picked.price || "" : estimate(q);
+    const name = picked ? picked.name : cap(q.name);
+    const price = picked ? picked.price || (q ? estimate(q) : "") : estimate(q); // the estimate until prices are in
     ctx.font = "500 " + font + "px " + FONT;
     const gap = font * 0.5, nw = ctx.measureText(name).width, pw = price ? ctx.measureText(price).width : 0;
     const w = font * 0.85 + nw + (price ? gap + pw : 0) + font, h = font * 2;
@@ -349,6 +353,31 @@ function drawLabel(t, b, alpha, v, font, full, picked) {
     }
   }
   ctx.shadowColor = "transparent";
+  ctx.globalAlpha = 1;
+}
+
+// The picked object: a lime outline around its box, and a ring that grows out of it when it's picked.
+function drawPicked(b, alpha, v, now) {
+  const x = v.x + b[0] * v.w, y = v.y + b[1] * v.h, w = b[2] * v.w, h = b[3] * v.h;
+  const r = Math.min(14, w / 4, h / 4);
+  ctx.globalAlpha = alpha;
+  roundRect(x, y, w, h, r);
+  ctx.fillStyle = "rgba(200, 255, 61, 0.08)";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#c8ff3d";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+  ctx.shadowBlur = 4;
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+  const k = (now - look.since) / PULSE_MS;
+  if (!REDUCED_MOTION && k >= 0 && k < 1) {
+    const grow = 14 * ease(k);
+    roundRect(x - grow, y - grow, w + 2 * grow, h + 2 * grow, r + grow);
+    ctx.globalAlpha = alpha * (1 - k);
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -384,7 +413,11 @@ function draw() {
     for (const t of tracks.values()) {
       if (t !== picked) drawLabel(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, top.has(t));
     }
-    if (picked) drawLabel(picked, boxAt(picked, now), alphaAt(picked, now), v, font, true, look);
+    if (picked) {
+      const b = boxAt(picked, now), a = alphaAt(picked, now);
+      drawPicked(b, a, v, now);
+      drawLabel(picked, b, a, v, font, true, look);
+    }
   }
   updateStatus();
   requestAnimationFrame(draw);
