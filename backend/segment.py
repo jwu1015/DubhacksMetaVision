@@ -17,7 +17,6 @@ import io
 import json
 import logging
 import math
-import os
 import sys
 import time
 from typing import NamedTuple
@@ -37,14 +36,15 @@ SAM_PAD = 0.08       # SAM's box is tight, so it gets less padding
 SAM_MIN_AREA = 0.02  # a SAM box under 2% of the image is ignored
 SAM_IOU = 0.3        # a SAM box must overlap Claude's this much to count as the same item
 CENTER_MAX = 0.25    # SAM first: an object further than this from the center of the view isn't "looked at"
+POINT_MAX = 0.10     # hint_point: an object further than this from the tapped point isn't the one tapped
+POINT_CROP = 0.40    # hint_point with no SAM box there: the crop around the point covers 40% of each side
 SAM_TIMEOUT = 2.0    # seconds, Claude first: SAM runs after Claude, inside /detect's budget
 SAM_FIRST_TIMEOUT = 2.5  # seconds, SAM first: about Claude's own time, so a busy scene that makes SAM
                          # slow is no slower than going through Claude
 # SAM first asks only about these: the server checks each category separately, so its full default
 # list took ~1.9s per photo against ~0.8s for these 12 (17 Oct). Anything else falls back to Claude,
 # which then asks SAM about its exact category. SAM_CATEGORIES="" uses the server's own list.
-SAM_CATEGORIES = os.getenv(
-    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
+SAM_CATEGORIES = config.SAM_CATEGORIES
 SAM_EDGE = 640       # the server resizes internally, so bigger photos only cost upload time
 MAX_EDGE = 1024      # saved images are capped at this size
 
@@ -85,23 +85,54 @@ def iou(a: BBox, b: BBox) -> float:
     return inter / (a.w * a.h + b.w * b.h - inter)
 
 
+_deleting: set[asyncio.Task] = set()  # one-frame sessions being deleted, kept so they aren't garbage-collected
+
+
+async def _delete_session(sid: str):
+    try:
+        await net.client().delete(f"{config.MODEL_SERVICE_URL}/session/{sid}", headers=config.segmentation_headers(),
+                                  timeout=5.0, follow_redirects=False)
+    except Exception as e:  # it expires after 120s idle anyway
+        log.info("sam: deleting one-frame session %s failed: %r", sid[:8], e)
+
+
+async def _segment(jpeg: bytes, prompt: str | None, timeout: float):
+    """The server's answer for one photo. Since 18 Oct its /segment only takes a category, and its Claude
+    picks the labels (2-4.5s); a one-frame tracking session takes our labels as given and answers as fast
+    as /segment used to (~0.3s). Without a prompt: /segment with SAM_AUTO_CATEGORY."""
+    base, auth = config.MODEL_SERVICE_URL, config.segmentation_headers()
+    image_headers = {"Content-Type": "image/jpeg", **auth}
+    # No redirects: without a valid token Cloudflare redirects to a login page.
+    if not prompt:
+        return await net.client().post(f"{base}/segment", params={"category": config.SAM_AUTO_CATEGORY},
+                                       content=jpeg, headers=image_headers, timeout=timeout, follow_redirects=False)
+    r = await net.client().post(f"{base}/session", json={"prompt": prompt}, headers=auth, timeout=timeout,
+                                follow_redirects=False)
+    if r.status_code != 200:
+        return r
+    sid = r.json()["session_id"]
+    try:
+        return await net.client().post(f"{base}/session/{sid}/frame", content=jpeg, headers=image_headers,
+                                       timeout=timeout, follow_redirects=False)
+    finally:  # in the background, even when cancelled: the answer doesn't wait on it
+        task = asyncio.create_task(_delete_session(sid))
+        _deleting.add(task)
+        task.add_done_callback(_deleting.discard)
+
+
 async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = SAM_TIMEOUT) -> list[Found] | None:
-    """Every object SAM finds (prompt None: the server's own shopping categories), highest score first;
-    None if the call failed. Never raises."""
+    """Every object SAM finds for prompt (comma-separated labels; None: labels the server's Claude picks
+    for SAM_AUTO_CATEGORY), highest score first; None if the call failed. Never raises."""
     if not config.MODEL_SERVICE_URL:
         return None
     small = image.copy()
     small.thumbnail((SAM_EDGE, SAM_EDGE))
     buf = io.BytesIO()
     small.save(buf, format="JPEG", quality=80)
-    headers = {"Content-Type": "image/jpeg", **config.segmentation_headers()}
     t0 = time.perf_counter()
     try:
         # wait_for makes the timeout a hard cap; httpx's timeout only bounds each wait for data.
-        # No redirects: without a valid token Cloudflare redirects to a login page.
-        r = await asyncio.wait_for(net.client().post(
-            f"{config.MODEL_SERVICE_URL}/segment", params={"prompt": prompt} if prompt else None,
-            content=buf.getvalue(), headers=headers, timeout=timeout, follow_redirects=False), timeout)
+        r = await asyncio.wait_for(_segment(buf.getvalue(), prompt, timeout), timeout)
         if r.status_code in (302, 401, 403):
             log.warning("sam: Cloudflare Access rejected the request (%d); check CF_ACCESS_CLIENT_ID/SECRET "
                         "and the server's access policy", r.status_code)
@@ -115,7 +146,7 @@ async def sam_objects(image: Image.Image, prompt: str | None, timeout: float = S
     except Exception as e:  # unreachable, too slow, error status, unexpected JSON
         log.warning("sam failed after %dms: %r", ms_since(t0), e)
         return None
-    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "default categories")
+    log.info("sam %dms: %d objects for %s", ms_since(t0), len(found), repr(prompt) if prompt else "the server's labels")
     return sorted(found, key=lambda f: -f.score)
 
 
@@ -129,6 +160,38 @@ def center_object(found: list[Found]) -> Found | None:
 
     usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA and distance(f.box) <= CENTER_MAX]
     return min(usable, key=lambda f: (distance(f.box), f.box.w * f.box.h), default=None)
+
+
+def point_object(found: list[Found], x: float, y: float) -> Found | None:
+    """hint_point: the object the user tapped at (x, y), normalized. The smallest box containing the
+    point (a lamp in front of a sofa, not the sofa), else the nearest box within POINT_MAX. Tiny boxes
+    are ignored."""
+    def distance(b: BBox) -> float:  # from the point to the box; 0 when the box contains it
+        dx = max(b.x - x, 0.0, x - (b.x + b.w))
+        dy = max(b.y - y, 0.0, y - (b.y + b.h))
+        return math.hypot(dx, dy)
+
+    usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA and distance(f.box) <= POINT_MAX]
+    return min(usable, key=lambda f: (distance(f.box), f.box.w * f.box.h), default=None)
+
+
+def text_object(found: list[Found]) -> Found | None:
+    """hint_text: of the objects SAM found for the user's words, the one at the center of the view,
+    else the best-scoring one. Tiny boxes are ignored."""
+    usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA]
+    return center_object(usable) or max(usable, key=lambda f: f.score, default=None)
+
+
+def point_box(x: float, y: float) -> BBox:
+    """hint_point with no SAM box there: POINT_CROP of each side around the point, moved inside the photo."""
+    x0, y0 = (min(max(c - POINT_CROP / 2, 0.0), 1 - POINT_CROP) for c in (x, y))
+    return BBox(x=round(x0, 4), y=round(y0, 4), w=POINT_CROP, h=POINT_CROP)
+
+
+def point_crop(image: Image.Image, x: float, y: float, capture_id: str, t0: float) -> Segmentation:
+    """The cutout around a tapped point when SAM has nothing there (or is down)."""
+    crop = point_box(x, y)
+    return result("bbox_fallback", crop, None, save_images(image, crop, capture_id, [(crop, RED)]), t0)
 
 
 async def sam_box(image: Image.Image, item: Item) -> Found | None:
@@ -152,6 +215,23 @@ async def sam_box(image: Image.Image, item: Item) -> Found | None:
     return pick if pick.box.w * pick.box.h >= SAM_MIN_AREA else None
 
 
+def crop_image(image: Image.Image, crop: BBox) -> Image.Image:
+    """The cutout: the photo cut to crop (normalized), at most MAX_EDGE px on its longest side."""
+    W, H = image.size
+    cutout = image.crop((round(crop.x * W), round(crop.y * H), round((crop.x + crop.w) * W),
+                         round((crop.y + crop.h) * H)))
+    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
+    return cutout
+
+
+def sam_cutout(image: Image.Image, box: BBox) -> bytes:
+    """The cutout sam_crop saves for a SAM box, as a JPEG kept in memory: nothing is written (prefetch.py's
+    background Looks)."""
+    buf = io.BytesIO()
+    crop_image(image, pad(box, SAM_PAD)).convert("RGB").save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
 def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tuple[BBox, tuple]]) -> tuple[str, str]:
     """Write the cutout and the preview (photo with boxes drawn); return their uploads/ paths."""
     W, H = image.size
@@ -159,10 +239,8 @@ def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tupl
     def px(b: BBox):
         return round(b.x * W), round(b.y * H), round((b.x + b.w) * W), round((b.y + b.h) * H)
 
-    cutout = image.crop(px(crop))
-    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
     cutout_path = f"uploads/{capture_id}_cutout.jpg"
-    cutout.save(config.ROOT / cutout_path, quality=90)
+    crop_image(image, crop).save(config.ROOT / cutout_path, quality=90)
 
     preview = image.copy()
     preview.thumbnail((MAX_EDGE, MAX_EDGE))

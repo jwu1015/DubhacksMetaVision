@@ -420,16 +420,18 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(msg["ts"], int)
         self.assertLess(abs(msg["ts"] - time.time() * 1000), 5000)
         for o in msg["objects"]:
-            self.assertEqual(set(o), {"track_id", "box", "label", "score"})
+            self.assertEqual(set(o), {"track_id", "box", "label", "score", *webrtc.SCENE_FIELDS})
             self.assertEqual(o["label"], {"t1": "sofa", "t2": "lamp", "t3": "table"}[o["track_id"]])
             x1, y1, x2, y2 = o["box"]
             self.assertTrue(0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1, o)
+            self.assertTrue(o["in_view"] and 0 <= o["centered"] <= 1 and o["seconds_viewed"] >= 0, o)
 
-        # Exactly the boxes of an "objects" event, as corners.
+        # Exactly the objects of an "objects" event, boxes as corners.
         def as_corners(event):
             return [{"track_id": f"t{o['id']}", "label": o["label"], "score": o["score"],
                      "box": [o["box"]["x"], o["box"]["y"], round(o["box"]["x"] + o["box"]["w"], 4),
-                             round(o["box"]["y"] + o["box"]["h"], 4)]} for o in event["objects"]]
+                             round(o["box"]["y"] + o["box"]["h"], 4)],
+                     **{k: o[k] for k in webrtc.SCENE_FIELDS}} for o in event["objects"]]
         self.assertIn(msg["objects"], [as_corners(e) for e in self.events])
 
         # The phone's frames reached the stream as sent, portrait and upright, and went on to tracking.
@@ -480,6 +482,35 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
                 if (msg := await phone.messages.get())["type"] == "look":
                     got.append(msg)
         self.assertEqual(got, [{**e, "track_id": "t2"} for e in sent])  # only these, in order, ids as "t2"
+
+    async def test_a_mode_switch_forgets_what_was_tracked(self):
+        phone = await self.phone()
+        await phone.detections()
+        self.assertTrue(self.live.scene.tracks)
+        phone.channel.send(json.dumps({"type": "mode", "mode": "glasses"}))
+        await until(lambda: self.stats()["deleted"] == 1)  # the session ended: ids restart
+        self.assertEqual(self.phones.current.mode, "glasses")
+        await phone.detections()  # tracking goes on, in a new session
+        self.assertEqual(self.stats()["created"], 2)
+        for junk in ({"type": "mode", "mode": "tv"}, {"type": "mode"}):
+            phone.channel.send(json.dumps(junk))
+        await asyncio.sleep(0.2)
+        self.assertEqual((self.stats()["deleted"], self.phones.current.mode), (1, "glasses"))  # ignored
+
+    async def test_pause_stops_tracking_and_purges_until_resumed(self):
+        phone = await self.phone()
+        await phone.detections()
+        phone.channel.send(json.dumps({"type": "pause", "paused": True}))
+        await until(lambda: not self.live.running)
+        self.assertEqual((self.live.scene.tracks, self.live.latest_frame()), ({}, None))
+        self.assertEqual(self.sam.state.sessions, {})  # the tracking server's frames go with the session
+        pushed = len(self.pushed)
+        await asyncio.sleep(0.3)
+        self.assertEqual(len(self.pushed), pushed)  # frames that still arrive aren't kept
+        phone.channel.send(json.dumps({"type": "pause", "paused": "yes"}))  # not a bool: ignored
+        phone.channel.send(json.dumps({"type": "pause", "paused": False}))
+        await until(lambda: self.live.running)
+        await phone.detections()  # back
 
     async def test_select_without_a_hook_or_with_a_failing_one(self):
         phone = await self.phone()

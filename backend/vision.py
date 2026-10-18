@@ -125,9 +125,13 @@ def to_item(out: VisionOut, size: tuple[int, int]) -> Item:
     )
 
 
-async def detect(image_bytes: bytes) -> Item:
-    """Identify the main item. Unusable output twice -> Item(category=None); API errors raise."""
+async def detect(image_bytes: bytes, hint: str | None = None) -> Item:
+    """Identify the main item. hint: what the user asked about (their voice command, e.g. "green floor
+    lamp"), as one line before the question. Unusable output twice -> Item(category=None); API errors raise."""
     b64, size = prepare(image_bytes)
+    question = "What is the main item in this photo?"
+    if hint:
+        question = f"The user asked about: {hint}\n{question}"
     for attempt in (1, 2):
         t0 = time.perf_counter()
         try:
@@ -137,7 +141,7 @@ async def detect(image_bytes: bytes) -> Item:
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": [
                     {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                    {"type": "text", "text": "What is the main item in this photo?"},
+                    {"type": "text", "text": question},
                 ]}],
                 output_format=VisionOut,
                 output_config={"effort": "low"},  # extraction: low effort skips thinking on most photos

@@ -41,9 +41,9 @@ log = logging.getLogger("gtl.search")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SERPAPI_URL = "https://serpapi.com/search.json"
-# Per-source limits. 7s caps how long one slow search can hold up an item: real calls usually took 1-3s
-# (Shopping, Amazon), but Shopping sometimes hung for the whole limit. (Lens took 14-45s; it isn't called.)
-TIMEOUT_S = {"lens": 15.0, "shopping": 7.0, "ebay": 7.0, "amazon": 7.0}
+# Per-source limits. 5s caps how long one slow search can hold up an item: fresh calls took 0.7-2.6s
+# (Shopping, Amazon), but about 1 in 12 hung for the whole limit. (Lens took 17-64s; it isn't called.)
+TIMEOUT_S = {"lens": 15.0, "shopping": 5.0, "ebay": 5.0, "amazon": 5.0}
 # "all" (the default) returned only an ai_overview link and no visual_matches in our one test, so ask
 # for visual_matches directly. Compare again once Lens returns results.
 LENS_TYPE = "visual_matches"
@@ -324,7 +324,7 @@ def queries_for(item: Item) -> list[str]:
     return [q.strip() for q in item.search_queries if q.strip()] or ([item.category] if item.category else [])
 
 
-async def search_all_with_stats(cutout_url: str, item: Item,
+async def search_all_with_stats(cutout_url: str | bytes, item: Item,
                                 capture_id: str | None = None) -> tuple[list[Product], dict]:
     queries = queries_for(item)
     jobs = {}
@@ -347,10 +347,12 @@ async def search_all_with_stats(cutout_url: str, item: Item,
     return products, stats
 
 
-async def search_all(cutout_url: str, item: Item, capture_id: str | None = None) -> list[Product]:
+async def search_all(cutout_url: str | bytes, item: Item, capture_id: str | None = None) -> list[Product]:
     """Shopping for the item's first 2 queries + Amazon for the first, at once, then a match score for each result.
 
     Normalized, priced, deduped. A failing or slow source contributes [] and never raises.
+    cutout_url can be the crop itself (bytes): a background Look keeps it in memory only. Without a
+    capture_id, SerpAPI's raw answers aren't logged.
     """
     products, _ = await search_all_with_stats(cutout_url, item, capture_id)
     return products

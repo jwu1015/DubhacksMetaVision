@@ -2,7 +2,9 @@
 likely the result is the same product. It stands in for CLIP (rerank.py) while no /embed service is
 deployed, and it judges "same product" rather than "looks similar".
 
-    score(cutout_url, item, products) -> the same products, with match_score set on the top candidates
+    score(cutout, item, products) -> the same products, with match_score set on the top candidates
+
+cutout is the crop's URL, or the crop itself (a background Look keeps it in memory only).
 
 Never raises: if the crop can't be read or Claude fails, products come back unscored.
 """
@@ -74,8 +76,11 @@ def candidates(products: list[Product]) -> list[int]:
     return with_photo[:MAX_CANDIDATES]
 
 
-async def fetch(url: str) -> bytes | None:
-    """Our own uploads are read from disk (no round trip through the tunnel); anything else is downloaded."""
+async def fetch(url: str | bytes) -> bytes | None:
+    """Our own uploads are read from disk (no round trip through the tunnel); anything else is downloaded.
+    Bytes are an image already in memory."""
+    if isinstance(url, bytes):
+        return url
     prefix = config.PUBLIC_BASE_URL + "/"
     if url.startswith(prefix):
         path = (config.ROOT / url[len(prefix):].split("?")[0]).resolve()
@@ -114,18 +119,19 @@ async def call_model(content: list[dict]) -> str:
     return "".join(b.text for b in msg.content if b.type == "text")
 
 
-async def score(cutout_url: str, item: Item, products: list[Product]) -> list[Product]:
+async def score(cutout: str | bytes, item: Item, products: list[Product]) -> list[Product]:
     t0 = time.perf_counter()
     picks = candidates(products)
     if not picks:
         return products
-    crop, *photos = await asyncio.gather(fetch(cutout_url), *(fetch(products[i].image_url) for i in picks))
+    crop, *photos = await asyncio.gather(fetch(cutout), *(fetch(products[i].image_url) for i in picks))
     try:
         crop_b64 = jpeg_b64(crop, CROP_EDGE) if crop else None
     except Exception:
         crop_b64 = None
     if crop_b64 is None:
-        log.warning("match: couldn't read the crop %s; products left unscored", cutout_url)
+        log.warning("match: couldn't read the crop %s; products left unscored",
+                    cutout if isinstance(cutout, str) else f"({len(cutout)} bytes in memory)")
         return products
 
     shown = []  # (product index, photo), numbered from 1 in the order Claude sees them

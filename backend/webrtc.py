@@ -8,7 +8,16 @@ The phone's offer has one video track (sendonly, H.264 or VP8) and a data channe
 /stream/viewer). Each "objects" event from stream.live goes back on the channel as
 
     {"type": "detections", "ts": <ms since epoch>,
-     "objects": [{"track_id": "t3", "box": [x1, y1, x2, y2], "label": "sofa", "score": 0.93}]}   (box normalized 0-1)
+     "objects": [{"track_id": "t3", "box": [x1, y1, x2, y2], "label": "sofa", "score": 0.93,   (box normalized 0-1)
+                  "in_view": true, "centered": 0.82, "seconds_viewed": 3.4, "first_seen_ts", "last_seen_ts",
+                  "name": "gray linen sofa", "price_low": 800, "price_high": 1500}]}
+
+listing every object scene memory holds (scene.py): those that left the view in the last 15 s too, with
+in_view false. name, price_low and price_high are prefetch.py's quick label, there once an object has been in
+view half a second. The phone's control messages on the same channel:
+
+    {"type": "mode", "mode": "glasses" | "phone"}   on connect and on every camera switch: forget what was tracked
+    {"type": "pause", "paused": true | false}       stop tracking and purge it / start again
 
 When the user taps a hotspot the phone sends {"type": "select", "track_id": "t3"}, which calls
 select_handler(3): main.py's Look. Each step of a Look on a tracked object then comes back on the channel
@@ -188,10 +197,17 @@ def corners(box: dict) -> list[float]:
     return [box["x"], box["y"], min(round(box["x"] + box["w"], 4), 1.0), min(round(box["y"] + box["h"], 4), 1.0)]
 
 
+SCENE_FIELDS = ("in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts")  # scene memory's
+QUICK_FIELDS = ("name", "price_low", "price_high")  # prefetch.py's quick label, once an object has one
+
+
 def detections(event: dict) -> dict:
-    """A stream "objects" event as the phone's DetectionsMessage."""
+    """A stream "objects" event as the phone's DetectionsMessage: every object scene memory holds, with
+    its scene fields and, once it has one, its quick label. Those out of view (in_view false) aren't
+    hotspots, but a voice command can name them."""
     return {"type": "detections", "ts": round(time.time() * 1000), "objects": [
-        {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"]}
+        {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"],
+         **{k: o[k] for k in SCENE_FIELDS + QUICK_FIELDS if k in o}}
         for o in event["objects"]]}
 
 
@@ -255,6 +271,8 @@ class Phone:
         self.t0 = time.perf_counter()
         self.closed = False
         self.started = False  # this connection started stream.live
+        self.paused = False   # the user paused the camera: no tracking, frames dropped
+        self.mode: str | None = None  # "glasses" or "phone", as the phone last said
         self.frames = self.sent = self.skipped = 0
         self.size: tuple[int, int] | None = None
         self._tasks: set[asyncio.Task] = set()
@@ -311,6 +329,8 @@ class Phone:
             log.info("webrtc: %s %s track ended after %d frames", self, track.kind, self.frames)
 
     def _push(self, frame):
+        if self.paused:  # nothing is kept while the camera is paused
+            return
         # Under 1ms for 504x896, so it stays on the loop: frames never queue up behind it.
         img = frame.to_image()
         if ROTATE:
@@ -370,12 +390,36 @@ class Phone:
         except ValueError:
             msg = None
         kind = msg.get("type") if isinstance(msg, dict) else None
-        if kind != "select":
+        if kind == "mode":
+            self._on_mode(msg.get("mode"))
+        elif kind == "pause":
+            self._on_pause(msg.get("paused"))
+        elif kind == "select":
+            self._on_select(msg.get("track_id"))
+        else:
             log.info("webrtc: %s sent a message of type %.40r; ignored", self, kind)
+
+    def _on_mode(self, mode):
+        """{"type": "mode", "mode": "glasses" | "phone"}, on connect and on every switch. The phone swaps
+        the camera without renegotiating, so what was tracked belongs to the old one: reset."""
+        if mode not in ("glasses", "phone"):
+            log.info("webrtc: %s sent mode %.40r; ignored", self, mode)
             return
-        oid = track_number(msg.get("track_id"))
+        log.info("webrtc: %s mode %s", self, mode)
+        self.mode = mode
+        self._spawn(self.phones.reset(self))
+
+    def _on_pause(self, paused):
+        """{"type": "pause", "paused": true | false}: the user paused or resumed the camera."""
+        if not isinstance(paused, bool):
+            log.info("webrtc: %s sent pause %.40r; ignored", self, paused)
+            return
+        self._spawn(self.phones.pause(self, paused))
+
+    def _on_select(self, track_id):
+        oid = track_number(track_id)
         if oid is None:
-            log.info("webrtc: %s selected %.40r, which isn't a track_id; ignored", self, msg.get("track_id"))
+            log.info("webrtc: %s selected %.40r, which isn't a track_id; ignored", self, track_id)
             return
         handler = select_handler
         if handler is None:
@@ -450,6 +494,23 @@ class Phones:
         async with self.lock:
             if phone is self.current:
                 await self._close_current()
+
+    async def reset(self, phone: Phone):
+        """The phone switched cameras: forget what was tracked; tracking goes on with the new one."""
+        async with self.lock:
+            if phone is self.current and phone.started and not phone.paused:
+                await stream.live.reset()
+
+    async def pause(self, phone: Phone, paused: bool):
+        """Paused: stop tracking and purge what was tracked (scene memory, the latest frame, the session
+        on the tracking server). Resumed: start again."""
+        async with self.lock:
+            if phone is not self.current or phone.paused == paused:
+                return
+            phone.paused = paused
+            log.info("webrtc: %s camera %s", phone, "paused" if paused else "resumed")
+            if phone.started:
+                await (stream.live.stop() if paused else stream.live.start())
 
     async def _close_current(self):
         phone, self.current = self.current, None

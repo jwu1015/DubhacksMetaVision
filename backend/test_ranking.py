@@ -148,8 +148,20 @@ class RerankTest(unittest.IsolatedAsyncioTestCase):
         with mock.patch.object(rerank, "EMBED_URL", ""):
             out = await self.rerank(scored, lambda request: sent.append(request))
         self.assertEqual(sent, [])
-        self.assertEqual([p.match_score for p in out[:2]], [90, 55])  # 30 is under MIN_SCORE: dropped
-        self.assertEqual([p.url for p in out[2:]], [p.url for p in scored if p.match_score is None])
+        self.assertEqual([p.match_score for p in out[:2]], [90, 55])
+        self.assertEqual([p.url for p in out[2:-1]], [p.url for p in scored if p.match_score is None])
+        self.assertEqual(out[-1].match_score, 30)  # under MIN_SCORE: last, not dropped
+
+    async def test_a_crop_in_memory_keeps_scores_search_set(self):
+        # a background Look's crop (bytes) has no URL the CLIP service could fetch: as if there were none
+        scores = [55, None, 30, 90] + [None] * (len(RAW) - 4)
+        scored = [p.model_copy(update={"match_score": s}) for p, s in zip(RAW, scores)]
+        sent = []
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: sent.append(request))) as client:
+            out = await rerank.rerank(b"\xff\xd8 a jpeg", scored, client=client)
+        self.assertEqual(sent, [])
+        self.assertEqual([p.match_score for p in out[:2]], [90, 55])
+        self.assertEqual(out[-1].match_score, 30)
 
     async def test_no_thumbnails_or_no_products(self):
         no_thumbs = [p.model_copy(update={"image_url": None}) for p in RAW]
@@ -490,6 +502,13 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((resp.best_match.url, resp.best_match.tier), (products[1].url, "used"))
         self.assertEqual(resp.best_match.match_reason, rank.USED_MATCH_REASON)
         self.assertEqual(resp.spoken_summary, "That's a Store floor lamp, used, about 120 dollars.")
+
+    async def test_unchecked_pick_is_not_found_when_the_checked_ones_missed(self):
+        # match.py scored only some results, all low; Claude's pick is one it never checked
+        products = [product(300.0, None, n=0), product(200.0, 30, n=1), product(250.0, None, n=2)]
+        resp = await self.choose(self.best_pick(0), products=products)
+        self.assertEqual(resp.best_match.match_reason, rank.NOT_EXACT_REASON)
+        self.assertTrue(resp.spoken_summary.startswith("I couldn't find this exact one."), resp.spoken_summary)
 
     async def test_found_match_keeps_claudes_pick_and_summary(self):
         products = [product(300.0, 80, n=0), product(200.0, 95, n=1)]

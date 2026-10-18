@@ -121,8 +121,21 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
 
 
+class VoiceTokenRequest(BaseModel):   # LiveKit's standard token-endpoint request; every field is optional
+    participant_identity: str | None = None
+    participant_name: str | None = None
+
+
+class VoiceTokenResponse(BaseModel):  # ... and its response, which LiveKit's client SDKs read
+    server_url: str
+    participant_token: str
+
+
 class HealthResponse(BaseModel):
     ok: bool
     model_service: bool
     fixtures: bool
     demo_mode: bool
+    webrtc_sessions: int = 0     # phones streaming over WebRTC (one at a time)
+    scene_memory: bool = False   # the live stream is tracking, so scene memory is filling
+    voice: bool = False          # the voice assistant is set up (LiveKit keys present)
