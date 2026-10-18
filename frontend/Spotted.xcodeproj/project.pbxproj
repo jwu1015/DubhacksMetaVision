@@ -421,10 +421,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Spotted-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Spotted connects to your Meta glasses to see what you're looking at.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
@@ -440,7 +442,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -454,10 +456,12 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Spotted-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Spotted connects to your Meta glasses to see what you're looking at.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
@@ -473,7 +477,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -486,9 +490,10 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -501,9 +506,10 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -517,6 +523,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SpottedWidgets-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
@@ -526,7 +533,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -541,6 +548,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SpottedWidgets-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
@@ -550,7 +558,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -565,9 +573,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -581,9 +590,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dubhacks.spotted.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baptiste.storefront.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;

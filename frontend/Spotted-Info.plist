@@ -15,24 +15,32 @@
 			</array>
 		</dict>
 	</array>
+	<key>MWDAT</key>
+	<dict>
+		<key>AppLinkURLScheme</key>
+		<string>spotted://</string>
+		<key>ClientToken</key>
+		<string>$(CLIENT_TOKEN)</string>
+		<key>MetaAppID</key>
+		<string>$(META_APP_ID)</string>
+		<key>TeamID</key>
+		<string>$(DEVELOPMENT_TEAM)</string>
+	</dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bonjour._tcp</string>
+	</array>
 	<key>SpottedAPIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
 	<key>CFAccessClientID</key>
 	<string>$(CF_ACCESS_CLIENT_ID)</string>
 	<key>CFAccessClientSecret</key>
 	<string>$(CF_ACCESS_CLIENT_SECRET)</string>
-	<!-- Meta Wearables DAT: Meta AI calls back on spotted://. MetaAppID can stay empty in Developer Mode. -->
-	<key>MWDAT</key>
-	<dict>
-		<key>AppLinkURLScheme</key>
-		<string>spotted://</string>
-		<key>MetaAppID</key>
-		<string>$(META_APP_ID)</string>
-		<key>ClientToken</key>
-		<string>$(CLIENT_TOKEN)</string>
-		<key>TeamID</key>
-		<string>$(DEVELOPMENT_TEAM)</string>
-	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>processing</string>
@@ -44,17 +52,5 @@
 	<array>
 		<string>com.meta.ar.wearable</string>
 	</array>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Spotted connects to your Meta glasses to see what you're looking at.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_bonjour._tcp</string>
-	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<!-- Plain http to localhost or the laptop's LAN IP while testing on the same Wi-Fi. ngrok is https. -->
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 </dict>
 </plist>
