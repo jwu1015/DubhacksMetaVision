@@ -17,6 +17,10 @@
 	</array>
 	<key>SpottedAPIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
+	<key>CFAccessClientID</key>
+	<string>$(CF_ACCESS_CLIENT_ID)</string>
+	<key>CFAccessClientSecret</key>
+	<string>$(CF_ACCESS_CLIENT_SECRET)</string>
 	<!-- Meta Wearables DAT: Meta AI calls back on spotted://. MetaAppID can stay empty in Developer Mode. -->
 	<key>MWDAT</key>
 	<dict>

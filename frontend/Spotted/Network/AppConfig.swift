@@ -10,15 +10,28 @@ enum AppConfig {
             return URL(string: override)
         }
         #endif
-        guard let value = Bundle.main.object(forInfoDictionaryKey: "SpottedAPIBaseURL") as? String,
-              !value.isEmpty, !value.contains("$("), let url = URL(string: value) else { return nil }
-        return url
+        return setting("SpottedAPIBaseURL").flatMap(URL.init(string:))
     }()
 
-    /// A server path such as a Look's cutoutPath, as a full URL.
-    static func url(for path: String) -> URL? {
-        guard let baseURL else { return nil }
-        if let absolute = URL(string: path), absolute.scheme != nil { return absolute }
-        return baseURL.appending(path: path.hasPrefix("/") ? String(path.dropFirst()) : path)
+    /// The Cloudflare Access service token for the tunnel in front of the backend, from Config.xcconfig.
+    private static let accessClientID = setting("CFAccessClientID")
+    private static let accessClientSecret = setting("CFAccessClientSecret")
+
+    /// A request to `url`. Requests to the backend carry the Cloudflare Access service token; requests to
+    /// anyone else (store images) never do.
+    static func request(_ url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        if url.host() == baseURL?.host(), let accessClientID, let accessClientSecret {
+            request.setValue(accessClientID, forHTTPHeaderField: "CF-Access-Client-Id")
+            request.setValue(accessClientSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
+        return request
+    }
+
+    /// An Info.plist value set from the build settings. Nil when it's empty or its setting is undefined.
+    private static func setting(_ key: String) -> String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty, !value.contains("$(") else { return nil }
+        return value
     }
 }

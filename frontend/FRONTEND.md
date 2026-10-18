@@ -532,6 +532,7 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 5. **Base URL:** `Spotted.xcconfig` defaults to `https://dubhacks.tamkar.ai`.
    - For another backend (a laptop or an ngrok URL, say), copy `Config.example.xcconfig` to the **untracked** `Config.xcconfig` and set `API_BASE_URL` there. Don't commit ngrok URLs: the repo is public, and every session costs LiveKit and Claude usage.
    - Debug builds also read `SPOTTED_API_BASE_URL` from the scheme; set it empty to run on mock data, as the UI tests do.
+6. **Cloudflare Access:** the backend sits behind a Cloudflare tunnel protected by Access. Set the service token's `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` in `Config.xcconfig` (Cloudflare Zero Trust → Access → Service Auth). Requests to the backend's host, including crop images, carry them as `CF-Access-Client-Id` and `CF-Access-Client-Secret`; requests to other hosts never do. The token ships inside the app bundle, so use a token scoped to this app only.
 
 ---
 

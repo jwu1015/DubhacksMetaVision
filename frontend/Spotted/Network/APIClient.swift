@@ -7,7 +7,7 @@ struct APIClient {
 
     /// POST /session/token: a token for a new LiveKit room with the backend in it.
     func sessionToken(identity: String) async throws -> TokenResponse {
-        var request = URLRequest(url: baseURL.appending(path: "session/token"))
+        var request = AppConfig.request(baseURL.appending(path: "session/token"))
         request.httpMethod = "POST"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

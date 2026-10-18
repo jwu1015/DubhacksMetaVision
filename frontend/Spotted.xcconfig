@@ -11,4 +11,9 @@ API_BASE_URL = https:/$()/dubhacks.tamkar.ai
 META_APP_ID =
 CLIENT_TOKEN =
 
+// The Cloudflare Access service token for the tunnel in front of the backend. Secret: set both in
+// Config.xcconfig. Sent only with requests to the backend's host.
+CF_ACCESS_CLIENT_ID =
+CF_ACCESS_CLIENT_SECRET =
+
 #include? "Config.xcconfig"
