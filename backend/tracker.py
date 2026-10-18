@@ -186,6 +186,12 @@ class Tracker:
         log.warning("tracker: failed after %dms (%s); retrying in %ds", ms, self.error, delay)
         return delay
 
+    async def restart(self):
+        """End the session once the frame in flight (if any) is answered; the next frame starts a new
+        session, so ids restart. Never raises."""
+        async with self._lock:
+            await self.stop()
+
     async def stop(self):
         """Delete the session, best effort. Never raises."""
         sid, self.session_id = self.session_id, None

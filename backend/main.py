@@ -345,17 +345,18 @@ async def search_pipeline(cap: Capture) -> SearchResponse:
 
 
 async def look(track_id: int) -> DetectResponse | None:
-    """The user picked a tracked object (the phone's "select" message, or POST /look/{id}). The crop
-    comes from the frame its box describes, so SAM isn't asked again; the projector follows along
-    through the "look" events. None if the stream isn't tracking that object."""
-    frame, result = stream.live.tracked_frame(), stream.live.latest_objects()
-    obj = next((o for o in result.objects if o.id == track_id), None) if result else None
-    if frame is None or obj is None:
-        log.info("look: the stream isn't tracking object %d", track_id)
+    """The user picked a tracked object (the phone's "select" message, POST /look/{id}, or the voice
+    assistant). The crop comes from that track's best frame in scene memory (sharpest, biggest, most
+    centered), in view or not, with the box it had there, so SAM isn't asked again; the projector follows
+    along through the "look" events. None if scene memory doesn't hold that track (any more)."""
+    best = stream.live.scene.best(track_id)
+    if best is None:
+        log.info("look: scene memory has no object %d", track_id)
         return None
+    frame, track = best
     buf = io.BytesIO()
     frame.convert("RGB").save(buf, format="JPEG", quality=90)
-    hint = stage("segment").Found(obj.box, obj.score, obj.label)
+    hint = stage("segment").Found(track.frame_box, track.score, track.label)
     return await run_detect(buf.getvalue(), hint=hint, track_id=track_id)
 
 
@@ -467,7 +468,9 @@ async def voice_token_route(req: VoiceTokenRequest | None = None):
 @app.get("/health", response_model=HealthResponse)
 async def health_route():
     return HealthResponse(ok=True, model_service=await model_service_ok(),
-                          fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE)
+                          fixtures=config.USE_FIXTURES, demo_mode=config.DEMO_MODE,
+                          webrtc_sessions=1 if webrtc.phones.current else 0, scene_memory=stream.live.running,
+                          voice=bool(config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET))
 
 
 # The live stream (stream.py): the projector page at /stream/viewer, its video and its events.

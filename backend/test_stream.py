@@ -437,8 +437,12 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         event = await next_event(self.events, "objects")
         self.assertEqual(set(event), {"type", "frame_idx", "width", "height", "age_ms", "objects"})
         self.assertGreaterEqual(event["age_ms"], 0)
-        self.assertEqual(event["objects"], [
-            {"id": 4, "label": "lamp", "score": 0.88, "box": {"x": 0.0, "y": 0.0, "w": 0.25, "h": 0.5}}])
+        [lamp] = [dict(o) for o in event["objects"]]
+        seen = lamp.pop("first_seen_ts")
+        self.assertEqual(lamp.pop("last_seen_ts"), seen)  # a first sighting
+        self.assertLess(abs(seen - time.time() * 1000), 5000)
+        self.assertEqual(lamp, {"id": 4, "label": "lamp", "score": 0.88, "box": {"x": 0.0, "y": 0.0, "w": 0.25, "h": 0.5},
+                                "in_view": True, "centered": 0.36, "seconds_viewed": 0.0})  # scene memory's fields
         self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "ok"})
 
         result = self.stream.latest_objects()
@@ -480,6 +484,44 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([await anext(fresh), await anext(fresh)],
                          [{"type": "status", "tracking": "stopped"}, replayed(look("nothing", "c_c"))])
         await fresh.aclose()
+
+    async def test_a_reset_forgets_everything_and_drops_answers_from_before(self):
+        await self.stream.start()
+        self.stream.push_frame(image(300))
+        self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 300)
+        self.gate.open.release()
+        await next_event(self.events, "objects")
+        self.assertEqual(set(self.stream.scene.tracks), {4})
+        self.stream.push_frame(image(310))  # the old camera's last frame, in flight
+        self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 310)
+
+        resetting = asyncio.create_task(self.stream.reset())
+        cleared = await next_event(self.events, "objects")
+        self.assertEqual(cleared["objects"], [])  # at once: subscribers drop what they had
+        self.assertEqual((self.stream.scene.tracks, self.stream.latest_frame()), ({}, None))
+        await asyncio.sleep(0.05)
+        self.assertFalse(resetting.done())  # the session ends once the frame in flight is answered
+        self.gate.open.release()
+        await asyncio.wait_for(resetting, 2)
+        self.assertEqual(self.gate.calls[-1], "DELETE /session/s1")
+        self.assertEqual(self.stream.scene.tracks, {})  # that answer came back after the reset: dropped
+
+        self.stream.push_frame(image(320))  # the new camera
+        self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 320)
+        self.gate.open.release()
+        event = await next_event(self.events, "objects")
+        self.assertEqual([o["id"] for o in event["objects"]], [4])
+        self.assertEqual(self.gate.calls[-2:], ["POST /session", "POST /session/s1/frame"])  # a new session
+
+    async def test_stop_purges_what_was_tracked(self):
+        await self.stream.start()
+        self.stream.push_frame(image(300))
+        self.gate.open.release()
+        await next_event(self.events, "objects")
+        await self.stream.stop()
+        self.assertEqual((await next_event(self.events, "objects"))["objects"], [])
+        self.assertEqual((self.stream.scene.tracks, self.stream.latest_frame(), self.stream.tracked_frame()),
+                         ({}, None, None))
 
     async def test_stop_deletes_the_session_and_clears_the_boxes(self):
         await self.stream.start()
