@@ -10,6 +10,8 @@
 		5D0A00000000000000000022 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000021 /* WebRTC */; };
 		5D0A00000000000000000027 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000026 /* LiveKit */; };
 		5D0A0000000000000000003D /* SpottedWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5D0A00000000000000000030 /* SpottedWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5D0A00000000000000000042 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000041 /* MWDATCore */; };
+		5D0A00000000000000000044 /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 5D0A00000000000000000043 /* MWDATCamera */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +84,8 @@
 			files = (
 				5D0A00000000000000000022 /* WebRTC in Frameworks */,
 				5D0A00000000000000000027 /* LiveKit in Frameworks */,
+				5D0A00000000000000000042 /* MWDATCore in Frameworks */,
+				5D0A00000000000000000044 /* MWDATCamera in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -151,6 +155,8 @@
 			packageProductDependencies = (
 				5D0A00000000000000000021 /* WebRTC */,
 				5D0A00000000000000000026 /* LiveKit */,
+				5D0A00000000000000000041 /* MWDATCore */,
+				5D0A00000000000000000043 /* MWDATCamera */,
 			);
 			productName = Spotted;
 			productReference = 5D0A00000000000000000001 /* Spotted.app */;
@@ -232,6 +238,7 @@
 			packageReferences = (
 				5D0A00000000000000000020 /* XCRemoteSwiftPackageReference "WebRTC" */,
 				5D0A00000000000000000025 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
+				5D0A00000000000000000040 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5D0A00000000000000000005 /* Products */;
@@ -319,7 +326,7 @@
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -338,7 +345,7 @@
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
@@ -545,6 +552,14 @@
 				minimumVersion = 2.5.0;
 			};
 		};
+		5D0A00000000000000000040 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -557,6 +572,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5D0A00000000000000000025 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
 			productName = LiveKit;
+		};
+		5D0A00000000000000000041 /* MWDATCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D0A00000000000000000040 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCore;
+		};
+		5D0A00000000000000000043 /* MWDATCamera */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5D0A00000000000000000040 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCamera;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

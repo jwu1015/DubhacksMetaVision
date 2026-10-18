@@ -21,7 +21,10 @@ final class AppState {
     var tab: Tab = .live
     var connection: Connection = .live
     var isCameraPaused = false {
-        didSet { live?.setPaused(isCameraPaused) }
+        didSet {
+            live?.setPaused(isCameraPaused)
+            updateVideoSource()
+        }
     }
 
     // Live view
@@ -35,7 +38,11 @@ final class AppState {
     var currentRoom = "Maya’s apartment"
 
     // Glasses mode (G1–G7)
-    var captureMode: CaptureMode = .phone
+    var captureMode: CaptureMode = .phone {
+        didSet { updateVideoSource() }
+    }
+    /// The Meta glasses (DAT SDK). Nil in previews and before launch configures the SDK.
+    private(set) var glasses: GlassesManager?
     /// "Glasses connected. Say “Spotted” to capture." on Glasses Home for a few seconds.
     var modeBanner: String?
     /// Every Look the user asked for: Spotted Today and the room recap.
@@ -312,6 +319,35 @@ final class AppState {
         detections = []
         connection = .reconnecting
         publisher.start()
+        updateVideoSource()
+    }
+
+    // MARK: - Meta glasses
+
+    /// Starts the DAT SDK's glasses tracking. Glasses connecting switches to glasses mode and video;
+    /// disconnecting switches back to the phone camera.
+    func startGlasses() {
+        guard glasses == nil, GlassesManager.configure() else { return }
+        let manager = GlassesManager()
+        manager.onAvailabilityChange = { [weak self] available in
+            self?.setCaptureMode(available ? .glasses : .phone)
+            self?.updateVideoSource()
+        }
+        glasses = manager
+        if manager.hasGlasses { setCaptureMode(.glasses) }
+    }
+
+    /// Glasses video only in glasses mode with real glasses connected and the camera not paused;
+    /// otherwise the phone camera (so "simulate glasses" without hardware still streams something).
+    private func updateVideoSource() {
+        guard let live else { return }
+        if captureMode == .glasses, let glasses, glasses.hasGlasses, !isCameraPaused {
+            live.use(.glasses)
+            glasses.startCamera(into: live.glassesCapturer)
+        } else {
+            glasses?.stopCamera()
+            live.use(.phone)
+        }
     }
 
     private func handle(_ message: ChannelMessage) {
@@ -510,6 +546,8 @@ final class AppState {
 
     /// Deep links from the Live Activity: spotted://save, spotted://add (with ?capture=ID), spotted://talk.
     func handle(_ url: URL) {
+        // Meta AI's registration and permission callbacks share the spotted:// scheme.
+        if glasses?.handle(url) == true { return }
         guard url.scheme == "spotted" else { return }
         let captureID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "capture" }?.value
