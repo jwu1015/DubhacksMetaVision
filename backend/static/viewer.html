@@ -70,6 +70,18 @@
   h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--label-secondary); }
   .group { display: flex; flex-direction: column; gap: 10px; }
   @keyframes pulse { 50% { opacity: 0.4; } }
+  #look.flash { animation: flash 0.6s ease-out; }
+  @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--accent); } to { box-shadow: inset 0 0 0 2px transparent; } }
+  /* Narrow and portrait screens: the video on top, the item under it. */
+  @media (max-width: 760px), (orientation: portrait) {
+    #app { flex-direction: column; }
+    #look { flex: 0 1 auto; max-height: 48%; padding: 16px; gap: 12px;
+            border-left: 0; border-top: 1px solid var(--separator); }
+    #crop { aspect-ratio: auto; height: 120px; flex: none; }
+    #name { font-size: 19px; }
+    #status { top: 12px; left: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { #look.flash, #look-status.busy { animation: none; } }
 </style>
 </head>
 <body>
@@ -171,17 +183,26 @@ function handle(ev) {
 const $ = (id) => document.getElementById(id);
 const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
 const EXACT = 85;         // match_score from here up is an "Exact match", as in the app
-let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price}
-const picks = new Set();  // look_ids of every pick so far: the newest one is in the sidebar
+let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price, picked_at}
 
-// Each "look" message carries the whole Look so far, so the sidebar is drawn from it alone.
+// The latest pick takes the sidebar, whether it's a tap in the app or a pick by voice, and picking an older
+// item again brings it back. Each "look" message carries the whole Look so far, so the sidebar is drawn from
+// it alone.
 function showLook(ev) {
-  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the sidebar
-  else if (!look || ev.look_id !== look.look_id) return; // an older pick, already replaced
+  const at = ev.picked_at || 0;
+  if (look && ev.look_id !== look.look_id && at <= look.picked_at) return; // an older pick, already replaced
+  const fresh = !look || ev.look_id !== look.look_id || at > look.picked_at;
   const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
   look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
-           price: best ? money(best.price, best.currency) : null };
-  $("look").hidden = false;
+           price: best ? money(best.price, best.currency) : null, picked_at: at };
+  const panel = $("look");
+  panel.hidden = false;
+  if (fresh) { // a new pick: back to its top, and a short flash so it's seen to change
+    panel.scrollTop = 0;
+    panel.classList.remove("flash");
+    void panel.offsetWidth;
+    panel.classList.add("flash");
+  }
   $("crop").hidden = !ev.crop_url;
   $("crop").style.backgroundImage = cssUrl(ev.crop_url);
   $("name").textContent = look.name;

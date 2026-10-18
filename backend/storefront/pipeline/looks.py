@@ -55,12 +55,14 @@ class Look:
     search: SearchResponse | None = None
     message: str | None = None
     selected: bool = False
+    picked_at: int | None = None  # Unix ms of the latest pick
     crop_url: str | None = None
     task: asyncio.Task | None = None
 
     def message_dict(self) -> dict:
         return LookMessage(uid=self.uid, look_id=self.look_id, stage=self.stage, label=self.label,
-                           box=self.box.corners(), selected=self.selected, crop_url=self.crop_url,
+                           box=self.box.corners(), selected=self.selected, picked_at=self.picked_at,
+                           crop_url=self.crop_url,
                            item=self.item, search=self.search, message=self.message).model_dump(mode="json")
 
 
@@ -69,6 +71,7 @@ class Looks:
         self.publish, self.max_running = publish, max_running
         self.looks: dict[str, Look] = {}
         self._waiting: list[Look] = []  # started after the limit was reached, oldest first
+        self._last_pick = 0  # the latest picked_at
 
     def get(self, uid: str) -> Look | None:
         return self.looks.get(uid)
@@ -87,17 +90,20 @@ class Looks:
         return look
 
     def select(self, uid: str) -> Look | None:
-        """The user picked this object: write its crop, so its messages carry the crop's URL. None if it has
-        no Look."""
+        """The user picked this object: write its crop, so its messages carry the crop's URL. Picking it again
+        sends it again with a new picked_at, so the viewer shows it over the picks since. None if it has no
+        Look."""
         look = self.looks.get(uid)
-        if look is None or look.selected:
-            return look
-        path = config.UPLOADS / f"{look.look_id}.jpg"
-        path.write_bytes(look.cutout)
-        look.selected, look.crop_url = True, f"{config.PUBLIC_BASE_URL}/uploads/{path.name}"
-        if look in self._waiting:  # the user is waiting on this one now
-            self._waiting.remove(look)
-            self._run(look)
+        if look is None:
+            return None
+        look.picked_at = self._last_pick = max(time.time_ns() // 1_000_000, self._last_pick + 1)  # always the latest
+        if not look.selected:
+            path = config.UPLOADS / f"{look.look_id}.jpg"
+            path.write_bytes(look.cutout)
+            look.selected, look.crop_url = True, f"{config.PUBLIC_BASE_URL}/uploads/{path.name}"
+            if look in self._waiting:  # the user is waiting on this one now
+                self._waiting.remove(look)
+                self._run(look)
         log.info("look %s on %s: picked", look.look_id, uid)
         self._send(look)
         return look

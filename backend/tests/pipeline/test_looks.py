@@ -90,7 +90,9 @@ def test_picking_writes_the_crop_and_searches_by_its_url(stores, tmp_path):
         looks.start("1.7", "bottle", BOX, JPEG)
         await settle()  # described; the search waits on the gate
         look = looks.select("1.7")
-        assert looks.select("1.7") is look  # picked already
+        first = look.picked_at
+        assert looks.select("1.7") is look  # picked already: sent again, as the latest pick
+        assert look.picked_at > first
         stores.gate.set()
         await settle()
         return look
@@ -100,7 +102,8 @@ def test_picking_writes_the_crop_and_searches_by_its_url(stores, tmp_path):
     assert path.read_bytes() == JPEG
     assert look.crop_url == f"{config.PUBLIC_BASE_URL}/uploads/{path.name}"
     assert [(m["stage"], m["selected"]) for m in sent] == [("started", False), ("described", False),
-                                                          ("described", True), ("results", True)]
+                                                          ("described", True), ("described", True),
+                                                          ("results", True)]
     assert stores.searched[0][0] == JPEG  # its search had started before the pick
 
 
