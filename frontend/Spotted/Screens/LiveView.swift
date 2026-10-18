@@ -6,7 +6,6 @@ import SwiftUI
 struct LiveView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var focusedUID: String?
 
     var body: some View {
         ZStack {
@@ -20,6 +19,7 @@ struct LiveView: View {
                         Color.black.opacity(0.35)
                     }
                     markers(in: geo.size)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.labels.count)
                 }
             }
             .ignoresSafeArea()
@@ -60,7 +60,6 @@ struct LiveView: View {
 
     /// Back to the hotspots: clears the product, searching or couldn't-tell card and any open tag.
     private func dismissSelection() {
-        focusedUID = nil
         switch app.scan {
         case .looking, .detected, .matched, .failed: app.clearScan()
         case .idle: break
@@ -100,36 +99,20 @@ struct LiveView: View {
         }
     }
 
+    /// The object's quick label at the center of its box, once the backend has named it.
     @ViewBuilder
     private func marker(for object: LiveObject, in size: CGSize) -> some View {
-        let rect = feedRect(object.bbox, in: size)
-        if object.uid == app.selectedUID, isSelecting {
-            DetectionBrackets()
-                .frame(width: rect.width, height: rect.height)
-                // A tap on the selected object itself keeps it selected.
-                .contentShape(Rectangle())
-                .onTapGesture {}
-                .offset(x: rect.minX, y: rect.minY)
-            if let look = app.currentLook {
-                DetectionTag(item: look.name.sentenceCased)
-                    .fixedSize()
-                    .offset(x: rect.minX, y: rect.minY - 32)
+        if let label = app.labels[object.uid] {
+            let rect = feedRect(object.bbox, in: size)
+            let isSelected = object.uid == app.selectedUID && isSelecting
+            ClampedPosition(center: CGPoint(x: rect.midX, y: rect.midY)) {
+                Hotspot(item: label.name.sentenceCased, priceEstimate: label.priceEstimate, isSelected: isSelected)
+                    .opacity(hotspotOpacity)
+                    // A tap on the selected object itself keeps it selected.
+                    .onTapGesture { if !isSelected { app.select(object) } }
+                    .accessibilityAction { app.select(object) }
             }
-        } else {
-            let label = app.labels[object.uid]
-            Hotspot(item: (label?.name ?? object.prompt).sentenceCased, priceEstimate: label?.priceEstimate,
-                    isFocused: focusedUID == object.uid)
-                .opacity(hotspotOpacity)
-                .offset(x: rect.midX - 32, y: rect.midY - 32)
-                .onTapGesture {
-                    focusedUID = nil
-                    app.select(object)
-                }
-                // Press-and-hold stands in for Figma's Hover state on touch.
-                .onLongPressGesture(minimumDuration: 0.4) {
-                    focusedUID = object.uid
-                }
-                .accessibilityAction { app.select(object) }
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
     }
 
@@ -175,6 +158,25 @@ struct LiveView: View {
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+}
+
+/// Centers its one subview on `center`, nudged to stay inside the bounds: a label on an object at the
+/// edge of the frame stays readable.
+private struct ClampedPosition: Layout {
+    let center: CGPoint
+    var margin: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let view = subviews.first else { return }
+        let size = view.sizeThatFits(.unspecified)
+        let x = min(max(center.x, size.width / 2 + margin), bounds.width - size.width / 2 - margin)
+        let y = min(max(center.y, size.height / 2 + margin), bounds.height - size.height / 2 - margin)
+        view.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .center, proposal: .unspecified)
     }
 }
 

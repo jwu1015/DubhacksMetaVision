@@ -14,6 +14,9 @@ class SpottedUITestCase: XCTestCase {
         // No backend: the app plays its mock session.
         app.launchEnvironment["SPOTTED_API_BASE_URL"] = ""
         app.launch()
+        let start = app.buttons["Start streaming"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        start.tap()
     }
 
     /// Taps the chair's hotspot and waits for the mocked results. The searching card also has

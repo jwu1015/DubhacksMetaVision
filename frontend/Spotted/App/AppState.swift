@@ -273,7 +273,16 @@ final class AppState {
     /// Width ÷ height of the previewed camera frames, for mapping boxes through aspect-fill.
     var previewAspect: CGFloat? { liveVideoTrack == nil ? nil : 9.0 / 16.0 }
 
-    func startLive() {
+    /// False until the start screen's button: nothing streams before that.
+    private(set) var isStreaming = false
+
+    /// The start screen's button: join the session and start the camera.
+    func startStreaming() {
+        isStreaming = true
+        startLive()
+    }
+
+    private func startLive() {
         guard live == nil, let baseURL = AppConfig.baseURL else { return }
         clearObjects()
         isConnected = false

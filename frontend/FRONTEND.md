@@ -55,7 +55,7 @@ The app has **two modes and one pipeline**. In both, the camera goes up as one *
 |---|---|---|
 | Video source | Glasses camera → phone (DAT) → LiveKit | Phone camera (AVFoundation) → LiveKit |
 | Shown to the user? | **No.** Processed only; the phone renders no preview. | **Yes.** Live preview, full screen. |
-| How the user picks | **Voice**, once the agent is back | **Tap** a hotspot (01a) |
+| How the user picks | **Voice**, once the agent is back | **Tap** an object's quick label (01a) |
 | Target resolved by | The voice agent, which calls `select` on the backend like a tap | The tapped object's `uid` |
 | Results | **Spoken** in the glasses, plus a capture card, Live Activity and history on the phone | On screen, over the live view (01 / 01b) |
 
@@ -71,9 +71,9 @@ The backend keeps a scene memory of the last ~15 s, and the voice agent's ground
 **Room recap (optional):** when the user leaves a room, the phone shows "You looked at 4 things here", built from the captures. It's opt-in.
 
 ### Phone mode: tap the live video
-1. The live preview runs, and the camera publishes to the room.
-2. `objects` → **hotspots** (01a); each `label` adds a name and price estimate to its hotspot.
-3. Tapping a hotspot calls `select` → brackets → searching card (01b) → results (01).
+1. The app opens on a start screen; **Start streaming** joins the room and starts the camera.
+2. Each object's quick `label` (name and price estimate) pops up at the center of its box (01a). Objects without a label yet show nothing, and no box is drawn.
+3. Tapping a label calls `select`: the label turns lime → searching card (01b) → results (01).
 
 ### Voice trigger
 The glasses mode depends on this, so options are listed safest first:
@@ -118,7 +118,7 @@ Phone ── RPC select {uid} ──► vision: answers that object's Look; its 
 ### What the phone does
 
 1. **Join:** `POST /session/token`, then join the room as `phone-…` and publish the camera (phone or glasses) as one video track. Send `mode` right after joining, and `pause` if paused.
-2. **Draw:** each `objects` message replaces the hotspots (in-view objects only); a `label` adds a name and price estimate to its hotspot. The app keeps nothing else: after a reconnect, the backend sends its current state again.
+2. **Draw:** each `objects` message moves the labels (in-view objects only); a `label` message adds one, at the center of its object's box. The app keeps nothing else: after a reconnect, the backend sends its current state again.
 3. **Tap:** RPC `select {uid}`. Its answer is that object's Look as it stands: `started` / `described` → searching card (01b), `results` → product card (01), `failed` → couldn't tell (01c). Later `look` messages for that uid move the card along; Looks for other objects are ignored.
 4. **Speak:** the Look's quick phrase when it appears, then `spokenSummary` with the results.
 5. **Actions:** Save / Add to cart (client state). **Check out:** Face ID, then the checkout URL in `SFSafariViewController`.
@@ -234,14 +234,14 @@ The screens below (01–06) are **phone mode** (live video). Screens 03–06 (de
 
 | # | Frame | What it shows |
 |---|---|---|
-| 01a | Object Detected (Unselected) | The camera feed with a pulsing **Hotspot** on the chair. Its tag appears on hover/focus, and a hint pill reads "Tap the chair or say 'What's this?'". No card yet. |
-| 01 | Live View | The chair is selected: lime brackets, a "Lounge Chair · Likely" tag, and a glass product card (Search / Save / Add to cart). The lamp shows as an unselected Hotspot. |
+| 01a | Object Detected (Unselected) | The camera feed with each object's quick label ("Lounge chair · ~$900–1400") at its center, and a hint pill: "Tap the chair or say 'What's this?'". No card yet. |
+| 01 | Live View | The chair is selected: its label turns lime, over a glass product card (Search / Save / Add to cart). The lamp keeps its glass label. |
 | 02 | Listening → **Agent sheet** | A voice sheet with waveform, live transcript, the line the glasses will say, and suggestion chips. With the agent, this becomes the conversation surface with Claude (see below). |
 | 03 | Product Detail | A hero image, a store comparison (lowest price tagged) and a floating glass checkout bar. |
 | 04 | Saved | Saved items grouped by room ("Maya's apartment"). Saved = coral + filled bookmark + "Saved". |
 | 05 | Cart | Line items, an **Agent limit** card (Visa), the summary, and Check out. |
 | 06 | Checkout | A pay sheet showing merchants, card, limit check, the spoken confirmation, and **Pay with Face ID** / passcode. |
-| 01b | Searching | While the Look runs: brackets, crop thumbnail, the spoken quick phrase, skeleton prices and "Checking 3 stores…". Only Save is active. |
+| 01b | Searching | While the Look runs: the lime label, crop thumbnail, the spoken quick phrase, skeleton prices and "Checking 3 stores…". Only Save is active. |
 | 01c | Couldn't Tell | The Look failed: "Couldn't tell what that is", **Try again** / **Take a photo**. |
 | 01d | Stream Reconnecting | 01a with a "Reconnecting…" pill and dimmed hotspots (the room dropped). |
 | 03b | Dupes & Used | The Used tab with eBay results, and "Google Shopping · Unavailable right now" with Retry. |
@@ -364,16 +364,10 @@ The mockups use **Inter**, a stand-in for SF Pro, which doesn't render in Figma'
 
 | State | Marker | Card | Trigger to next |
 |---|---|---|---|
-| Unselected (01a) | **Hotspot**: pulsing dot, no tag | none | tap / focus / "What's this?" |
-| Focused / hover | Hotspot brightens; **item tag appears** ("Lounge chair · Tap to view") | none | tap or confirm |
-| Selected (01) | **Accent brackets** + "Name · Likely" tag | Product card | Save / Add / Search |
+| Unselected (01a) | Glass **quick label** ("Lounge chair · ~$900–1400") at the object's center; no box, no dot | none | tap the label |
+| Selected (01) | The same label in **lime** | Product card | Save / Add / Search |
 
-**Hover on iPhone:** there's no pointer hover on touch. Map the Figma Hover state to:
-1. **Glasses gaze:** the user's view stays centered on the object for about 0.5 s (preferred).
-2. **Press-and-hold** on the hotspot (phone fallback).
-3. VoiceOver focus: the tag's text is the hotspot's accessibility label.
-
-Transitions: 200 ms ease-out (matches the Figma Smart Animate). Respect **Reduce Motion**: no pulse, instant swap.
+Labels pop in (scale and fade) when the backend names an object, and stay inside the screen near its edges. Transitions: 200 ms ease-out. Respect **Reduce Motion**: instant swap.
 
 ---
 
@@ -419,8 +413,8 @@ Target: **WCAG 2.2 AA** (the standard that the ADA, Section 508 and the European
   - Visa blue on dark backgrounds is about 2.2:1, so Visa marks need a light outline.
 - **Never color alone:** Saved = coral + filled icon + label; selected tab = accent + glass pill; confidence is shown as text ("Likely").
 - **Dynamic Type:** use system text styles; test cards at the largest accessibility sizes.
-- **VoiceOver:** hotspots are buttons labeled with the item name; the product card reads name, price and actions in order.
-- **Reduce Motion:** disable the hotspot pulse and bracket lock-in animation.
+- **VoiceOver:** quick labels are buttons labeled with the item name and price; the product card reads name, price and actions in order.
+- **Reduce Motion:** labels appear without the pop-in animation.
 
 ---
 
@@ -512,9 +506,9 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 
 ### UI rules
 - **Hotspots from the stream:**
-  - Each in-view `objects[]` entry becomes an **unselected Hotspot** (01a) at the center of its `box`, keyed by `uid`.
+  - Each in-view `objects[]` entry with a `label` shows that label (01a) at the center of its `box`, keyed by `uid`. No box is drawn.
   - While the room is reconnecting or `status.tracking` is `offline`, show "Reconnecting…" in the status pill.
-- **Selected:** tapping a hotspot makes that object **selected** (brackets on its box) and calls `select`.
+- **Selected:** tapping a label makes that object **selected** (the label turns lime) and calls `select`.
 - **Couldn't tell:** a `failed` Look → speak its `message`, show **Couldn't tell** (01c).
 - **Similarity:** show "Exact match" only when `product.isExactMatch` (`matchScore ≥ 85`). While `matchScore` is `nil` (today), show **"Similar"**.
 - **Price verdict chip:** text is `bestMatchVerdict.label`. Color: Low = success, Fair = secondary, High = warning. Always text plus color.
