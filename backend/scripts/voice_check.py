@@ -2,7 +2,7 @@
 mic, a fake backend ("vision") sends the tracker's messages (a mug in the middle of the view, its quick label and
 its Look's prices), the voice agent is dispatched, and the phone asks its question (spoken by Gemini's text to
 speech, or a 16-bit mono WAV). Prints what comes back: the agent's transcript and how much it spoke. Its side
-(frames, what it heard, its tool calls) is in the worker's log (debug.py).
+is in the worker's log.
 
     python scripts/voice_check.py [question.wav]    # from backend/; needs a running worker (voice/agent.py), and
                                                     # GOOGLE_API_KEY without a WAV
