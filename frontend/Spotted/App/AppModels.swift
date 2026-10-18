@@ -63,6 +63,26 @@ extension Look {
     }
 }
 
+// MARK: - Tracking category
+
+/// A start-screen choice of what to track. `value` goes to the backend, which picks SAM's labels within it.
+struct TrackingCategory: Identifiable, Hashable {
+    let title: String
+    let value: String
+    var id: String { value }
+
+    /// The backend's own default.
+    static let `default` = TrackingCategory(title: "Things to buy", value: "small things to buy")
+    static let all = [
+        Self.default,
+        TrackingCategory(title: "Furniture", value: "furniture"),
+        TrackingCategory(title: "Electronics", value: "electronics"),
+        TrackingCategory(title: "Kitchen", value: "kitchen utensils"),
+        TrackingCategory(title: "Clothing", value: "clothing and shoes"),
+        TrackingCategory(title: "Decor", value: "home decor"),
+    ]
+}
+
 // MARK: - Glasses mode
 
 /// Where the video comes from: the phone's camera or the Meta glasses.

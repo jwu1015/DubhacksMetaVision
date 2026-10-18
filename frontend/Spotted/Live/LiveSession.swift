@@ -34,21 +34,24 @@ final class LiveSession: NSObject, UpdateSource {
     let glassesCapturer: GlassesCapturer
 
     private let api: APIClient
+    /// What the backend tracks, sent with every token request (a rejoin opens a new room).
+    private let category: String
     private let capturer: FeedCapturer
     private var activeSource: VideoSource = .phone
     private var isPaused = false
     private var mode: CaptureMode = .phone
     private var joinTask: Task<Void, Never>?
 
-    static func make(api: APIClient) async -> LiveSession {
+    static func make(api: APIClient, category: String) async -> LiveSession {
         // ~504×896 at 15 fps, per the stream spec in FRONTEND.md.
         let options = BufferCaptureOptions(dimensions: Dimensions(width: 504, height: 896), fps: 15)
         let track = await LocalVideoTrack.createBufferTrack(name: "feed", source: .camera, options: options)
-        return LiveSession(api: api, track: track)
+        return LiveSession(api: api, category: category, track: track)
     }
 
-    private init(api: APIClient, track: LocalVideoTrack) {
+    private init(api: APIClient, category: String, track: LocalVideoTrack) {
         self.api = api
+        self.category = category
         videoTrack = track
         // createBufferTrack always makes a BufferCapturer.
         let buffer = track.capturer as! BufferCapturer
@@ -116,7 +119,7 @@ final class LiveSession: NSObject, UpdateSource {
             try? await Task.sleep(for: delay)
             guard let self, !Task.isCancelled else { return }
             do {
-                let token = try await api.sessionToken(identity: identity.stringValue)
+                let token = try await api.sessionToken(identity: identity.stringValue, category: category)
                 try await room.connect(url: token.serverURL, token: token.participantToken)
                 // One video track per session: a rejoin publishes it again only if the room dropped it.
                 if room.localParticipant.localVideoTracks.isEmpty {

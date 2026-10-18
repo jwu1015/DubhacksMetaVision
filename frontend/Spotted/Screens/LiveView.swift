@@ -35,6 +35,7 @@ struct LiveView: View {
             .padding(.bottom, 74)
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.scan)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.isFindingLabels)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.connection)
         .accessibilityAction(.escape, dismissSelection)
     }
@@ -144,6 +145,10 @@ struct LiveView: View {
 
     @ViewBuilder private var bottomContent: some View {
         switch app.scan {
+        case .idle where app.isFindingLabels:
+            LabelsLoader(category: app.category)
+                .padding(.bottom, 12)
+                .transition(.opacity)
         case .idle:
             HintPill(text: "Tap the \(app.objects.first?.prompt ?? "item") or say “What’s this?”")
                 .padding(.bottom, 12)
@@ -170,6 +175,31 @@ struct LiveView: View {
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+}
+
+/// While the backend picks what to track from the first frame: no label can show up before that.
+private struct LabelsLoader: View {
+    let category: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.labelPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Finding \(category) in view…")
+                    .font(.spottedSubhead)
+                    .foregroundStyle(.labelPrimary)
+                Text("Picking what to look for from the first frame")
+                    .font(.spottedFootnote)
+                    .foregroundStyle(.labelSecondary)
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 20)
+        .padding(.vertical, 12)
+        .glass(in: Capsule(), tint: 0.62)
+        .accessibilityElement(children: .combine)
     }
 }
 

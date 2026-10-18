@@ -5,13 +5,13 @@ struct APIClient {
     let baseURL: URL
     var session: URLSession = .shared
 
-    /// POST /session/token: a token for a new LiveKit room with the backend in it.
-    func sessionToken(identity: String) async throws -> TokenResponse {
+    /// POST /session/token: a token for a new LiveKit room with the backend in it, tracking `category`.
+    func sessionToken(identity: String, category: String) async throws -> TokenResponse {
         var request = AppConfig.request(baseURL.appending(path: "session/token"))
         request.httpMethod = "POST"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(TokenRequest(participantIdentity: identity))
+        request.httpBody = try JSONEncoder().encode(TokenRequest(participantIdentity: identity, category: category))
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {

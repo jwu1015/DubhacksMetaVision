@@ -20,7 +20,7 @@ final class AppState {
 
     var tab: Tab = .live
     var connection: Connection {
-        isConnected && tracking != .offline ? .live : .reconnecting
+        isConnected && status?.tracking != .offline ? .live : .reconnecting
     }
     var isCameraPaused = false {
         didSet {
@@ -248,7 +248,8 @@ final class AppState {
     private var live: LiveSession?
     private var source: UpdateSource
     private var isConnected = true
-    private var tracking: StatusMessage.Tracking?
+    /// The backend's last tracking status: its state, category and SAM's prompts.
+    private var status: StatusMessage?
     private let speaker = Speaker()
 
     init() {
@@ -274,10 +275,20 @@ final class AppState {
     /// False until the start screen's button: nothing streams before that.
     private(set) var isStreaming = false
 
-    /// The start screen's button: join the session and stream from the chosen camera.
-    func startStreaming(from mode: CaptureMode) {
+    /// What the backend tracks, picked on the start screen.
+    private(set) var category = TrackingCategory.default.value
+
+    /// Streaming, but the backend hasn't picked SAM's labels from the first frame yet: no object can
+    /// show up until it has.
+    var isFindingLabels: Bool {
+        isStreaming && !isCameraPaused && (status?.prompts.isEmpty ?? true)
+    }
+
+    /// The start screen's button: join the session and stream from the chosen camera, tracking `category`.
+    func startStreaming(from mode: CaptureMode, category: String) {
         guard !isStreaming else { return }
         captureMode = mode
+        self.category = category
         isStreaming = true
         startLive()
     }
@@ -285,9 +296,10 @@ final class AppState {
     private func startLive() {
         guard live == nil, let baseURL = AppConfig.baseURL else { return }
         clearObjects()
+        status = nil
         isConnected = false
-        Task { [weak self] in
-            let session = await LiveSession.make(api: APIClient(baseURL: baseURL))
+        Task { [weak self, category] in
+            let session = await LiveSession.make(api: APIClient(baseURL: baseURL), category: category)
             guard let self else { return }
             session.onUpdate = { [weak self] in self?.handle($0) }
             session.onConnectionChange = { [weak self] connected in
@@ -342,7 +354,7 @@ final class AppState {
         case let .look(look):
             if look.uid == selectedUID { show(look) }
         case let .status(status):
-            tracking = status.tracking
+            self.status = status
         case .other:
             break
         }

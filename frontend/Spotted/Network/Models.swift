@@ -318,8 +318,12 @@ struct RPCReply: Decodable, Hashable {
 /// POST /session/token body. The backend makes sure the identity starts with "phone-".
 struct TokenRequest: Codable, Hashable {
     var participantIdentity: String?
+    /// What to track, e.g. "electronics": SAM's labels are picked within it from the first frame.
+    /// nil: the backend's default ("small things to buy").
+    var category: String?
 
     enum CodingKeys: String, CodingKey {
+        case category
         case participantIdentity = "participant_identity"
     }
 }

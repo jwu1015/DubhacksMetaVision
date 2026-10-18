@@ -8,6 +8,8 @@ enum MockData {
     static let lamp = LiveObject(uid: "1.4", box: [0.720, 0.400, 0.930, 0.572], prompt: "lamp", score: 0.74,
                                  inView: true, lastSeenTs: 0)
     static let objects = ObjectsMessage(session: 1, ageMS: 0, objects: [chair, lamp])
+    static let status = StatusMessage(tracking: .ok, category: TrackingCategory.default.value,
+                                      prompts: ["chair", "lamp"])
     static let labels = [
         LabelMessage(uid: chair.uid, box: chair.box, name: "lounge chair", priceLow: 900, priceHigh: 1400),
         LabelMessage(uid: lamp.uid, box: lamp.box, name: "arc floor lamp", priceLow: 150, priceHigh: 250),

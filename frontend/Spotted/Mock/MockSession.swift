@@ -6,8 +6,10 @@ import Foundation
 final class MockSession: UpdateSource {
     var onUpdate: ((Update) -> Void)?
 
-    /// What joining the room sends first: the objects in view and their quick labels.
+    /// What joining the room sends first: the status (labels already picked), the objects in view and their
+    /// quick labels.
     func start() {
+        onUpdate?(.status(MockData.status))
         onUpdate?(.objects(MockData.objects))
         for label in MockData.labels { onUpdate?(.label(label)) }
     }

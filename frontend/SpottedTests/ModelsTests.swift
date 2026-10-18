@@ -111,6 +111,12 @@ final class ModelsTests: XCTestCase {
         XCTAssertTrue(done.ok)
     }
 
+    func testTokenRequestCarriesTheCategory() throws {
+        let body = try JSONEncoder().encode(TokenRequest(participantIdentity: "phone-1a2b", category: "electronics"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(json, ["participant_identity": "phone-1a2b", "category": "electronics"])
+    }
+
     func testTokenResponse() throws {
         let json = #"{"server_url": "wss://storefront.livekit.cloud", "participant_token": "eyJhbGciOi"}"#
         let token = try JSONDecoder().decode(TokenResponse.self, from: Data(json.utf8))

@@ -5,6 +5,7 @@ import SwiftUI
 struct StartView: View {
     @Environment(AppState.self) private var app
     @State private var source: CaptureMode = .phone
+    @State private var category = TrackingCategory.default
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +22,20 @@ struct StartView: View {
             }
             .padding(.horizontal, 32)
             Spacer()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("LOOK FOR")
+                    .font(.spottedCaption)
+                    .tracking(0.72)
+                    .foregroundStyle(.labelTertiary)
+                FlowLayout(spacing: 8) {
+                    ForEach(TrackingCategory.all) { option in
+                        CategoryChip(title: option.title, isSelected: option == category) { category = option }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
             VStack(spacing: 10) {
                 SourceRow(title: "Phone camera", detail: "The iPhone's back camera", icon: "icon-camera",
                           isSelected: source == .phone, isEnabled: true) { source = .phone }
@@ -36,7 +51,7 @@ struct StartView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
             VStack(spacing: 12) {
-                PrimaryButton(title: "Start streaming", height: 56) { app.startStreaming(from: source) }
+                PrimaryButton(title: "Start streaming", height: 56) { app.startStreaming(from: source, category: category.value) }
                 Text(server)
                     .font(.spottedFootnote)
                     .foregroundStyle(.labelTertiary)
@@ -63,6 +78,26 @@ struct StartView: View {
 
     private var server: String {
         AppConfig.baseURL?.host().map { "Connects to \($0)" } ?? "No backend set: demo data"
+    }
+}
+
+/// One category to track. The selected one is lime.
+private struct CategoryChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.spottedCallout)
+                .foregroundStyle(isSelected ? Color.onAccent : Color.labelPrimary)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(isSelected ? Color.accent : Color.surface, in: Capsule())
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

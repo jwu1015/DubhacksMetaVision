@@ -71,7 +71,7 @@ The backend keeps a scene memory of the last ~15 s, and the voice agent's ground
 **Room recap (optional):** when the user leaves a room, the phone shows "You looked at 4 things here", built from the captures. It's opt-in.
 
 ### Tap the live video
-1. The app opens on a start screen: pick the camera, then **Start streaming** joins the room and starts it.
+1. The app opens on a start screen: pick what to look for (Things to buy, Furniture, Electronics, Kitchen, Clothing, Decor) and the camera, then **Start streaming** joins the room and starts it. The category goes to the backend with `POST /session/token`; it picks SAM's labels within it from the first frame, and until `status.prompts` arrives the Live view shows "Finding electronics in view…".
 2. Each object's quick `label` (name and price estimate) pops up at the center of its box (01a). Objects without a label yet show nothing, and no box is drawn.
 3. Tapping a label calls `select`: the label turns lime → searching card (01b) → results (01).
 
@@ -427,7 +427,7 @@ Base URL: `https://dubhacks.tamkar.ai` by default, set in `Spotted.xcconfig`. Ov
 
 | Endpoint | Request | Response |
 |---|---|---|
-| `POST /session/token` | `TokenRequest` (`participant_identity`, optional) | `TokenResponse` (`server_url`, `participant_token`): a new room with the backend in it |
+| `POST /session/token` | `TokenRequest` (`participant_identity`, `category`; both optional) | `TokenResponse` (`server_url`, `participant_token`): a new room with the backend in it, tracking `category` |
 | `POST /checkout` | `CheckoutRequest` | `CheckoutResponse` (a stub for now) |
 
 ### The session's LiveKit room
