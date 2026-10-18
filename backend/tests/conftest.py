@@ -15,6 +15,7 @@ SETTINGS = (
 )
 
 os.environ["STOREFRONT_DOTENV"] = "0"  # config.py skips backend/.env
+os.environ["RECORD_ROOMS"] = "0"  # no recordings from the fake rooms
 for name in SETTINGS:
     os.environ.pop(name, None)
 logging.getLogger("storefront").setLevel(logging.CRITICAL)  # failure tests log expected warnings

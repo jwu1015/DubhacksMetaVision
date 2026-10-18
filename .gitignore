@@ -138,3 +138,4 @@ backend/logs/*
 # ---- Frontend local config (backend base URL is secret; repo is public) ----
 frontend/**/Config.xcconfig
 frontend/**/Config.swift
+backend/recordings/

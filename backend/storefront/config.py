@@ -53,5 +53,7 @@ def livekit_ready() -> bool:
 
 STATIC = ROOT / "static"
 UPLOADS = ROOT / "uploads"
+RECORDINGS = ROOT / "recordings"  # each session room, recorded (rtc/recorder.py)
+RECORD_ROOMS = _flag("RECORD_ROOMS", "true")
 LOGS = ROOT / "logs"
 FIXTURES = ROOT / "fixtures"

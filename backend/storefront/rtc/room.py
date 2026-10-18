@@ -31,6 +31,7 @@ from storefront import config
 from storefront.live.stream import Stream
 from storefront.pipeline.runner import Runner
 from storefront.rtc import tokens
+from storefront.rtc.recorder import Recorder
 
 log = logging.getLogger("storefront.room")
 
@@ -72,9 +73,11 @@ class Session:
         self._dispatch_id: str | None = None  # the voice agent's, while it's wanted
         self._grace: asyncio.Task | None = None
         self._tasks: set[asyncio.Task] = set()
+        self.recorder = Recorder(name) if config.RECORD_ROOMS else None  # every track, to recordings/<room>/
         room.on("participant_connected", self._on_join)
         room.on("participant_disconnected", self._on_leave)
         room.on("track_subscribed", self._on_track)
+        room.on("track_unsubscribed", self._on_untrack)
         for method, handler in (("select", self._select), ("mode", self._mode), ("pause", self._pause),
                                 ("category", self._category), ("voice", self._voice)):
             room.local_participant.register_rpc_method(method, self._rpc(handler))
@@ -127,9 +130,15 @@ class Session:
         await self.live.stop()
 
     def _on_track(self, track: rtc.Track, publication: rtc.RemoteTrackPublication, p: rtc.RemoteParticipant):
+        if self.recorder and track.kind in (rtc.TrackKind.KIND_VIDEO, rtc.TrackKind.KIND_AUDIO):
+            self._spawn(self.recorder.record(track, p.identity, to_image))
         if self.tracking and track.kind == rtc.TrackKind.KIND_VIDEO and is_phone(p):
             log.info("room %s: video from %s", self.name, p.identity)
             self._spawn(self._receive(track))
+
+    def _on_untrack(self, track: rtc.Track, publication: rtc.RemoteTrackPublication, p: rtc.RemoteParticipant):
+        if self.recorder:
+            self.recorder.stop(track)
 
     async def _receive(self, track: rtc.Track):
         video = rtc.VideoStream(track, format=rtc.VideoBufferType.RGBA)
@@ -225,6 +234,8 @@ class Session:
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self.recorder and self.recorder.parts:
+            await self.recorder.mux()
         try:
             await self.room.disconnect()
         except Exception as e:
