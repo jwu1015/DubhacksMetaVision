@@ -250,22 +250,12 @@ async def run_detect(data: bytes, hint=None, track_id: int | None = None) -> Det
     return resp
 
 
-def start_search(cap: Capture) -> asyncio.Task | None:
-    """Start the store search now, if the search stage exists. It needs only the crop and a label:
-    Lens on the crop, then Shopping and eBay from Lens's titles."""
-    search = stage("search")
-    if search is None:
-        return None
-    return asyncio.create_task(search.search_all(cap.segmentation.cutout_url, cap.item, capture_id=cap.capture_id))
-
-
 async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool = False) -> SearchResponse:
-    """The object is known (SAM first, or the user picked it): the store search starts right away on
-    its crop and label, while Claude describes it for ranking. on_crop: Claude was asked about the crop
-    itself; otherwise about the whole photo, and then about the crop if it looked at a different
-    object. Claude failing leaves the label."""
+    """The object is known (SAM first, or the user picked it): Claude describes it, then the store
+    search runs on Claude's queries (a label like "lamp" alone finds lamps, not this one). on_crop:
+    Claude was asked about the crop itself; otherwise about the whole photo, and then about the crop if
+    it looked at a different object. Claude failing leaves the label."""
     t0 = time.perf_counter()
-    products = start_search(cap)
     vision, segment = stage("vision"), stage("segment")
     sam_item = cap.item
     try:
@@ -281,7 +271,7 @@ async def describe_then_search(cap: Capture, claude: asyncio.Task, on_crop: bool
         log.warning("describe %s: Claude failed (%r); searching with SAM's label", cap.capture_id, e)
     log.info("describe %s: %dms category=%r queries=%s", cap.capture_id, ms_since(t0),
              cap.item.category, cap.item.search_queries)
-    return await compute_search(cap, products)
+    return await compute_search(cap)
 
 
 async def run_search(capture_id: str) -> SearchResponse:
@@ -307,12 +297,11 @@ async def run_search(capture_id: str) -> SearchResponse:
     return await compute_search(cap)
 
 
-async def compute_search(cap: Capture, products_task: asyncio.Task | None = None) -> SearchResponse:
+async def compute_search(cap: Capture) -> SearchResponse:
     """search -> rerank -> pricing + rank for one capture, with the finished item attached and the
-    result announced to the projector. products_task: a search already started (timing_ms["search"]
-    is then only the time left to wait for it)."""
+    result announced to the projector."""
     try:
-        resp = await search_pipeline(cap, products_task)
+        resp = await search_pipeline(cap)
     except Exception:
         announce(cap, "failed", message="Couldn't get prices for that one.")
         raise
@@ -321,7 +310,7 @@ async def compute_search(cap: Capture, products_task: asyncio.Task | None = None
     return resp
 
 
-async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> SearchResponse:
+async def search_pipeline(cap: Capture) -> SearchResponse:
     t0 = time.perf_counter()
     capture_id = cap.capture_id
     timing: dict[str, int] = {}
@@ -329,9 +318,7 @@ async def search_pipeline(cap: Capture, products_task: asyncio.Task | None) -> S
 
     search = stage("search")
     with timed(timing, "search"):
-        if products_task is not None:
-            products = await products_task
-        elif search:
+        if search:
             products = await search.search_all(cutout_url, cap.item, capture_id=capture_id)
         else:
             products = [Product.model_validate(p) for p in fixture("products_raw_lamp.json")]
