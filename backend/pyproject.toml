@@ -3,3 +3,9 @@ testpaths = ["tests"]
 pythonpath = [".", "tests"]
 markers = ["live: needs a real service (LiveKit Cloud, the GPU server); run with -m live"]
 addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.isort]
+known-first-party = ["storefront", "fakes"]

@@ -1,20 +1,15 @@
 """Mocked tests for rerank, pricing and rank. No network, no API key."""
 import asyncio
 import json
-import logging
 import unittest
 from unittest import mock
 
 import anthropic
 import httpx
 
-import config
-import pricing
-import rank
-import rerank
-from models import Item, PriceInsight, Product, SearchResponse
-
-logging.getLogger("gtl").setLevel(logging.ERROR)  # the failure tests log expected warnings
+from storefront import config
+from storefront.models import Item, PriceInsight, Product, SearchResponse
+from storefront.pipeline import pricing, rank, rerank
 
 
 def fixture(name: str):

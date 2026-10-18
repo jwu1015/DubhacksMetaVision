@@ -6,9 +6,17 @@ from pathlib import Path
 import httpx
 import pytest
 
-import search
-from models import Item, Product
-from search import dedupe, normalize_url, parse_amazon, parse_ebay, parse_lens, parse_price, parse_shopping
+from storefront.models import Item, Product
+from storefront.pipeline import search
+from storefront.pipeline.search import (
+    dedupe,
+    normalize_url,
+    parse_amazon,
+    parse_ebay,
+    parse_lens,
+    parse_price,
+    parse_shopping,
+)
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 
@@ -480,7 +488,7 @@ def test_serp_logs_serpapi_processing_time(monkeypatch, caplog, took, expected):
         finally:
             await client.aclose()
 
-    with caplog.at_level("INFO", logger="gtl.search"):
+    with caplog.at_level("INFO", logger="storefront.search"):
         asyncio.run(go())
     assert "search lens: " in caplog.text and expected in caplog.text
 

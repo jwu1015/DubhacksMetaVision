@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Get the Look · Live</title>
+<title>Storefront · Live</title>
 <style>
   :root {
     color-scheme: dark;
@@ -89,7 +89,7 @@
 <body>
 <div id="app">
   <main id="stage">
-    <img id="video" alt="">
+    <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay"></canvas>
     <div id="waiting">Waiting for video…</div>
     <div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting…</span></div>
@@ -102,6 +102,7 @@
     <div id="look-results"></div>
   </aside>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.3/dist/livekit-client.umd.js"></script>
 <script>
 "use strict";
 const stage = document.getElementById("stage");
@@ -119,15 +120,17 @@ const STALE_S = 10;       // the badge turns amber when the boxes are older than
 const DIM = 0.35;         // the other boxes, while one is picked
 const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font").trim();
 
-// Labels arrive every few seconds; between updates each box stays where it was last seen.
-const tracks = new Map(); // "epoch:id" -> {id, label, from, to, t0, born, gone}
-let epoch = 0;            // bumps when the tracking session restarts (its ids restart)
-let lastFrameIdx = -1;
+// Boxes arrive a few times a second; between updates each box stays where it was last seen.
+const tracks = new Map(); // uid -> {uid, label, from, to, t0, born, gone}
+const names = new Map();  // uid -> its quick label: {name, price_low, price_high}
 let updatedAt = null;     // performance.now() when the frame behind the latest boxes was captured
 let count = 0;
 let tracking = "connecting";
 
-function color(id) { return "hsl(" + Math.round((id * 137.508) % 360) + ", 90%, 62%)"; }
+function color(uid) {     // uid "<session>.<id>": a color per SAM id
+  const id = Number(uid.split(".").pop()) || 0;
+  return "hsl(" + Math.round((id * 137.508) % 360) + ", 90%, 62%)";
+}
 function ease(k) { return 1 - Math.pow(1 - k, 3); }
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ""; }
 
@@ -147,36 +150,36 @@ function fadeAll(now) {
 
 function onObjects(ev) {
   const now = performance.now();
-  if (ev.frame_idx < lastFrameIdx) { fadeAll(now); epoch++; }
-  lastFrameIdx = ev.frame_idx;
+  if (!ev.objects.length) { fadeAll(now); names.clear(); updatedAt = null; return; } // tracking restarted
   updatedAt = now - ev.age_ms;
-  const inView = ev.objects.filter((o) => o.in_view !== false); // scene memory also lists objects that left
+  const inView = ev.objects.filter((o) => o.in_view); // scene memory also lists objects that left
   count = inView.length;
   const seen = new Set();
   for (const o of inView) {
-    const key = epoch + ":" + o.id;
-    const box = [o.box.x, o.box.y, o.box.w, o.box.h];
-    const t = tracks.get(key);
-    seen.add(key);
+    const [x1, y1, x2, y2] = o.box, box = [x1, y1, x2 - x1, y2 - y1];
+    const t = tracks.get(o.uid);
+    seen.add(o.uid);
     if (t) {
       t.from = boxAt(t, now);
       t.born = now - alphaAt(t, now) * FADE_IN_MS; // fading out: fade back in from where it is
-      t.to = box; t.t0 = now; t.gone = null; t.label = o.label;
+      t.to = box; t.t0 = now; t.gone = null; t.label = o.prompt;
     } else {
-      tracks.set(key, { id: o.id, label: o.label, from: box, to: box, t0: now, born: now, gone: null });
+      tracks.set(o.uid, { uid: o.uid, label: o.prompt, from: box, to: box, t0: now, born: now, gone: null });
     }
   }
-  for (const [key, t] of tracks) if (!seen.has(key) && t.gone === null) t.gone = now;
+  for (const [uid, t] of tracks) if (!seen.has(uid) && t.gone === null) t.gone = now;
 }
 
 function handle(ev) {
   if (ev.type === "objects") {
     onObjects(ev);
+  } else if (ev.type === "label") {
+    names.set(ev.uid, ev);
   } else if (ev.type === "status") {
     tracking = ev.tracking;
-    if (tracking === "stopped") { fadeAll(performance.now()); updatedAt = null; lastFrameIdx = -1; epoch++; }
-  } else if (ev.type === "look") {
-    onLook(ev);
+    if (tracking === "stopped") { fadeAll(performance.now()); names.clear(); updatedAt = null; }
+  } else if (ev.type === "look" && ev.selected) {
+    showLook(ev);
   }
 }
 
@@ -191,39 +194,29 @@ const statusEl = document.getElementById("look-status");
 const resultsEl = document.getElementById("look-results");
 const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
 const EXACT = 85;         // match_score from here up is an "Exact match"
-let look = null;          // the Look on the panel: {capture_id, key ("epoch:id" of its box, or null), name, price}
+let look = null;          // the Look on the panel: {look_id, uid, name, price}
+const picks = new Set();  // look_ids of every pick so far: the newest one is on the panel
 
-function onLook(ev) {
-  if (ev.stage === "detected" || ev.stage === "nothing") { // a new Look
-    const found = ev.stage === "detected";
-    look = { capture_id: ev.capture_id, key: found && ev.track_id != null ? epoch + ":" + ev.track_id : null,
-             name: cap(ev.label), price: null };
-    panel.hidden = false;
-    crop.hidden = !found;
-    if (found && cropImg.getAttribute("src") !== "/" + ev.cutout_path) cropImg.src = "/" + ev.cutout_path;
-    nameEl.textContent = found ? look.name : "No product spotted";
-    descEl.textContent = "";
-    setStatus(found ? "Finding prices…" : ev.quick_phrase, found ? "busy" : "");
-    resultsEl.replaceChildren();
-    return;
-  }
-  if (!look || ev.capture_id !== look.capture_id) return; // an older Look, already replaced
-  if (ev.stage === "described") {
-    describe(ev.item);
-  } else if (ev.stage === "results") {
-    if (ev.search.item) describe(ev.search.item);
+// Each "look" message carries the whole Look so far, so the panel is drawn from it alone.
+function showLook(ev) {
+  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the panel
+  else if (!look || ev.look_id !== look.look_id) return; // an older pick, already replaced
+  look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label), price: null };
+  panel.hidden = false;
+  crop.hidden = !ev.crop_url;
+  if (ev.crop_url && cropImg.getAttribute("src") !== ev.crop_url) cropImg.src = ev.crop_url;
+  nameEl.textContent = look.name;
+  descEl.textContent = (ev.item && ev.item.description) || "";
+  resultsEl.replaceChildren();
+  if (ev.stage === "results") {
     look.price = ev.search.best_match ? money(ev.search.best_match) : null;
     setStatus("", "");
     showResults(ev.search);
   } else if (ev.stage === "failed") {
     setStatus(ev.message || "Couldn't get prices.", "error");
+  } else {
+    setStatus("Finding prices…", "busy");
   }
-}
-
-function describe(item) {
-  if (item.category) look.name = cap(item.category);
-  nameEl.textContent = look.name;
-  descEl.textContent = item.description || "";
 }
 
 function setStatus(text, cls) {
@@ -298,6 +291,10 @@ function thumb(src) {
   return box;
 }
 
+function priceRange(q) {
+  return q.price_low === q.price_high ? "$" + q.price_low : "$" + q.price_low + "–" + q.price_high;
+}
+
 function money(p) {
   const digits = Number.isInteger(p.price) || p.price >= 100 ? 0 : 2;
   try {
@@ -322,7 +319,7 @@ function resize() {
 }
 
 function videoRect() {
-  const iw = video.naturalWidth, ih = video.naturalHeight;
+  const iw = video.videoWidth, ih = video.videoHeight;
   if (!iw || !ih) return null;
   const s = Math.min(cw / iw, ch / ih), w = iw * s, h = ih * s;
   return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
@@ -342,7 +339,7 @@ function roundRect(x, y, w, h, r) {
 // picked: the label of the box the user picked (drawn thicker, with a glow), else undefined
 function drawTrack(t, b, alpha, v, font, line, picked) {
   const x = v.x + b[0] * v.w, y = v.y + b[1] * v.h, w = b[2] * v.w, h = b[3] * v.h;
-  const c = color(t.id);
+  const c = color(t.uid);
   if (picked) line *= 2;
   ctx.globalAlpha = alpha;
   roundRect(x, y, w, h, Math.min(14, w / 4, h / 4));
@@ -355,7 +352,8 @@ function drawTrack(t, b, alpha, v, font, line, picked) {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  const text = picked || cap(t.label) + "  #" + t.id;
+  const q = names.get(t.uid);
+  const text = picked || (q ? cap(q.name) + "  ·  " + priceRange(q) : cap(t.label));
   ctx.font = "700 " + font + "px " + FONT;
   const pad = font * 0.4, tw = ctx.measureText(text).width + pad * 2, th = font * 1.4;
   const lx = Math.max(v.x, Math.min(x - line / 2, v.x + v.w - tw));
@@ -397,7 +395,7 @@ function draw() {
     const font = Math.round(Math.max(18, Math.min(v.h * 0.045, 56)));
     const line = Math.max(3, Math.round(v.h * 0.005));
     for (const [key, t] of tracks) if (t.gone !== null && alphaAt(t, now) <= 0) tracks.delete(key);
-    const picked = look && look.key ? tracks.get(look.key) : undefined;
+    const picked = look ? tracks.get(look.uid) : undefined;
     for (const t of tracks.values()) {
       if (t !== picked) drawTrack(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, line);
     }
@@ -410,37 +408,65 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-// ---------- connections ----------
+// ---------- the session's LiveKit room, watch only ----------
 
-function reloadVideo() { video.src = "video.mjpg?t=" + Date.now(); }
-video.onerror = () => setTimeout(reloadVideo, 1000);
+const LK = LivekitClient;
+const TOPIC = "updates";   // the backend's messages: data packets, and text streams for "look"
+const BACKEND = "vision";  // its identity in the room
+let room = null;
 
-let retryMs = 500, opened = false;
-
-function connect() {
-  const url = new URL("events", location.href);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.search = url.hash = "";
-  const ws = new WebSocket(url.href);
-  ws.onopen = () => {
-    retryMs = 500;
-    if (opened) reloadVideo(); // the server came back: the old video connection is gone too
-    opened = true;
-  };
-  ws.onmessage = (e) => {
-    let ev;
-    try { ev = JSON.parse(e.data); } catch (err) { return; }
-    handle(ev);
-  };
-  ws.onclose = () => {
-    tracking = "connecting";
-    setTimeout(connect, retryMs);
-    retryMs = Math.min(retryMs * 2, 5000);
-  };
+function clearVideo() {
+  video.srcObject = null;
+  video.removeAttribute("src");
 }
 
-reloadVideo();
-connect();
+async function join() {
+  tracking = "connecting";
+  let token;
+  try {
+    const r = await fetch("viewer-token", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status === 404 ? "no session yet" : "HTTP " + r.status);
+    token = await r.json();
+  } catch (err) {
+    setTimeout(join, 2000);  // no session yet, or the server is restarting
+    return;
+  }
+  room = new LK.Room();
+  room.on(LK.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+    if (track.kind === "video" && participant.identity.startsWith("phone-")) track.attach(video);
+  });
+  room.on(LK.RoomEvent.TrackUnsubscribed, (track) => { track.detach(video); clearVideo(); });
+  room.on(LK.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+    if (topic !== TOPIC || !participant || participant.identity !== BACKEND) return;
+    try { handle(JSON.parse(new TextDecoder().decode(payload))); } catch (err) { /* not a message */ }
+  });
+  room.registerTextStreamHandler(TOPIC, async (reader, from) => {
+    if (from.identity !== BACKEND) return;
+    try { handle(JSON.parse(await reader.readAll())); } catch (err) { /* not a message */ }
+  });
+  room.on(LK.RoomEvent.ParticipantDisconnected, (p) => { if (p.identity === BACKEND) leave(); }); // a new session
+  room.on(LK.RoomEvent.Disconnected, leave);
+  try {
+    await room.connect(token.server_url, token.participant_token);
+  } catch (err) {
+    leave();
+  }
+}
+
+function leave() {
+  if (!room) return;
+  const old = room;
+  room = null;
+  old.removeAllListeners();
+  old.disconnect();
+  clearVideo();
+  fadeAll(performance.now());
+  names.clear();
+  updatedAt = null;
+  setTimeout(join, 1000);
+}
+
+join();
 requestAnimationFrame(draw);
 </script>
 </body>

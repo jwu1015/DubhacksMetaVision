@@ -3,37 +3,35 @@ import asyncio
 import io
 import json
 import logging
-import tempfile
 import time
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import httpx
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from PIL import Image
 
-import config
-import stream
-import tracker
 from fakes.frames import image
-from fakes.tracking import fake_server, make_video
-from models import BBox
-from stream import FileSource, Stream, WebcamSource
-from tracker import Tracker
-
-logging.getLogger("gtl").setLevel(logging.CRITICAL)  # the failure tests log expected warnings
+from fakes.tracking import fake_server
+from storefront import config
+from storefront.live import labels, tracker
+from storefront.live.stream import Stream
+from storefront.live.tracker import Tracker
+from storefront.models import BBox
 
 BASE = "http://sam.test/inference"
 HEADERS = {"CF-Access-Client-Id": "test-id", "CF-Access-Client-Secret": "test-secret"}
 
 
+async def lamp_prompts(image, category) -> list[str]:
+    return ["lamp"]
+
+
 def setUpModule():
-    # Fake credentials, and no real server: nothing here may reach the shared GPU or print the token.
-    for name, value in (("CF_ACCESS_CLIENT_ID", "test-id"), ("CF_ACCESS_CLIENT_SECRET", "test-secret"),
-                        ("MODEL_SERVICE_URL", "")):
-        patcher = mock.patch.object(config, name, value)
+    # Fake credentials, no real server and no Claude: nothing here may reach the shared GPU or print the token.
+    for target, name, value in ((config, "CF_ACCESS_CLIENT_ID", "test-id"),
+                                (config, "CF_ACCESS_CLIENT_SECRET", "test-secret"), (config, "MODEL_SERVICE_URL", ""),
+                                (labels, "labels_or_fallback", lamp_prompts)):
+        patcher = mock.patch.object(target, name, value)
         patcher.start()
         unittest.addModuleCleanup(patcher.stop)
 
@@ -71,7 +69,17 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
             "frame_idx": 0, "width": img.width, "height": img.height,
             "objects": [{"id": 7, "score": 0.9, "box": [0, 0, img.width / 2, img.height / 2], "prompt": "sofa"}]})
 
-    def tracker(self, handler=None, base_url: str = BASE) -> Tracker:
+    def tracker(self, handler=None, base_url: str = BASE, picked=("sofa",)) -> Tracker:
+        """A tracker against the fake API, with Claude's prompts faked: self.picks records each call, in
+        order with the server's requests."""
+        self.picks = []
+
+        async def fake_labels(image, category):
+            self.picks.append((image.size, category, len(self.requests)))  # how many requests went before
+            return list(picked)
+        patcher = mock.patch("storefront.live.labels.labels_or_fallback", fake_labels)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         # follow_redirects=True like net.client(), so a request that forgets to turn it off would show.
         client = httpx.AsyncClient(transport=httpx.MockTransport(handler or self.handler), follow_redirects=True)
         self.addAsyncCleanup(client.aclose)
@@ -83,56 +91,32 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
     def calls(self) -> list[str]:
         return [f"{r.method} {r.url.path.removeprefix('/inference')}" for r in self.requests]
 
-    async def test_start_creates_a_session(self):
-        t = self.tracker()
-        self.assertTrue(await t.start())
-        self.assertEqual(t.session_id, "s1")
-        self.assertEqual(str(self.requests[0].url), f"{BASE}/session")
-        self.assertEqual(json.loads(self.requests[0].content), {"prompt": config.SAM_CATEGORIES})  # ours, as /detect
-        self.assertTrue(await t.start())  # already has one
-        self.assertEqual(self.calls(), ["POST /session"])
-
-    def auto_tracker(self, picked=("lamp", "rug")) -> tuple[Tracker, list]:
-        """A tracker without categories, with Claude's labels faked; picks records each call, in order
-        with the server's requests."""
-        picks = []
-
-        async def fake_labels(image, category):
-            picks.append((image.size, category, len(self.requests)))  # how many requests went before
-            return list(picked)
-        patcher = mock.patch("labels.labels_or_fallback", fake_labels)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        client = httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
-        self.addAsyncCleanup(client.aclose)
-        return Tracker(base_url=BASE, client=client, categories=""), picks
-
-    async def test_no_categories_waits_for_claudes_labels_from_the_first_frame(self):
-        t, picks = self.auto_tracker()
-        self.assertTrue(await t.start())
-        self.assertEqual((self.calls(), picks), ([], []))  # no frame yet: nothing to pick labels from
+    async def test_a_session_waits_for_claudes_prompts_from_its_first_frame(self):
+        t = self.tracker(picked=("lamp", "rug"))
         result = await t.send(image(320))
-        self.assertEqual(picks, [((320, 240), config.SAM_AUTO_CATEGORY, 0)])  # before any request
+        self.assertEqual(self.picks, [((320, 240), config.DEFAULT_CATEGORY, 0)])  # before any request
         self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame"])
         self.assertEqual(json.loads(self.requests[0].content), {"prompt": ["lamp", "rug"]})
-        self.assertEqual(result.objects[0].id, 7)
-        await t.send(image(320))  # same session: no new labels
-        self.assertEqual(len(picks), 1)
+        self.assertEqual((t.prompts, t.sessions, result.objects[0].uid), (["lamp", "rug"], 1, "1.7"))
+        await t.send(image(320))  # same session: no new prompts
+        self.assertEqual(len(self.picks), 1)
 
-    async def test_no_categories_picks_new_labels_for_a_new_session(self):
-        t, picks = self.auto_tracker()
+    async def test_a_new_session_picks_new_prompts_and_new_uids(self):
+        t = self.tracker()
+        t.category = "kitchen utensils"
         await t.send(image(320))
         self.replies = [404]  # expired
-        await t.send(image(320))
+        result = await t.send(image(320))
         self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame", "POST /session/s1/frame",
                                         "POST /session", "POST /session/s2/frame"])
-        self.assertEqual([p[2] for p in picks], [0, 3])  # each right before its session
+        self.assertEqual([(p[1], p[2]) for p in self.picks], [("kitchen utensils", 0), ("kitchen utensils", 3)])
+        self.assertEqual(result.objects[0].uid, "2.7")  # the new session's
 
     async def test_send_creates_the_session_if_needed(self):
         t = self.tracker()
         result = await t.send(image(320))
         self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame"])
-        self.assertEqual(result.objects[0].id, 7)
+        self.assertEqual(result.objects[0].uid, "1.7")
         self.assertEqual(self.requests[1].headers["content-type"], "image/jpeg")
 
     async def test_boxes_are_normalized_from_the_downscaled_jpeg(self):
@@ -153,9 +137,9 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
         result = await self.tracker(handler).send(image(1280, 720), captured_at=t0)
         self.assertEqual(sent, [("JPEG", (640, 360))])
         self.assertEqual((result.frame_idx, result.width, result.height, result.captured_at), (3, 640, 360, t0))
-        self.assertEqual([(o.id, o.label, o.box) for o in result.objects], [
-            (1, "sofa", BBox(x=0.1, y=0.1, w=0.4, h=0.4)),
-            (2, "object", BBox(x=0.0, y=0.0, w=1.0, h=1.0)),
+        self.assertEqual([(o.uid, o.label, o.box) for o in result.objects], [
+            ("1.1", "sofa", BBox(x=0.1, y=0.1, w=0.4, h=0.4)),
+            ("1.2", "object", BBox(x=0.0, y=0.0, w=1.0, h=1.0)),
         ])
         self.assertGreaterEqual(result.latency_ms, 0)
 
@@ -197,10 +181,9 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
             self.requests.append(request)
             raise httpx.ConnectError("refused")
         t = self.tracker(handler)
-        self.assertFalse(await t.start())
         for _ in range(3):
             self.assertIsNone(await t.send(image(320)))
-        self.assertEqual(self.sleeps, [2, 4, 8])  # start() counted as the first failure
+        self.assertEqual(self.sleeps, [1, 2, 4])
         self.assertIn("ConnectError", t.error)
 
     async def test_auth_failures_log_once_and_retry_slowly_without_redirects(self):
@@ -211,8 +194,7 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
                 self.requests.append(request)
                 return httpx.Response(status, headers={"Location": "https://login.test/cdn-cgi/access/login"})
             t = self.tracker(handler)
-            with self.assertLogs("gtl.tracker", logging.WARNING) as logs:
-                self.assertFalse(await t.start())
+            with self.assertLogs("storefront.tracker", logging.WARNING) as logs:
                 for _ in range(3):
                     self.assertIsNone(await t.send(image(320)))
             self.assertEqual(len(logs.records), 1, status)
@@ -250,10 +232,10 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_stop_deletes_the_session(self):
         t = self.tracker()
-        await t.start()
+        await t.send(image(320))
         await t.stop()
         await t.stop()  # nothing left to delete
-        self.assertEqual(self.calls(), ["POST /session", "DELETE /session/s1"])
+        self.assertEqual(self.calls(), ["POST /session", "POST /session/s1/frame", "DELETE /session/s1"])
         self.assertIsNone(t.session_id)
 
     async def test_stop_never_raises(self):
@@ -262,14 +244,13 @@ class TrackerTest(unittest.IsolatedAsyncioTestCase):
                 raise httpx.ConnectError("refused")
             return self.handler(request)
         t = self.tracker(handler)
-        await t.start()
+        await t.send(image(320))
         await t.stop()
         self.assertIsNone(t.session_id)
 
     async def test_headers_go_out_on_every_request(self):
         t = self.tracker()
         self.replies = [404]
-        await t.start()
         await t.send(image(320))
         await t.stop()
         self.assertEqual(len(self.requests), 5)
@@ -330,9 +311,9 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         await self.client.aclose()
 
     async def test_only_the_newest_frame_is_sent_and_never_two_at_once(self):
-        self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "stopped"})
+        self.assertEqual((await next_event(self.events, "status"))["tracking"], "stopped")
         await self.stream.start()
-        self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "starting"})
+        self.assertEqual((await next_event(self.events, "status"))["tracking"], "starting")
         self.stream.push_frame(image(101))
         self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 101)
         for w in (102, 103, 104):  # arrive while 101 is in flight
@@ -343,9 +324,9 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 104)  # 102 and 103 dropped
         self.gate.open.release()
         await next_event(self.events, "objects")
-        event = await next_event(self.events, "objects")
-        self.assertEqual(event["frame_idx"], 1)
-        self.assertEqual(event["width"], 104)
+        await next_event(self.events, "objects")
+        result = self.stream.latest_objects()
+        self.assertEqual((result.frame_idx, result.width), (1, 104))
         await asyncio.sleep(0.05)
         self.assertTrue(self.gate.arrived.empty())  # nothing new pushed: nothing sent
         self.assertEqual(self.gate.max_in_flight, 1)
@@ -357,15 +338,14 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.stream.push_frame(frame)
         self.gate.open.release()
         event = await next_event(self.events, "objects")
-        self.assertEqual(set(event), {"type", "frame_idx", "width", "height", "age_ms", "objects"})
+        self.assertEqual((set(event), event["session"]), ({"type", "session", "age_ms", "objects"}, 1))
         self.assertGreaterEqual(event["age_ms"], 0)
         [lamp] = [dict(o) for o in event["objects"]]
-        seen = lamp.pop("first_seen_ts")
-        self.assertEqual(lamp.pop("last_seen_ts"), seen)  # a first sighting
-        self.assertLess(abs(seen - time.time() * 1000), 5000)
-        self.assertEqual(lamp, {"id": 4, "label": "lamp", "score": 0.88, "box": {"x": 0.0, "y": 0.0, "w": 0.25, "h": 0.5},
-                                "in_view": True, "centered": 0.36, "seconds_viewed": 0.0})  # scene memory's fields
-        self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "ok"})
+        self.assertLess(abs(lamp.pop("last_seen_ts") - time.time() * 1000), 5000)
+        self.assertEqual(lamp, {"uid": "1.4", "box": [0.0, 0.0, 0.25, 0.5], "prompt": "lamp", "score": 0.88,
+                                "in_view": True})
+        self.assertEqual(await next_event(self.events, "status"),
+                         {"type": "status", "tracking": "ok", "category": config.DEFAULT_CATEGORY, "prompts": ["lamp"]})
 
         result = self.stream.latest_objects()
         self.assertEqual((result.frame_idx, result.objects[0].label), (0, "lamp"))
@@ -377,35 +357,27 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
 
         # A new subscriber starts with the current state.
         fresh = self.stream.subscribe()
-        self.assertEqual(await anext(fresh), {"type": "status", "tracking": "ok"})
+        self.assertEqual((await anext(fresh))["tracking"], "ok")
         self.assertEqual((await anext(fresh))["objects"], event["objects"])
         await fresh.aclose()
 
-    async def test_the_latest_look_is_replayed_to_new_subscribers(self):
-        def look(stage, capture_id):
-            return {"type": "look", "stage": stage, "capture_id": capture_id, "track_id": 4}
-        sent = [look("detected", "c_a"), look("described", "c_a"), look("detected", "c_b"),
-                look("results", "c_a"),  # the older Look finishing late
-                look("results", "c_b")]
+    async def test_new_subscribers_get_every_label_and_each_looks_latest_message(self):
+        def look(uid, stage):
+            return {"type": "look", "uid": uid, "stage": stage}
+        sent = [{"type": "label", "uid": "1.4", "name": "brass lamp"}, look("1.4", "started"), look("1.5", "started"),
+                look("1.4", "results")]
         await next_event(self.events, "status")  # subscribed from here on
-        for event in sent:
-            self.stream.publish(event)
+        for m in sent:
+            self.stream.publish(m)
         self.assertEqual([await anext(self.events) for _ in sent], sent)  # listening: everything, once
 
-        def replayed(event):
-            return {**event, "replay": True}
         fresh = self.stream.subscribe()
-        self.assertEqual(await anext(fresh), {"type": "status", "tracking": "stopped"})
-        self.assertEqual([await anext(fresh), await anext(fresh)],
-                         [replayed(look("detected", "c_b")), replayed(look("results", "c_b"))])
+        self.assertEqual((await anext(fresh))["tracking"], "stopped")
+        self.assertEqual([await anext(fresh) for _ in range(3)], [sent[0], look("1.4", "results"), look("1.5", "started")])
         await fresh.aclose()
-        self.assertNotIn("replay", self.stream._look[0])  # the marker is only on what's replayed
 
-        self.stream.publish(look("nothing", "c_c"))  # a photo with nothing to buy is a new Look too
-        fresh = self.stream.subscribe()
-        self.assertEqual([await anext(fresh), await anext(fresh)],
-                         [{"type": "status", "tracking": "stopped"}, replayed(look("nothing", "c_c"))])
-        await fresh.aclose()
+        await self.stream.reset()  # what was tracked is gone, and so are its labels and Looks
+        self.assertEqual(self.stream.snapshot()[1:], [])
 
     async def test_a_reset_forgets_everything_and_drops_answers_from_before(self):
         await self.stream.start()
@@ -413,7 +385,7 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 300)
         self.gate.open.release()
         await next_event(self.events, "objects")
-        self.assertEqual(set(self.stream.scene.tracks), {4})
+        self.assertEqual(set(self.stream.scene.tracks), {"1.4"})
         self.stream.push_frame(image(310))  # the old camera's last frame, in flight
         self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 310)
 
@@ -432,8 +404,8 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await asyncio.wait_for(self.gate.arrived.get(), 2), 320)
         self.gate.open.release()
         event = await next_event(self.events, "objects")
-        self.assertEqual([o["id"] for o in event["objects"]], [4])
-        self.assertEqual(self.gate.calls[-2:], ["POST /session", "POST /session/s1/frame"])  # a new session
+        self.assertEqual([o["uid"] for o in event["objects"]], ["2.4"])  # a new session, new uids
+        self.assertEqual(self.gate.calls[-2:], ["POST /session", "POST /session/s1/frame"])
 
     async def test_stop_purges_what_was_tracked(self):
         await self.stream.start()
@@ -453,11 +425,11 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         await self.stream.stop()
         self.assertEqual(self.gate.calls[-1], "DELETE /session/s1")
         self.assertIsNone(self.stream.latest_objects())
-        self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "ok"})
-        self.assertEqual(await next_event(self.events, "status"), {"type": "status", "tracking": "stopped"})
+        self.assertEqual((await next_event(self.events, "status"))["tracking"], "ok")
+        self.assertEqual((await next_event(self.events, "status"))["tracking"], "stopped")
         self.assertFalse(self.stream.running)
 
-    async def test_tracking_down_shows_offline_and_video_goes_on(self):
+    async def test_tracking_down_shows_offline_and_frames_still_arrive(self):
         async def down(request):
             raise httpx.ConnectError("refused")
         client = httpx.AsyncClient(transport=httpx.MockTransport(down))
@@ -467,205 +439,48 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         await s.start()
         s.push_frame(image(300))
         for state in ("starting", "offline"):  # first read after start(): the state then
-            self.assertEqual(await next_event(events, "status"), {"type": "status", "tracking": state})
+            self.assertEqual((await next_event(events, "status"))["tracking"], state)
         s.push_frame(image(310))
-        video = s.mjpeg()
-        self.assertIn(b"\xff\xd8", await anext(video))
-        await video.aclose()
+        self.assertEqual(s.latest_frame().width, 310)  # frames still arrive
         await s.stop()
         await events.aclose()
 
-    async def test_mjpeg_parts(self):
-        self.stream.push_frame(image(1600, 1200))
-        video = self.stream.mjpeg()
-        part = await anext(video)
-        head, _, rest = part.partition(b"\r\n\r\n")
-        self.assertEqual(head.split(b"\r\n")[:2], [b"--frame", b"Content-Type: image/jpeg"])
-        jpeg = rest[:-2]
-        self.assertEqual(head.split(b"\r\n")[2], b"Content-Length: %d" % len(jpeg))
-        self.assertEqual(Image.open(io.BytesIO(jpeg)).size, (1024, 768))
-        self.stream.push_frame(image(800, 600))
-        self.assertEqual(Image.open(io.BytesIO((await anext(video)).partition(b"\r\n\r\n")[2][:-2])).size, (800, 600))
-        await video.aclose()
 
-
-# ---------- frame sources ----------
-
-class Collector:
-    """Stands in for a Stream: records what a source pushes and when."""
-
-    def __init__(self):
-        self.frames: list[tuple[float, Image.Image]] = []
-
-    def push_frame(self, img):
-        self.frames.append((time.monotonic(), img))
-
-
-class SourceTest(unittest.IsolatedAsyncioTestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory()
-        cls.video = make_video(Path(cls.tmp.name) / "room.mp4", seconds=0.8, fps=15)  # 12 frames
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp.cleanup()
-
-    async def test_file_plays_at_its_frame_rate_without_blocking_the_loop(self):
-        out, gaps = Collector(), []
-
-        async def ticker():
-            while True:
-                t = time.monotonic()
-                await asyncio.sleep(0.005)
-                gaps.append(time.monotonic() - t)
-        tick = asyncio.create_task(ticker())
-        t0 = time.monotonic()
-        await FileSource(self.video, loop=False).run(out)
-        tick.cancel()
-        self.assertEqual(len(out.frames), 12)
-        self.assertEqual(out.frames[0][1].size, (320, 240))
-        self.assertEqual(out.frames[0][1].mode, "RGB")
-        self.assertGreater(out.frames[-1][0] - out.frames[0][0], 0.6)  # 11 frame gaps at 15 fps: 0.73s
-        self.assertLess(time.monotonic() - t0, 3)
-        self.assertLess(max(gaps), 0.1)
-
-    async def test_file_loops_until_cancelled(self):
-        out = Collector()
-        task = asyncio.create_task(FileSource(self.video).run(out))
-        await asyncio.sleep(1.2)
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
-        self.assertGreater(len(out.frames), 12)
-        n = len(out.frames)
-        await asyncio.sleep(0.2)
-        self.assertLessEqual(len(out.frames), n + 1)  # the decode thread stops too
-
-    async def test_a_bad_file_never_raises(self):
-        out = Collector()
-        await FileSource(Path(self.tmp.name) / "missing.mp4").run(out)
-        not_video = Path(self.tmp.name) / "notes.mp4"
-        not_video.write_text("not a video")
-        await FileSource(not_video).run(out)
-        self.assertEqual(out.frames, [])
-
-    def test_source_from(self):
-        self.assertIsInstance(stream.source_from("webcam"), WebcamSource)
-        with mock.patch.object(stream, "MEDIA", Path(self.tmp.name)):
-            self.assertEqual(stream.source_from(f"file:{self.video}").path, self.video.resolve())
-            for spec in ("file:config.py", f"file:{self.tmp.name}/../config.py", f"file:{self.tmp.name}/nope.mp4",
-                         "rtsp://cam", "file:"):
-                with self.assertRaises(Exception, msg=spec) as cm:
-                    stream.source_from(spec)
-                self.assertEqual(cm.exception.status_code, 400)
-
-
-# ---------- end to end: video file -> stream -> tracker -> fake server -> events ----------
+# ---------- end to end: frames -> stream -> tracker -> fake server -> events ----------
 
 class EndToEndTest(unittest.IsolatedAsyncioTestCase):
-    async def test_video_to_events_through_the_fake_server(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            video = make_video(Path(tmp) / "room.mp4", seconds=1.0, fps=30)
-            server = fake_server(latency=0.08)
-            client = httpx.AsyncClient(transport=httpx.ASGITransport(app=server))
-            s = Stream(Tracker(base_url="http://fake", client=client))
-            pushed = 0
-            push = s.push_frame
+    async def test_frames_to_events_through_the_fake_server(self):
+        server = fake_server(latency=0.08)
+        client = httpx.AsyncClient(transport=httpx.ASGITransport(app=server))
+        s = Stream(Tracker(base_url="http://fake", client=client))
+        pushed = 0
 
-            def counting_push(img):
-                nonlocal pushed
+        async def camera():  # 30 fps, like the phone
+            nonlocal pushed
+            while True:
+                s.push_frame(image(320, 240))
                 pushed += 1
-                push(img)
-            s.push_frame = counting_push
-            events = s.subscribe()
-            await s.start(FileSource(video))
-            got = []
-            async with asyncio.timeout(10):
-                while len(got) < 8:
-                    got.append(await next_event(events, "objects"))
-            self.assertEqual(len(server.state.sessions), 1)
-            await s.stop()
-            await events.aclose()
-            await client.aclose()
+                await asyncio.sleep(1 / 30)
+        events = s.subscribe()
+        await s.start()
+        frames = asyncio.create_task(camera())
+        got = []
+        async with asyncio.timeout(10):
+            while len(got) < 8:
+                got.append(await next_event(events, "objects"))
+        self.assertEqual(len(server.state.sessions), 1)
+        frames.cancel()
+        await s.stop()
+        await events.aclose()
+        await client.aclose()
 
         stats = server.state.stats
         self.assertEqual(stats["overlaps"], 0)
         self.assertEqual((stats["created"], stats["deleted"]), (1, 1))
         self.assertEqual(server.state.sessions, {})
         self.assertLess(stats["frames"], pushed / 2)  # most frames were skipped, not queued
-        self.assertEqual([e["frame_idx"] for e in got], list(range(8)))
-        labels = {o["id"]: o["label"] for e in got for o in e["objects"]}
-        self.assertEqual(labels, {1: "sofa", 2: "lamp", 3: "table"})  # ids stable, labels keyed by id
-        self.assertEqual(got[0]["width"], 320)
-        sofa = [next(o["box"] for o in e["objects"] if o["id"] == 1) for e in got]
-        self.assertGreater(len({b["x"] for b in sofa}), 1)  # it moves
-        self.assertTrue(all(0 <= b["x"] and b["x"] + b["w"] <= 1 for b in sofa))
-
-
-# ---------- routes ----------
-
-class RouteTest(unittest.TestCase):
-    def setUp(self):
-        self.calls: list[str] = []
-
-        def handler(request):
-            self.calls.append(f"{request.method} {request.url.path.removeprefix('/inference')}")
-            if request.method == "DELETE":
-                return httpx.Response(200, json={"deleted": "s1"})
-            if request.url.path.endswith("/frame"):
-                return httpx.Response(200, json={"frame_idx": 0, "width": 320, "height": 240, "objects": []})
-            return httpx.Response(200, json={"session_id": "s1", "prompt": ["sofa"]})
-        self.live = Stream(Tracker(base_url=BASE, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))))
-        patcher = mock.patch.object(stream, "live", self.live)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        app = FastAPI()
-        app.include_router(stream.router)
-        self.app = app
-
-    def client(self, host: str = "127.0.0.1") -> TestClient:
-        return TestClient(self.app, client=(host, 50000))
-
-    def test_viewer_page(self):
-        with self.client() as c:
-            r = c.get("/stream/viewer")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("text/html", r.headers["content-type"])
-        for needle in ('"video.mjpg', 'new URL("events"', 'id="look"'):
-            self.assertIn(needle, r.text)
-
-    def test_events_start_with_the_current_state(self):
-        with self.client() as c, c.websocket_connect("/stream/events") as ws:
-            self.assertEqual(ws.receive_json(), {"type": "status", "tracking": "stopped"})
-
-    def test_start_and_stop(self):
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(stream, "MEDIA", Path(tmp)):
-            video = make_video(Path(tmp) / "room.mp4", seconds=0.5)
-            with self.client() as c, c.websocket_connect("/stream/events") as ws:
-                self.assertEqual(ws.receive_json()["tracking"], "stopped")
-                r = c.post("/stream/start", json={"source": f"file:{video}"})
-                self.assertEqual((r.status_code, r.json()), (200, {"tracking": "starting"}))
-                self.assertEqual(ws.receive_json(), {"type": "status", "tracking": "starting"})
-                r = c.post("/stream/stop")
-                self.assertEqual((r.status_code, r.json()), (200, {"tracking": "stopped"}))
-                events = [ws.receive_json()]
-                while events[-1] != {"type": "status", "tracking": "stopped"}:
-                    events.append(ws.receive_json())
-                self.assertTrue(all(e["type"] in ("objects", "status") for e in events))
-        self.assertEqual(self.calls[0], "POST /session")
-        self.assertEqual(self.calls[-1], "DELETE /session/s1")
-
-    def test_start_rejects_other_files(self):
-        with self.client() as c:
-            for source in ("file:config.py", "file:/etc/hosts", "http://example.com/a.mp4"):
-                self.assertEqual(c.post("/stream/start", json={"source": source}).status_code, 400, source)
-        self.assertFalse(self.live.running)
-
-    def test_test_routes_are_local_only(self):
-        with self.client("203.0.113.9") as c:
-            self.assertEqual(c.post("/stream/stop").status_code, 403)
-        with self.client() as c:  # a tunnel connects from localhost but says who it forwards for
-            self.assertEqual(c.post("/stream/stop", headers={"X-Forwarded-For": "203.0.113.9"}).status_code, 403)
-            self.assertEqual(c.post("/stream/start", json={"source": "webcam"},
-                                    headers={"X-Forwarded-For": "203.0.113.9"}).status_code, 403)
-        self.assertFalse(self.live.running)
+        prompts = {o["uid"]: o["prompt"] for e in got for o in e["objects"]}
+        self.assertEqual(prompts, {"1.1": "sofa", "1.2": "lamp", "1.3": "table"})  # uids stable, prompts keyed by uid
+        sofa = [next(o["box"] for o in e["objects"] if o["uid"] == "1.1") for e in got]
+        self.assertGreater(len({b[0] for b in sofa}), 1)  # it moves
+        self.assertTrue(all(0 <= x1 < x2 <= 1 for x1, _, x2, _ in sofa))
