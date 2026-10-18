@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the backend (main.py) on the GPU box next to the segmentation server, behind its own Cloudflare tunnel.
+# Run the backend (storefront.app) on the GPU box next to the segmentation server, behind its own Cloudflare tunnel.
 # The backend reaches the segmentation server over localhost, so it skips its tunnel and Cloudflare Access.
 # Usage: ./deploy.sh [--restart]
 #   --restart  kill the existing session first (e.g. after pulling new code)
@@ -77,11 +77,11 @@ else
     [ -n "$PUBLIC_URL" ] || echo "warning: no quick-tunnel URL after 30s; see $TUNNEL_LOG" >&2
 fi
 
-# Real environment variables win over backend/.env (config.py), so these overrides stick
+# Real environment variables win over backend/.env (storefront/config.py), so these overrides stick
 OVERRIDES="MODEL_SERVICE_URL='$SEG_URL' CF_ACCESS_CLIENT_ID= CF_ACCESS_CLIENT_SECRET="
 [ -n "$PUBLIC_URL" ] && OVERRIDES="$OVERRIDES PUBLIC_BASE_URL='$PUBLIC_URL'"
 tmux new-window -t "$SESSION" -n server
-tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' && ${EXTRA_ENV}$OVERRIDES uvicorn main:app --host 127.0.0.1 --port $BACKEND_PORT --timeout-graceful-shutdown 1" Enter
+tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' && ${EXTRA_ENV}$OVERRIDES uvicorn storefront.app:app --host 127.0.0.1 --port $BACKEND_PORT --timeout-graceful-shutdown 1" Enter
 
 echo "Started backend on 127.0.0.1:$BACKEND_PORT -> segmentation at $SEG_URL (attach: tmux attach -t $SESSION)"
 echo "Public URL: ${PUBLIC_URL:-unknown}"
