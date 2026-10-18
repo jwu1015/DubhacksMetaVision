@@ -1,10 +1,10 @@
 // Shared build settings for the Spotted app target. Committed.
 //
-// The backend's base URL. The default is the laptop on the phone's hotspot; to use another backend
-// (an ngrok URL, say), copy Config.example.xcconfig to the untracked Config.xcconfig and set it there.
-// "//" starts a comment in xcconfig files, so write the scheme as http:/$()/
+// The backend's base URL. To use another backend (a laptop or an ngrok URL, say), copy
+// Config.example.xcconfig to the untracked Config.xcconfig and set it there.
+// "//" starts a comment in xcconfig files, so write the scheme as https:/$()/
 
-API_BASE_URL = http:/$()/172.20.10.2:8001
+API_BASE_URL = https:/$()/dubhacks.tamkar.ai
 
 // Meta Wearables DAT. Leave empty while the glasses are in Developer Mode (Meta AI app > your
 // glasses > Developer Mode); set both from the Wearables Developer Center for release.
