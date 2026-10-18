@@ -17,14 +17,20 @@ struct SavedView: View {
                         Text("Saved")
                             .font(.spottedLargeTitle)
                             .foregroundStyle(.labelPrimary)
-                        Text("\(app.saved.count) things you spotted this week")
+                        Text(app.saved.isEmpty
+                             ? "Nothing saved yet"
+                             : "\(app.saved.count) \(app.saved.count == 1 ? "thing" : "things") you spotted this week")
                             .font(.spottedSubhead)
                             .foregroundStyle(.labelSecondary)
                     }
 
                     SegmentedControl(options: Segment.allCases, title: \.rawValue, selection: $segment)
 
-                    if segment == .saved {
+                    if segment == .saved, app.saved.isEmpty {
+                        Text("Tap the bookmark on anything you spot to keep it here.")
+                            .font(.spottedSubhead)
+                            .foregroundStyle(.labelSecondary)
+                    } else if segment == .saved {
                         ForEach(app.rooms) { room in
                             let items = app.items(in: room)
                             if !items.isEmpty {

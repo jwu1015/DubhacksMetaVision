@@ -36,8 +36,10 @@ final class AppState {
 
     // Saved + cart
     var rooms = MockData.rooms
-    var saved = MockData.saved
-    var cart = MockData.cart
+    // Start empty so a first scan behaves like a real first run. The Saved, Cart and Checkout
+    // mockup frames load the sample items (see show(_:)).
+    var saved: [SavedItem] = []
+    var cart: [CartItem] = []
     var agentLimit = AgentLimit(amount: 2000, cardLast4: "4242")
 
     static let taxRate = 0.1035
@@ -198,9 +200,14 @@ final class AppState {
             scan = .matched(MockData.detect, MockData.searchShoppingTimeout)
             detailTab = .used
             isShowingDetail = true
-        case .saved: tab = .saved
-        case .cart: tab = .cart
+        case .saved:
+            loadSampleItems()
+            tab = .saved
+        case .cart:
+            loadSampleItems()
+            tab = .cart
         case .checkout:
+            loadSampleItems()
             tab = .cart
             isShowingCheckout = true
         case .whichOne:
@@ -210,6 +217,12 @@ final class AppState {
             clearScan()
             connection = .disconnected
         }
+    }
+
+    /// The saved items and cart drawn in the 04 / 05 / 06 mockups.
+    private func loadSampleItems() {
+        saved = MockData.saved
+        cart = MockData.cart
     }
 }
 

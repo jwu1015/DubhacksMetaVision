@@ -179,7 +179,9 @@ struct ProductDetail: View {
     // MARK: - Bottom bar
 
     private func bottomBar(match: Product, search: SearchResponse) -> some View {
-        let newPrices = ([match] + search.dupes).filter { !$0.isUsed && $0.isExactMatch }.map(\.price)
+        // Compare against every new listing, dupes included, so "lowest new" is never claimed
+        // while a cheaper new option is one tab away.
+        let newPrices = ([match] + search.dupes).filter { !$0.isUsed }.map(\.price)
         let isLowestNew = !match.isUsed && match.price <= (newPrices.min() ?? match.price)
 
         return HStack(spacing: 10) {
