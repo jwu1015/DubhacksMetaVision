@@ -3,7 +3,7 @@
 # The backend reaches the segmentation server over localhost, so it skips its tunnel and Cloudflare Access.
 # Usage: ./deploy.sh [--restart]
 #   --restart  kill the existing session first (e.g. after pulling new code)
-# Attach with: tmux attach -t backend   (windows: tunnel unless shared, server; detach: Ctrl-b d)
+# Attach with: tmux attach -t backend   (windows: tunnel unless shared, server, voice; detach: Ctrl-b d)
 #
 # Settings come from backend/.env as usual (ANTHROPIC_API_KEY, SERPAPI_KEY, ...). This script overrides
 # MODEL_SERVICE_URL and clears CF_ACCESS_CLIENT_ID/SECRET. Tunnel:
@@ -13,6 +13,8 @@
 #     (CF_TUNNEL_TOKEN, run_tmux.sh) also routes to http://localhost:$BACKEND_PORT. Add that route in the
 #     Cloudflare dashboard and keep Cloudflare Access off it; set PUBLIC_BASE_URL to its public URL.
 #   otherwise -> a quick tunnel (https://<random>.trycloudflare.com, new on every start), used as PUBLIC_BASE_URL.
+# Voice: with GOOGLE_API_KEY and LIVEKIT_URL in backend/.env, the voice agent's worker (storefront.voice.agent)
+#   runs too, in the voice window.
 
 SESSION="${SESSION:-backend}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -93,6 +95,16 @@ OVERRIDES="MODEL_SERVICE_URL='$SEG_URL' CF_ACCESS_CLIENT_ID= CF_ACCESS_CLIENT_SE
 [ -n "$PUBLIC_URL" ] && OVERRIDES="$OVERRIDES PUBLIC_BASE_URL='$PUBLIC_URL'"
 tmux list-windows -t "$SESSION" -F '#W' | grep -qx server || tmux new-window -t "$SESSION" -n server
 tmux send-keys -t "$SESSION:server" "cd '$DIR' && source '$VENV/bin/activate' && ${EXTRA_ENV}$OVERRIDES uvicorn storefront.app:app --host 127.0.0.1 --port $BACKEND_PORT --timeout-graceful-shutdown 1" Enter
+
+# The worker waits for the backend to send for it (voice on, in the app), so it runs all the time; Gemini only
+# runs while voice is on. It restarts if it exits.
+if [ -n "$(env_value "$ENV_FILE" GOOGLE_API_KEY)" ] && [ -n "$(env_value "$ENV_FILE" LIVEKIT_URL)" ]; then
+    tmux new-window -t "$SESSION" -n voice
+    tmux send-keys -t "$SESSION:voice" "cd '$DIR' && source '$VENV/bin/activate' && while true; do python -m storefront.voice.agent start; echo 'voice agent exited; restarting in 3s'; sleep 3; done" Enter
+    echo "Started the voice agent (window '$SESSION:voice')"
+else
+    echo "warning: no voice agent: GOOGLE_API_KEY and LIVEKIT_URL must be set in backend/.env" >&2
+fi
 
 echo "Started backend on 127.0.0.1:$BACKEND_PORT -> segmentation at $SEG_URL (attach: tmux attach -t $SESSION)"
 echo "Public URL: ${PUBLIC_URL:-unknown}"
