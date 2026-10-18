@@ -8,7 +8,8 @@ as an "objects" event, listing every object scene memory holds, those in view fi
 
     {"type": "objects", "frame_idx", "width", "height", "age_ms",
      "objects": [{"id", "label", "score", "box": {"x", "y", "w", "h"},       (box normalized 0-1)
-                  "in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts"}]}
+                  "in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts",
+                  "name", "price_low", "price_high"}]}      (the last three: prefetch.py's quick label, once known)
 
 When the stream stops or resets (pause, camera switch, disconnect), what was tracked is purged, and an
 "objects" event with no objects says so.
@@ -78,6 +79,11 @@ class Stream:
         self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
         self.scene = Scene()
         self._epoch = 0  # bumps when what was tracked is purged: answers to frames sent before are dropped
+        # Set by main.py (prefetch.py): told about every tracking result and every purge, and adds fields to
+        # each object sent out.
+        self.on_objects: Callable[[TrackResult, Image.Image], None] | None = None
+        self.object_fields: Callable[[int], dict] | None = None
+        self.on_purge: Callable[[], None] | None = None
 
     # ---------- frames in, results out ----------
 
@@ -137,6 +143,11 @@ class Stream:
         self._epoch += 1
         self.scene.clear()
         self._result = self._tracked = self._frame = self._jpeg = None
+        if self.on_purge:
+            try:
+                self.on_purge()
+            except Exception:  # a purge never fails
+                log.exception("stream: on_purge failed")
         if had:  # subscribers drop their boxes and memory too
             self.publish({"type": "objects", "frame_idx": 0, "width": 0, "height": 0, "age_ms": 0, "objects": []})
 
@@ -158,6 +169,11 @@ class Stream:
             if result and epoch == self._epoch:
                 self._result, self._tracked = result, frame
                 self.scene.update(result, frame.image)
+                if self.on_objects:
+                    try:
+                        self.on_objects(result, frame.image)
+                    except Exception:  # labels and prefetching must never stop tracking
+                        log.exception("stream: on_objects failed")
                 self.publish(self._objects_event())
             self._publish_status()
 
@@ -176,10 +192,13 @@ class Stream:
 
     def _objects_event(self) -> dict:
         r = self._result
+        objects = self.scene.objects()
+        if self.object_fields:
+            objects = [o | self.object_fields(o["id"]) for o in objects]
         return {
             "type": "objects", "frame_idx": r.frame_idx, "width": r.width, "height": r.height,
             "age_ms": round((time.time() - r.captured_at) * 1000),  # how old the frame these boxes describe is
-            "objects": self.scene.objects(),
+            "objects": objects,
         }
 
     def _publish_status(self):
