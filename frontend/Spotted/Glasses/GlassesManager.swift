@@ -142,6 +142,7 @@ final class GlassesManager {
                 }.store(in: tokens)
                 session.errorPublisher.listen { [weak self] error in
                     let message = error.localizedDescription
+                    log.error("Glasses session error: \(String(describing: error), privacy: .public)")
                     Task { @MainActor in self?.errorMessage = message }
                 }.store(in: tokens)
                 try session.start()
@@ -182,6 +183,7 @@ final class GlassesManager {
             }.store(in: tokens)
             stream.errorPublisher.listen { [weak self] error in
                 let message = error.localizedDescription
+                log.error("Glasses stream error: \(String(describing: error), privacy: .public)")
                 Task { @MainActor in self?.camera = .failed(message) }
             }.store(in: tokens)
             stream.videoFramePublisher.listen { [weak target] frame in
@@ -218,6 +220,7 @@ final class GlassesManager {
     }
 
     private func streamChanged(_ state: StreamState) {
+        log.info("Glasses stream: \(String(describing: state), privacy: .public)")
         switch state {
         case .streaming: camera = .streaming
         case .starting, .waitingForDevice: camera = .connecting

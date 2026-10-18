@@ -348,6 +348,13 @@ final class AppState {
         }
     }
 
+    /// Spoken feedback, through the phone camera's mode only. With the glasses as the source the audio
+    /// would play on them over the Bluetooth link their camera streams on, which can drop the stream.
+    private func say(_ text: String) {
+        guard captureMode == .phone else { return }
+        speaker.say(text)
+    }
+
     private func clearObjects() {
         objects = []
         labels = [:]
@@ -361,15 +368,15 @@ final class AppState {
         switch look.stage {
         case .started, .described:
             scan = .detected(look)
-            if previous == nil { speaker.say(look.quickPhrase) }
+            if previous == nil { say(look.quickPhrase) }
         case .results:
             guard let search = look.search else { return }
             scan = .matched(look, search)
-            if previous?.stage != .results { speaker.say(search.spokenSummary) }
+            if previous?.stage != .results { say(search.spokenSummary) }
         case .failed:
             let line = look.message ?? "Couldn't tell. Try again closer."
             scan = .failed(line)
-            speaker.say(line)
+            say(line)
         case .unknown:
             break
         }
@@ -381,10 +388,12 @@ final class AppState {
 
     /// Connect only while voice is in use: the app is in front and the Live view, the assistant
     /// sheet, results or the pay sheet is up. The mic is transcribed the whole time it's connected.
+    /// Never with the glasses as the source: their mic would open a Bluetooth audio link next to the
+    /// camera stream, which can drop it.
     func updateVoice(appIsActive: Bool) {
         guard let voice else { return }
         let inUse = tab == .live || isListening || isShowingDetail || isShowingCheckout || isShowingRoomRecap
-        appIsActive && inUse ? voice.connect() : voice.disconnect()
+        appIsActive && inUse && captureMode == .phone ? voice.connect() : voice.disconnect()
     }
 
     /// One action the assistant asks for through the "action" RPC. It waits at most 15 s for the reply.
