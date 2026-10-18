@@ -18,8 +18,10 @@ from pathlib import Path
 import anthropic
 from pydantic import BaseModel
 
-import config  # noqa: F401  loads .env before the Anthropic client reads ANTHROPIC_API_KEY
+import config  # loads .env before the Anthropic client reads ANTHROPIC_API_KEY
 import pricing
+import search
+from match import FOUND_SCORE  # the match score at which a result counts as the item itself
 from models import Item, PriceInsight, Product, SearchResponse
 
 log = logging.getLogger("gtl")
@@ -33,6 +35,8 @@ SUMMARY_WORDS = 29            # "under 30 words"
 MIN_SAMPLE = 4                # fewer comparable prices than this: no verdict
 FALLBACK_DUPE_SCORE = 70
 NOT_FOUND = "I couldn't find that one for sale."
+NOT_EXACT_REASON = "Closest match, not the exact item"
+USED_MATCH_REASON = "Same item, pre-owned or refurbished"
 DUPE_REASON, USED_REASON = "Similar look for less", "Pre-owned, similar look"
 FIELDS = {"title", "store", "price", "match_score", "source", "tier"}  # plus "id"
 
@@ -76,7 +80,8 @@ _client: anthropic.AsyncAnthropic | None = None
 def client() -> anthropic.AsyncAnthropic:
     global _client
     if _client is None:
-        _client = anthropic.AsyncAnthropic(max_retries=0)  # ask() retries once, within BUDGET_S
+        # ask() retries once, within BUDGET_S
+        _client = anthropic.AsyncAnthropic(max_retries=0, default_headers=config.ANTHROPIC_HEADERS)
     return _client
 
 
@@ -183,7 +188,8 @@ def template_summary(item: Item, best: Product | None, dupes: list[Product], use
         if not used:
             return NOT_FOUND
         return f"I found a used one on {used[0].store} for {round(used[0].price)} dollars."
-    text = (f"That's {a_or_an(best.store)} {best.store} {item.category or 'item'}, "
+    condition = ", used," if best.tier == "used" else ","
+    text = (f"That's {a_or_an(best.store)} {best.store} {item.category or 'item'}{condition} "
             f"about {round(best.price)} dollars.")
     if dupes:
         deal = cheapest(dupes)
@@ -191,6 +197,17 @@ def template_summary(item: Item, best: Product | None, dupes: list[Product], use
     elif used:
         text += f" There's a used one on {used[0].store} for {round(used[0].price)}."
     return text
+
+
+def closest_summary(item: Item, best: Product) -> str:
+    return (f"I couldn't find this exact one. The closest is {a_or_an(best.store)} {best.store} "
+            f"{item.category or 'item'} for about {round(best.price)} dollars.")
+
+
+def closest_text(insight: PriceInsight) -> str:
+    if insight.sample_size < MIN_SAMPLE:
+        return "Not the exact item."
+    return f"Not the exact item. Similar ones usually cost {usd(insight.typical_low)}–{usd(insight.typical_high)}."
 
 
 def verdict(best: Product | None, insight: PriceInsight) -> str:
@@ -240,6 +257,20 @@ def build(item: Item, products: list[Product], insight: PriceInsight, picks: Pic
     else:
         best = None
 
+    # Found means a match score of FOUND_SCORE or more (unscored products can't be checked, so they pass).
+    # Below it, the highest-scoring product is the match if it clears the bar, else it's only the closest.
+    exact = best is None or best.match_score is None or best.match_score >= FOUND_SCORE
+    if not exact:
+        top = max((p for p in new if p.match_score is not None), key=lambda p: p.match_score)
+        exact = top.match_score >= FOUND_SCORE
+        best = priced(top, "new", "Highest match score" if exact else NOT_EXACT_REASON, None)
+    if not exact:  # no new listing is the item, but a used or refurbished one may be: that's still found
+        found_used = max((p for p in products if p.tier == "used" and (p.match_score or 0) >= FOUND_SCORE),
+                         key=lambda p: p.match_score, default=None)
+        if found_used:
+            exact = True
+            best = priced(found_used, "used", USED_MATCH_REASON, None)
+
     seen = {best.url} if best else set()
 
     def take(pairs: list[tuple[Product, str]], tier: str, limit: int) -> list[Product]:
@@ -268,18 +299,22 @@ def build(item: Item, products: list[Product], insight: PriceInsight, picks: Pic
         used = take([(p, USED_REASON) for p in used_all], "used", MAX_USED)
 
     final = [p for p in [best, *dupes, *used] if p]
-    from_model = trusted and summary_ok(picks.spoken_summary, final)
+    # Claude's summary describes its own pick, so it's only kept when that pick is the exact match.
+    from_model = trusted and exact and best.url == model_best.url and summary_ok(picks.spoken_summary, final)
     if picks and not from_model:
         log.info("rank: replaced Claude's summary %r", picks.spoken_summary)
-    summary = picks.spoken_summary.strip() if from_model else template_summary(item, best, dupes, used)
-    v = verdict(best, insight)
-    log.info("rank: picks from %s, summary from %s: best=%s dupes=%d used=%d verdict=%s",
+    if from_model:
+        summary = picks.spoken_summary.strip()
+    else:
+        summary = template_summary(item, best, dupes, used) if exact else closest_summary(item, best)
+    v = verdict(best, insight) if exact else "fair"
+    text = verdict_text(best, dupes, used, insight, v) if exact else closest_text(insight)
+    log.info("rank: picks from %s, summary from %s: best=%s (%s) dupes=%d used=%d verdict=%s",
              "claude" if picks else "fallback", "claude" if from_model else "template",
-             best.store if best else None, len(dupes), len(used), v)
+             best.store if best else None, "exact" if exact else "closest", len(dupes), len(used), v)
     return SearchResponse(
         capture_id="", best_match=best, dupes=dupes, used=used, spoken_summary=summary, timing_ms={},
-        price_insight=insight.model_copy(update={
-            "best_match_verdict": v, "verdict_text": verdict_text(best, dupes, used, insight, v)}),
+        price_insight=insight.model_copy(update={"best_match_verdict": v, "verdict_text": text}),
     )
 
 
@@ -288,7 +323,9 @@ async def choose(item: Item, products: list[Product], insight: PriceInsight) -> 
     if not products:
         return SearchResponse(capture_id="", best_match=None, dupes=[], used=[], price_insight=insight,
                               spoken_summary=NOT_FOUND, timing_ms={})
-    return build(item, products, insight, await ask(item, shortlist(products), insight))
+    resp = build(item, products, insight, await ask(item, shortlist(products), insight))
+    resp.best_match = await search.with_store_link(resp.best_match)  # found: link to the store, not Google
+    return resp
 
 
 async def main(item_path: str, products_path: str):
