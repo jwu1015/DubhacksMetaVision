@@ -62,11 +62,14 @@ async def embed(cutout_url: str, urls: list[str], client: httpx.AsyncClient) -> 
     return body
 
 
-async def rerank(cutout_url: str, products: list[Product],
+async def rerank(cutout_url: str | bytes, products: list[Product],
                  client: httpx.AsyncClient | None = None) -> list[Product]:
-    """Scored products best first (dropping those under MIN_SCORE), then unscored ones in input order."""
-    if not EMBED_URL:  # no CLIP service: order by the scores search set (match.py, Claude). Those under
-        # MIN_SCORE go last instead of being dropped, so rank can tell "checked and different" from "unchecked".
+    """Scored products best first (dropping those under MIN_SCORE), then unscored ones in input order.
+    A crop kept in memory (bytes, a background Look's) has no URL the CLIP service could fetch: it's
+    ordered as if there were no CLIP service."""
+    if not EMBED_URL or isinstance(cutout_url, bytes):
+        # No CLIP service: order by the scores search set (match.py, Claude). Those under MIN_SCORE go
+        # last instead of being dropped, so rank can tell "checked and different" from "unchecked".
         ranked = sorted((p for p in products if p.match_score is not None), key=lambda p: -p.match_score)
         return ([p for p in ranked if p.match_score >= MIN_SCORE] + [p for p in products if p.match_score is None]
                 + [p for p in ranked if p.match_score < MIN_SCORE])

@@ -150,9 +150,10 @@ function onObjects(ev) {
   if (ev.frame_idx < lastFrameIdx) { fadeAll(now); epoch++; }
   lastFrameIdx = ev.frame_idx;
   updatedAt = now - ev.age_ms;
-  count = ev.objects.length;
+  const inView = ev.objects.filter((o) => o.in_view !== false); // scene memory also lists objects that left
+  count = inView.length;
   const seen = new Set();
-  for (const o of ev.objects) {
+  for (const o of inView) {
     const key = epoch + ":" + o.id;
     const box = [o.box.x, o.box.y, o.box.w, o.box.h];
     const t = tracks.get(key);

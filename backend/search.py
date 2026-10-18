@@ -432,7 +432,7 @@ def similar_query(item: Item, queries: list[str]) -> str | None:
     return q if q and queries and q.lower() != queries[0].lower() else None
 
 
-async def search_all_with_stats(cutout_url: str, item: Item,
+async def search_all_with_stats(cutout_url: str | bytes, item: Item,
                                 capture_id: str | None = None) -> tuple[list[Product], dict]:
     queries = queries_for(item)
     jobs = {}
@@ -472,12 +472,14 @@ async def search_all_with_stats(cutout_url: str, item: Item,
     return products, stats
 
 
-async def search_all(cutout_url: str, item: Item, capture_id: str | None = None) -> list[Product]:
+async def search_all(cutout_url: str | bytes, item: Item, capture_id: str | None = None) -> list[Product]:
     """Shopping for the item's first 2 queries + Amazon for the first, at once, then a match score for each result.
     Amazon also searches the most generic query alongside; those similar-looking items are used only if the
     others find nothing.
 
     Normalized, priced, deduped. A failing or slow source contributes [] and never raises.
+    cutout_url can be the crop itself (bytes): a background Look keeps it in memory only. Without a
+    capture_id, SerpAPI's raw answers aren't logged.
     """
     products, _ = await search_all_with_stats(cutout_url, item, capture_id)
     return products

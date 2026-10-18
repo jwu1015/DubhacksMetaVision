@@ -1,9 +1,10 @@
 import AVFoundation
+import MWDATCamera
 import SwiftUI
 import WebRTC
 
 /// Pushes frames into the WebRTC video source: the phone's back camera on a device, the mock room in
-/// the Simulator (which has no camera). Swap in GlassesVideoCapturer once the DAT SDK is in.
+/// the Simulator (which has no camera), or the Meta glasses (GlassesCapturer).
 /// Frames are sent upright in portrait, 9:16, with no rotation metadata.
 class FeedCapturer: NSObject, @unchecked Sendable {
     static func make(for source: RTCVideoSource) -> FeedCapturer {
@@ -28,6 +29,42 @@ class FeedCapturer: NSObject, @unchecked Sendable {
     func send(_ pixelBuffer: CVPixelBuffer, timeStampNs: Int64) {
         let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: timeStampNs)
         source.capturer(rtcCapturer, didCapture: frame)
+    }
+
+    /// Draws an image into a new BGRA pixel buffer.
+    static func pixelBuffer(from image: CGImage) -> CVPixelBuffer? {
+        let width = image.width, height = image.height
+        var buffer: CVPixelBuffer?
+        let attributes = [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary
+        CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes, &buffer)
+        guard let buffer else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer), width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        )
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return buffer
+    }
+}
+
+/// The Meta glasses camera, fed by GlassesManager's DAT stream (raw frames, 504×896, upright).
+/// GlassesManager starts and stops the stream, so start() and stop() do nothing here.
+final class GlassesCapturer: FeedCapturer, @unchecked Sendable {
+    /// Called on the SDK's queue for every frame.
+    func send(_ frame: VideoFrame) {
+        let sampleBuffer = frame.sampleBuffer
+        let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let timeStampNs = time.isValid ? Int64(CMTimeGetSeconds(time) * 1_000_000_000)
+                                       : Int64(CACurrentMediaTime() * 1_000_000_000)
+        // Raw frames carry a decoded pixel buffer; fall back to the SDK's image if one doesn't.
+        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            send(pixelBuffer, timeStampNs: timeStampNs)
+        } else if let image = frame.makeUIImage()?.cgImage, let pixelBuffer = Self.pixelBuffer(from: image) {
+            send(pixelBuffer, timeStampNs: timeStampNs)
+        }
     }
 }
 
@@ -113,19 +150,6 @@ final class MockRoomCapturer: FeedCapturer, @unchecked Sendable {
         let renderer = ImageRenderer(content: MockCameraFeed().frame(width: CGFloat(width), height: CGFloat(height)))
         renderer.scale = 1
         guard let image = renderer.cgImage else { return nil }
-
-        var buffer: CVPixelBuffer?
-        let attributes = [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary
-        CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes, &buffer)
-        guard let buffer else { return nil }
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-        let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(buffer), width: width, height: height, bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        )
-        context?.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return buffer
+        return pixelBuffer(from: image)
     }
 }

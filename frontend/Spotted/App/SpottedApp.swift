@@ -16,7 +16,10 @@ struct SpottedApp: App {
         }
         #endif
         // Stream to the backend when Config.xcconfig has its URL; mockup frames stay on mock data.
-        if mockFrame == nil { state.startLive() }
+        if mockFrame == nil {
+            state.startLive()
+            state.startGlasses()
+        }
         _appState = State(initialValue: state)
     }
 
@@ -25,6 +28,8 @@ struct SpottedApp: App {
             RootView()
                 .environment(appState)
                 .preferredColorScheme(.dark)
+                // spotted://save, add and talk, from the Live Activity (G6).
+                .onOpenURL { appState.handle($0) }
         }
     }
 }

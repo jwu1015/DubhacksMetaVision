@@ -5,5 +5,6 @@ uvicorn
 pillow
 python-multipart
 requests
+python-dotenv
 kernels  # NMS + mask cleanup in SAM3 video; without it duplicate boxes slip through
 anthropic  # Claude picks each session's labels from its first frame

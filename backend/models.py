@@ -136,3 +136,6 @@ class HealthResponse(BaseModel):
     model_service: bool
     fixtures: bool
     demo_mode: bool
+    webrtc_sessions: int = 0     # phones streaming over WebRTC (one at a time)
+    scene_memory: bool = False   # the live stream is tracking, so scene memory is filling
+    voice: bool = False          # the voice assistant is set up (LiveKit keys present)

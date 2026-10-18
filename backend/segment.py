@@ -36,6 +36,8 @@ SAM_PAD = 0.08       # SAM's box is tight, so it gets less padding
 SAM_MIN_AREA = 0.02  # a SAM box under 2% of the image is ignored
 SAM_IOU = 0.3        # a SAM box must overlap Claude's this much to count as the same item
 CENTER_MAX = 0.25    # SAM first: an object further than this from the center of the view isn't "looked at"
+POINT_MAX = 0.10     # hint_point: an object further than this from the tapped point isn't the one tapped
+POINT_CROP = 0.40    # hint_point with no SAM box there: the crop around the point covers 40% of each side
 SAM_TIMEOUT = 2.0    # seconds, Claude first: SAM runs after Claude, inside /detect's budget
 SAM_FIRST_TIMEOUT = 2.5  # seconds, SAM first: about Claude's own time, so a busy scene that makes SAM
                          # slow is no slower than going through Claude
@@ -160,6 +162,38 @@ def center_object(found: list[Found]) -> Found | None:
     return min(usable, key=lambda f: (distance(f.box), f.box.w * f.box.h), default=None)
 
 
+def point_object(found: list[Found], x: float, y: float) -> Found | None:
+    """hint_point: the object the user tapped at (x, y), normalized. The smallest box containing the
+    point (a lamp in front of a sofa, not the sofa), else the nearest box within POINT_MAX. Tiny boxes
+    are ignored."""
+    def distance(b: BBox) -> float:  # from the point to the box; 0 when the box contains it
+        dx = max(b.x - x, 0.0, x - (b.x + b.w))
+        dy = max(b.y - y, 0.0, y - (b.y + b.h))
+        return math.hypot(dx, dy)
+
+    usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA and distance(f.box) <= POINT_MAX]
+    return min(usable, key=lambda f: (distance(f.box), f.box.w * f.box.h), default=None)
+
+
+def text_object(found: list[Found]) -> Found | None:
+    """hint_text: of the objects SAM found for the user's words, the one at the center of the view,
+    else the best-scoring one. Tiny boxes are ignored."""
+    usable = [f for f in found if f.box.w * f.box.h >= SAM_MIN_AREA]
+    return center_object(usable) or max(usable, key=lambda f: f.score, default=None)
+
+
+def point_box(x: float, y: float) -> BBox:
+    """hint_point with no SAM box there: POINT_CROP of each side around the point, moved inside the photo."""
+    x0, y0 = (min(max(c - POINT_CROP / 2, 0.0), 1 - POINT_CROP) for c in (x, y))
+    return BBox(x=round(x0, 4), y=round(y0, 4), w=POINT_CROP, h=POINT_CROP)
+
+
+def point_crop(image: Image.Image, x: float, y: float, capture_id: str, t0: float) -> Segmentation:
+    """The cutout around a tapped point when SAM has nothing there (or is down)."""
+    crop = point_box(x, y)
+    return result("bbox_fallback", crop, None, save_images(image, crop, capture_id, [(crop, RED)]), t0)
+
+
 async def sam_box(image: Image.Image, item: Item) -> Found | None:
     """Claude first: SAM's box for Claude's item, or None (no server, failure, nothing usable)."""
     if not item.category:
@@ -181,6 +215,23 @@ async def sam_box(image: Image.Image, item: Item) -> Found | None:
     return pick if pick.box.w * pick.box.h >= SAM_MIN_AREA else None
 
 
+def crop_image(image: Image.Image, crop: BBox) -> Image.Image:
+    """The cutout: the photo cut to crop (normalized), at most MAX_EDGE px on its longest side."""
+    W, H = image.size
+    cutout = image.crop((round(crop.x * W), round(crop.y * H), round((crop.x + crop.w) * W),
+                         round((crop.y + crop.h) * H)))
+    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
+    return cutout
+
+
+def sam_cutout(image: Image.Image, box: BBox) -> bytes:
+    """The cutout sam_crop saves for a SAM box, as a JPEG kept in memory: nothing is written (prefetch.py's
+    background Looks)."""
+    buf = io.BytesIO()
+    crop_image(image, pad(box, SAM_PAD)).convert("RGB").save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
 def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tuple[BBox, tuple]]) -> tuple[str, str]:
     """Write the cutout and the preview (photo with boxes drawn); return their uploads/ paths."""
     W, H = image.size
@@ -188,10 +239,8 @@ def save_images(image: Image.Image, crop: BBox, capture_id: str, draw: list[tupl
     def px(b: BBox):
         return round(b.x * W), round(b.y * H), round((b.x + b.w) * W), round((b.y + b.h) * H)
 
-    cutout = image.crop(px(crop))
-    cutout.thumbnail((MAX_EDGE, MAX_EDGE))
     cutout_path = f"uploads/{capture_id}_cutout.jpg"
-    cutout.save(config.ROOT / cutout_path, quality=90)
+    crop_image(image, crop).save(config.ROOT / cutout_path, quality=90)
 
     preview = image.copy()
     preview.thumbnail((MAX_EDGE, MAX_EDGE))

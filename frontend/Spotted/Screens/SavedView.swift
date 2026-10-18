@@ -70,22 +70,7 @@ private struct RoomSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Icon(name: "icon-pin", size: 18)
-                    .frame(width: 40, height: 40)
-                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(room.name)
-                        .font(.spottedHeadline)
-                        .foregroundStyle(.labelPrimary)
-                    Text("\(room.visited) · \(items.count) spotted")
-                        .font(.spottedFootnote)
-                        .foregroundStyle(.labelSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Icon(name: "icon-chevron", size: 16)
-            }
-            .accessibilityElement(children: .combine)
+            RoomHeader(name: room.name, subtitle: "\(room.visited) · \(items.count) spotted")
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(items) { item in

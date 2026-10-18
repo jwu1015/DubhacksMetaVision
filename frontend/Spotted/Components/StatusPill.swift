@@ -4,6 +4,7 @@ import SwiftUI
 struct StatusPill: View {
     let connection: AppState.Connection
     let isPaused: Bool
+    var isGlassesMode = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -25,7 +26,7 @@ struct StatusPill: View {
     private var text: String {
         if isPaused { return "Camera paused" }
         switch connection {
-        case .live: return "Glasses · Live"
+        case .live: return isGlassesMode ? "Glasses · Connected" : "Glasses · Live"
         case .reconnecting: return "Reconnecting…"
         case .disconnected: return "Disconnected"
         }

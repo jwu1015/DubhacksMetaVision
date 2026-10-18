@@ -118,7 +118,8 @@ struct LiveView: View {
                     .offset(x: rect.minX, y: rect.minY - 32)
             }
         } else {
-            Hotspot(item: detection.label.sentenceCased, isFocused: focusedTrackID == detection.trackID)
+            Hotspot(item: detection.displayName, priceEstimate: detection.priceEstimate,
+                    isFocused: focusedTrackID == detection.trackID)
                 .opacity(hotspotOpacity)
                 .offset(x: rect.midX - 32, y: rect.midY - 32)
                 .onTapGesture {

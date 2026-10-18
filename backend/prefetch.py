@@ -5,9 +5,15 @@ stream.py hands every tracking result to observe():
   ("black insulated water bottle", $30-50). fields() adds them to the objects stream.py sends to the phone
   and the projector, so a hotspot can show them before anyone taps.
 - The PREFETCH_MAX objects in view the longest (at least PREFETCH_AFTER_S) get the whole Look in the
-  background through start_look, which is main.py's look(quiet=True): nothing is announced, and Claude
-  describes the object before the search, so the search uses Claude's queries. When the user taps one of
-  them, main.py takes that Look (claim()) instead of starting a new one.
+  background through start_look, which is main.py's background_look(): Claude describes the object's crop,
+  then the stores are searched on Claude's queries. When the user picks one of them (a tap, or the voice
+  assistant), main.py's look() takes that Look (claim()) instead of starting a new one.
+
+Nothing here is written to disk or announced. Crops exist only in memory, while Claude (and match.py's
+score) look at them. What stays, by track id, is what came out of them: the tracker's label, the quick
+label, and the background Look's description and results. An object is forgotten FORGET_S after it was
+last seen, as scene memory forgets it, and everything goes on reset() (stream.py's purge: a pause, a
+camera switch, the phone disconnecting).
 
 PREFETCH=false turns both off. A background Look costs about 3 SerpAPI searches; quick labels cost none.
 """
@@ -17,7 +23,7 @@ import io
 import logging
 import os
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import anthropic
@@ -26,6 +32,7 @@ from pydantic import BaseModel
 
 import config
 from models import BBox
+from scene import WINDOW_S
 from tracker import TrackResult
 
 log = logging.getLogger("gtl.prefetch")
@@ -35,7 +42,7 @@ MODEL = "claude-haiku-5-5"
 QUICK_AFTER_S = 0.5      # in view this long before it gets a quick label, so flicker costs nothing
 PREFETCH_AFTER_S = 2.0   # in view this long before its whole Look starts in the background
 PREFETCH_MAX = 3         # background Looks among the objects in view
-FORGET_S = 60.0          # an object out of view this long is forgotten
+FORGET_S = WINDOW_S      # an object out of view this long is forgotten, as scene memory forgets it
 CROP_EDGE = 512          # longest side of the crop sent for a quick label
 PAD = 0.08               # around the box, as a fraction of its width and height
 TIMEOUT_S = 6.0
@@ -54,8 +61,27 @@ class QuickLabel(BaseModel):
 
 OUTPUT_FORMAT = {"type": "json_schema", "schema": anthropic.transform_schema(QuickLabel)}
 
-# Set by main.py: a quiet Look on a tracked object; returns its DetectResponse, or None.
-start_look: Callable[[int], Awaitable[object]] | None = None
+
+@dataclass
+class Background:
+    """A background Look (main.py's background_look). Its crop is in memory only, and gone once both are done."""
+    describe: asyncio.Task  # -> Claude's Item for the crop
+    search: asyncio.Task    # -> the SearchResponse for that item, with capture_id "" (no capture yet)
+    claimed: bool = False   # the user picked the object, and their Look awaits these tasks
+
+    def cancel(self):
+        """Stop the work, unless a Look has claimed it."""
+        if not self.claimed:
+            self.describe.cancel()
+            self.search.cancel()
+
+    @property
+    def failed(self) -> bool:
+        return self.search.done() and (self.search.cancelled() or self.search.exception() is not None)
+
+
+# Set by main.py: starts a background Look on a tracked object; None if scene memory has no frame of it.
+start_look: Callable[[int], Background | None] | None = None
 clock = time.monotonic
 
 
@@ -66,7 +92,7 @@ class Seen:
     last: float
     label: QuickLabel | None = None
     labeling: asyncio.Task | None = None
-    look: asyncio.Task | None = None
+    look: Background | None = None
 
 
 seen: dict[int, Seen] = {}
@@ -137,12 +163,20 @@ async def _label(track_id: int, s: Seen, jpeg: bytes):
 
 # ---------- what stream.py calls ----------
 
+def _drop(s: Seen):
+    if s.labeling and not s.labeling.done():
+        s.labeling.cancel()
+    if s.look:
+        s.look.cancel()
+
+
 def reset():
+    """Forget every object, and stop its work (stream.py's purge)."""
+    global _last_frame_idx
     for s in seen.values():
-        for task in (s.labeling, s.look):
-            if task and not task.done():
-                task.cancel()
+        _drop(s)
     seen.clear()
+    _last_frame_idx = -1
 
 
 def observe(result: TrackResult, frame: Image.Image):
@@ -158,6 +192,8 @@ def observe(result: TrackResult, frame: Image.Image):
     for o in result.objects:
         s = seen.get(o.id)
         if s is None or s.category != o.label:
+            if s is not None:
+                _drop(s)
             s = seen[o.id] = Seen(category=o.label, first=now, last=now)
         s.last = now
         visible.append(o.id)
@@ -169,14 +205,12 @@ def observe(result: TrackResult, frame: Image.Image):
         ready = sorted((i for i in visible if seen[i].look is None and now - seen[i].first >= PREFETCH_AFTER_S),
                        key=lambda i: seen[i].first)
         for i in ready[:max(0, PREFETCH_MAX - looked)]:
-            seen[i].look = asyncio.create_task(start_look(i))
-            log.info("prefetch: background Look on t%d", i)
+            if (look := start_look(i)) is not None:
+                seen[i].look = look
+                log.info("prefetch: background Look on t%d", i)
 
     for i in [i for i, s in seen.items() if now - s.last > FORGET_S]:
-        s = seen.pop(i)
-        for task in (s.labeling, s.look):
-            if task and not task.done():
-                task.cancel()
+        _drop(seen.pop(i))
 
 
 def fields(track_id: int) -> dict:
@@ -187,9 +221,11 @@ def fields(track_id: int) -> dict:
     return {"name": s.label.name, "price_low": s.label.price_low, "price_high": s.label.price_high}
 
 
-def claim(track_id: int) -> str | None:
-    """The capture id of this object's background Look, once it has started; else None."""
+def claim(track_id: int) -> Background | None:
+    """This object's background Look, done or still running; None if it has none, or its search failed.
+    The caller's Look awaits it from then on, so forgetting the object or reset() no longer cancels it."""
     s = seen.get(track_id)
-    if s is None or s.look is None or not s.look.done() or s.look.cancelled() or s.look.exception():
+    if s is None or s.look is None or s.look.failed:
         return None
-    return getattr(s.look.result(), "capture_id", None)
+    s.look.claimed = True
+    return s.look

@@ -3,12 +3,18 @@
 Frame sources (a video file now, the glasses over WebRTC later) only call live.push_frame(img).
 The tracking loop sends the newest frame to Baptiste's server, waits for the answer and repeats,
 so frames that arrive meanwhile are skipped, never queued, and the video never waits on tracking.
-Each answer goes to the projector page (and any other subscriber) as an "objects" event:
+Each answer goes into scene memory (scene.py) and out to the projector page (and any other subscriber)
+as an "objects" event, listing every object scene memory holds, those in view first:
 
     {"type": "objects", "frame_idx", "width", "height", "age_ms",
-     "objects": [{"id", "label", "score", "box": {"x", "y", "w", "h"}}]}     (box normalized 0-1)
+     "objects": [{"id", "label", "score", "box": {"x", "y", "w", "h"},       (box normalized 0-1)
+                  "in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts",
+                  "name", "price_low", "price_high"}]}      (the last three: prefetch.py's quick label, once known)
 
-plus {"type": "status", "tracking": "stopped" | "starting" | "ok" | "offline"} when that changes,
+When the stream stops or resets (pause, camera switch, disconnect), what was tracked is purged, and an
+"objects" event with no objects says so.
+
+Also {"type": "status", "tracking": "stopped" | "starting" | "ok" | "offline"} when that changes,
 and the "look" events main.py publishes as a picked item is identified and priced:
 
     {"type": "look", "stage": "detected" | "nothing" | "described" | "results" | "failed",
@@ -38,6 +44,7 @@ from pydantic import BaseModel
 
 import config
 import net
+from scene import Scene
 from tracker import Tracker, TrackResult, encode
 
 log = logging.getLogger("gtl.stream")
@@ -70,9 +77,13 @@ class Stream:
         self._status = "stopped"  # the last status published
         self._look: list[dict] = []  # the latest Look's events, replayed to new subscribers
         self._jpeg: tuple[int, bytes] | None = None  # (seq, MJPEG frame): encoded once for every viewer
-        # Set by main.py (prefetch.py): told about every tracking result, and adds fields to each object sent out.
+        self.scene = Scene()
+        self._epoch = 0  # bumps when what was tracked is purged: answers to frames sent before are dropped
+        # Set by main.py (prefetch.py): told about every tracking result and every purge, and adds fields to
+        # each object sent out.
         self.on_objects: Callable[[TrackResult, Image.Image], None] | None = None
         self.object_fields: Callable[[int], dict] | None = None
+        self.on_purge: Callable[[], None] | None = None
 
     # ---------- frames in, results out ----------
 
@@ -107,7 +118,8 @@ class Stream:
         self._publish_status()
 
     async def stop(self):
-        """Stop the source and the tracking loop, then delete the session. Never raises."""
+        """Stop the source and the tracking loop, delete the session, and purge what was tracked: scene
+        memory and the latest frame. Never raises."""
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -115,8 +127,29 @@ class Stream:
             log.info("stream: stopped")
         self._tasks = []
         await self.tracker.stop()
-        self._result = self._tracked = None
+        self._purge()
         self._publish_status()
+
+    async def reset(self):
+        """Forget what was tracked, for a new video source (the phone switched cameras) while tracking
+        goes on: scene memory and the latest frame are purged, answers to frames sent before are dropped,
+        and the next frame starts a new tracking session, so ids restart. Never raises."""
+        self._purge()
+        await self.tracker.restart()
+        log.info("stream: reset")
+
+    def _purge(self):
+        had = self._result is not None or bool(self.scene.tracks)
+        self._epoch += 1
+        self.scene.clear()
+        self._result = self._tracked = self._frame = self._jpeg = None
+        if self.on_purge:
+            try:
+                self.on_purge()
+            except Exception:  # a purge never fails
+                log.exception("stream: on_purge failed")
+        if had:  # subscribers drop their boxes and memory too
+            self.publish({"type": "objects", "frame_idx": 0, "width": 0, "height": 0, "age_ms": 0, "objects": []})
 
     async def _track(self):
         await self.tracker.start()
@@ -124,15 +157,18 @@ class Stream:
         while True:
             await self._new_frame.wait()
             self._new_frame.clear()
-            frame = self._frame
+            frame, epoch = self._frame, self._epoch
+            if frame is None:  # purged since it arrived
+                continue
             try:
                 result = await self.tracker.send(frame.image, frame.captured_at)
             except Exception:  # send() never raises; if a bug makes it, tracking still goes on
                 log.exception("stream: tracking failed")
                 await asyncio.sleep(1)
                 continue
-            if result:
+            if result and epoch == self._epoch:
                 self._result, self._tracked = result, frame
+                self.scene.update(result, frame.image)
                 if self.on_objects:
                     try:
                         self.on_objects(result, frame.image)
@@ -156,12 +192,13 @@ class Stream:
 
     def _objects_event(self) -> dict:
         r = self._result
+        objects = self.scene.objects()
+        if self.object_fields:
+            objects = [o | self.object_fields(o["id"]) for o in objects]
         return {
             "type": "objects", "frame_idx": r.frame_idx, "width": r.width, "height": r.height,
             "age_ms": round((time.time() - r.captured_at) * 1000),  # how old the frame these boxes describe is
-            "objects": [{"id": o.id, "label": o.label, "score": o.score, "box": o.box.model_dump(),
-                         **(self.object_fields(o.id) if self.object_fields else {})}
-                        for o in r.objects],
+            "objects": objects,
         }
 
     def _publish_status(self):

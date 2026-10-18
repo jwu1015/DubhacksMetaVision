@@ -215,7 +215,7 @@ struct ListingRow: View {
                     Text(listing.store)
                         .font(.spottedHeadline)
                         .foregroundStyle(.labelPrimary)
-                    MatchTag(isExact: listing.isExactMatch)
+                    MatchTag(product: listing)
                 }
                 HStack(spacing: 5) {
                     Icon(name: icon, size: 13)

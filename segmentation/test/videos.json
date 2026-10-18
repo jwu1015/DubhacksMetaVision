@@ -1,0 +1,12 @@
+[
+  {"name": "bedroom", "url": "https://huggingface.co/datasets/hf-internal-testing/sam2-fixtures/resolve/main/bedroom.mp4", "category": "small items"},
+  {"name": "bedroom", "url": "https://huggingface.co/datasets/hf-internal-testing/sam2-fixtures/resolve/main/bedroom.mp4", "category": "clothing"},
+  {"name": "bedroom", "url": "https://huggingface.co/datasets/hf-internal-testing/sam2-fixtures/resolve/main/bedroom.mp4", "category": "furniture"},
+  {"name": "person-bicycle-car", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/person-bicycle-car-detection.mp4"},
+  {"name": "store-aisle", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/store-aisle-detection.mp4"},
+  {"name": "bottle", "url": "https://github.com/intel-iot-devkit/sample-videos/raw/master/bottle-detection.mp4"},
+  {"name": "table", "path": "table.mp4", "category": "small buyable items"},
+  {"name": "table", "path": "table.mp4", "category": "furniture"},
+  {"name": "table", "path": "table.mp4", "category": "clothing"},
+  {"name": "table", "path": "table.mp4", "category": "electronics"}
+]

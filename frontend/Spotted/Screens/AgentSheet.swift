@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// 02 · Listening: waveform, live transcript, what the glasses will say, and suggestions.
-/// Transcript and reply are mocked until SpeechInput and AgentClient exist.
+/// 02 · Listening: waveform, live transcript, what the assistant said, suggestions and typed input.
+/// In glasses mode it's G2 · Voice Command: what the assistant understood and the earcon instead of
+/// suggestions. Live from the LiveKit voice assistant when it's connected; the Figma mock otherwise.
 struct AgentSheet: View {
     @Environment(AppState.self) private var app
     @State private var heard = "Add it to my cart "
     @State private var pending = "and save the lamp"
+    @State private var typed = ""
 
     private let suggestions = ["Tell me more", "Cheaper?", "Save it", "Compare", "Never mind"]
 
@@ -17,7 +19,7 @@ struct AgentSheet: View {
 
             Waveform()
 
-            Text("Listening…")
+            Text(status)
                 .font(.spottedFootnote)
                 .foregroundStyle(.labelSecondary)
 
@@ -26,24 +28,37 @@ struct AgentSheet: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            HStack(spacing: 10) {
-                Icon(name: "icon-glasses-accent", size: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("GLASSES WILL SAY")
+            if isGlasses, let request = app.parsedRequest {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("UNDERSTOOD")
                         .font(.spottedCaption)
                         .foregroundStyle(.labelTertiary)
-                    Text("“Chair added. Lamp saved. Undo?”")
-                        .font(.spottedCallout)
-                        .foregroundStyle(.labelPrimary)
+                    HStack(spacing: 8) {
+                        Text(request.action)
+                            .font(.spottedCaption)
+                            .foregroundStyle(.onAccent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.accent, in: Capsule())
+                        parsedChip("Target · \(request.target)")
+                        if let context = request.context { parsedChip(context) }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
-            .padding(.vertical, 12)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .accessibilityElement(children: .combine)
 
+            AssistantLine(label: app.voice == nil ? "GLASSES WILL SAY" : "SPOTTED SAID", text: reply)
+
+            if isGlasses {
+                HStack(spacing: 8) {
+                    Circle().fill(.accent).frame(width: 6, height: 6)
+                    Text("Earcon played · listening")
+                        .font(.spottedFootnote)
+                        .foregroundStyle(.labelTertiary)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Try saying")
                     .font(.spottedFootnote)
@@ -53,6 +68,8 @@ struct AgentSheet: View {
                         Button {
                             if suggestion == "Never mind" {
                                 app.isListening = false
+                            } else if let voice = app.voice, voice.isConnected {
+                                voice.send(suggestion)
                             } else {
                                 heard = suggestion
                                 pending = ""
@@ -70,6 +87,11 @@ struct AgentSheet: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let voice = app.voice, voice.isConnected {
+                typedInput(voice)
+            }
+            }
 
             HStack(spacing: 16) {
                 CircleButton(icon: "icon-close", size: 56, label: "Cancel") {
@@ -99,7 +121,72 @@ struct AgentSheet: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
+    private var status: String {
+        guard let voice = app.voice else { return "Listening…" }
+        return switch voice.status {
+        case .off, .connecting: "Connecting to Spotted…"
+        case .connected: "Spotted assistant · AI · Listening…"
+        case let .failed(message): message
+        }
+    }
+
+    private var isGlasses: Bool { app.captureMode == .glasses }
+
+    private func parsedChip(_ text: String) -> some View {
+        Text(text)
+            .font(.spottedCaption)
+            .foregroundStyle(.labelPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .fill(in: Capsule(), opacity: 0.1, stroke: 0.14)
+    }
+
+    private var reply: String {
+        guard let voice = app.voice else {
+            return isGlasses ? "“Lamp. Finding prices.”" : "“Chair added. Lamp saved. Undo?”"
+        }
+        return voice.lastAssistantLine.map { "“\($0.text)”" } ?? "Look at something and ask."
+    }
+
+    /// For when talking isn't possible. Sent to the assistant as chat.
+    private func typedInput(_ voice: VoiceAssistant) -> some View {
+        HStack(spacing: 8) {
+            TextField("Type a question", text: $typed)
+                .font(.spottedSubhead)
+                .foregroundStyle(.labelPrimary)
+                .submitLabel(.send)
+                .onSubmit { send(typed, with: voice) }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .fill(in: Capsule(), opacity: 0.1, stroke: 0.14)
+            CircleButton(icon: "icon-check", size: 44, iconSize: 18, label: "Send") {
+                send(typed, with: voice)
+            }
+            .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    private func send(_ text: String, with voice: VoiceAssistant) {
+        voice.send(text)
+        typed = ""
+    }
+
     private var transcript: AttributedString {
+        if let voice = app.voice {
+            guard let line = voice.lastUserLine else {
+                var hint = AttributedString("“How much is that?”")
+                hint.foregroundColor = .white.opacity(0.5)
+                return hint
+            }
+            var said = AttributedString("“\(line.text)”")
+            said.foregroundColor = line.isFinal ? .white : .white.opacity(0.7)
+            return highlightingTarget(said)
+        }
+        if isGlasses {
+            var said = AttributedString("“Spotted, how much is that lamp?”")
+            said.foregroundColor = .white
+            return highlightingTarget(said)
+        }
         var said = AttributedString("“\(heard)")
         said.foregroundColor = .white
         var rest = AttributedString("\(pending)”")
@@ -108,8 +195,25 @@ struct AgentSheet: View {
     }
 }
 
+extension AgentSheet {
+    /// G2: the parsed target ("that lamp") in lime, so the user sees what the assistant will look up.
+    fileprivate func highlightingTarget(_ text: AttributedString) -> AttributedString {
+        guard let target = app.parsedRequest?.target else { return text }
+        var text = text
+        let plain = String(text.characters)
+        let phrase = plain.range(of: "that \(target)", options: .caseInsensitive)
+            ?? plain.range(of: target, options: .caseInsensitive)
+        if let phrase, let range = Range(NSRange(phrase, in: plain), in: text) {
+            text[range].foregroundColor = Color.accent
+        }
+        return text
+    }
+}
+
 /// Lime level meter. Animates while listening; static under Reduce Motion.
-private struct Waveform: View {
+struct Waveform: View {
+    /// 1 for the Listening sheet, 0.5 for G4's small "Listening for your answer".
+    var scale: CGFloat = 1
     private let heights: [CGFloat] = [10, 18, 28, 40, 26, 46, 34, 22, 38, 16, 28, 12, 20, 8]
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -117,15 +221,15 @@ private struct Waveform: View {
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 4) {
+            HStack(spacing: 4 * scale) {
                 ForEach(heights.indices, id: \.self) { index in
                     let wobble = reduceMotion ? 1 : 0.7 + 0.3 * sin(t * 6 + Double(index) * 0.9)
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 3 * scale)
                         .fill(.accent)
-                        .frame(width: 5, height: heights[index] * wobble)
+                        .frame(width: 5 * scale, height: heights[index] * scale * wobble)
                 }
             }
-            .frame(height: 46)
+            .frame(height: 46 * scale)
         }
         .accessibilityHidden(true)
     }
