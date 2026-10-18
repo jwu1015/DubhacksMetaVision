@@ -77,5 +77,5 @@ def test_the_projector_page(client):
     c, _ = client
     r = c.get("/stream/viewer")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
-    for needle in ("livekit-client@2.22.3", '"viewer-token"', 'id="look"'):
+    for needle in ("livekit-client@2.22.3", '"viewer-token"', 'id="card"'):
         assert needle in r.text
