@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// 02 · Listening: waveform, live transcript, what the assistant said, suggestions and typed input.
-/// In glasses mode it's G2 · Voice Command: what the assistant understood and the earcon instead of
-/// suggestions. Live from the LiveKit voice assistant when it's connected; the Figma mock otherwise.
+/// In glasses mode it's G2 · Voice Command, with the earcon instead of suggestions. Live from the
+/// LiveKit voice assistant when it's connected; the Figma mock otherwise.
 struct AgentSheet: View {
     @Environment(AppState.self) private var app
     @State private var heard = "Add it to my cart "
@@ -27,26 +27,6 @@ struct AgentSheet: View {
                 .font(.spottedTranscript)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-
-            if isGlasses, let request = app.parsedRequest {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("UNDERSTOOD")
-                        .font(.spottedCaption)
-                        .foregroundStyle(.labelTertiary)
-                    HStack(spacing: 8) {
-                        Text(request.action)
-                            .font(.spottedCaption)
-                            .foregroundStyle(.onAccent)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.accent, in: Capsule())
-                        parsedChip("Target · \(request.target)")
-                        if let context = request.context { parsedChip(context) }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-            }
 
             AssistantLine(label: app.voice == nil ? "GLASSES WILL SAY" : "SPOTTED SAID", text: reply)
 
@@ -132,15 +112,6 @@ struct AgentSheet: View {
 
     private var isGlasses: Bool { app.captureMode == .glasses }
 
-    private func parsedChip(_ text: String) -> some View {
-        Text(text)
-            .font(.spottedCaption)
-            .foregroundStyle(.labelPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .fill(in: Capsule(), opacity: 0.1, stroke: 0.14)
-    }
-
     private var reply: String {
         guard let voice = app.voice else {
             return isGlasses ? "“Lamp. Finding prices.”" : "“Chair added. Lamp saved. Undo?”"
@@ -180,33 +151,18 @@ struct AgentSheet: View {
             }
             var said = AttributedString("“\(line.text)”")
             said.foregroundColor = line.isFinal ? .white : .white.opacity(0.7)
-            return highlightingTarget(said)
+            return said
         }
         if isGlasses {
             var said = AttributedString("“Spotted, how much is that lamp?”")
             said.foregroundColor = .white
-            return highlightingTarget(said)
+            return said
         }
         var said = AttributedString("“\(heard)")
         said.foregroundColor = .white
         var rest = AttributedString("\(pending)”")
         rest.foregroundColor = .white.opacity(0.5)
         return said + rest
-    }
-}
-
-extension AgentSheet {
-    /// G2: the parsed target ("that lamp") in lime, so the user sees what the assistant will look up.
-    fileprivate func highlightingTarget(_ text: AttributedString) -> AttributedString {
-        guard let target = app.parsedRequest?.target else { return text }
-        var text = text
-        let plain = String(text.characters)
-        let phrase = plain.range(of: "that \(target)", options: .caseInsensitive)
-            ?? plain.range(of: target, options: .caseInsensitive)
-        if let phrase, let range = Range(NSRange(phrase, in: plain), in: text) {
-            text[range].foregroundColor = Color.accent
-        }
-        return text
     }
 }
 
@@ -237,6 +193,6 @@ struct Waveform: View {
 
 #Preview("02 · Listening") {
     let app = AppState()
-    app.show(.listening)
+    app.isListening = true
     return RootView().environment(app)
 }

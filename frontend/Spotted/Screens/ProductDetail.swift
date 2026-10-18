@@ -139,7 +139,7 @@ struct ProductDetail: View {
             }
         }
         ForEach(ProductSource.searchable.filter { !search.isAvailable($0) }, id: \.self) { source in
-            UnavailableSourceCard(source: source, onRetry: app.retrySearch)
+            UnavailableSourceCard(source: source, onRetry: app.retry)
         }
     }
 
@@ -383,12 +383,8 @@ struct UnavailableSourceCard: View {
 
 #Preview("03 · Product Detail") {
     let app = AppState()
-    app.show(.matched)
+    app.selectedTrackID = MockData.chair.trackID
+    app.scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.search)
     return ProductDetail().environment(app)
 }
 
-#Preview("03b · Dupes & Used") {
-    let app = AppState()
-    app.show(.usedTimeout)
-    return ProductDetail().environment(app)
-}

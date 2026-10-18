@@ -36,7 +36,7 @@ This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta g
 | Target | iOS 17+ (designed for iOS 26 Liquid Glass) | Glasses SDK requires iOS 17+. A physical iPhone is required; there is no simulator support. |
 | Glasses | **Meta Wearables Device Access Toolkit (DAT)** | Swift Package: `https://github.com/facebook/meta-wearables-dat-ios`. Start from the sample app in `/samples`. |
 | Networking (stream) | **WebRTC** (`stasel/WebRTC` Swift package, prebuilt Google WebRTC) | **Continuous** video track from the glasses to the backend's **WebRTC page**; detections come back over a data channel for live hotspots. |
-| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `/detect`, `/search/{captureID}`, `/checkout`, `/cart`, `/health` on the FastAPI backend (ngrok HTTPS). Types: backend's `Models.swift`. |
+| Networking (requests) | `URLSession` async/await (HTTPS + JSON) | `/detect`, `/search/{captureID}`, `/checkout`, `/cart` on the FastAPI backend (ngrok HTTPS). Types: backend's `Models.swift`. |
 | Speech in | Apple `Speech` framework | Glasses mic arrives over Bluetooth audio. |
 | Speech out | `AVSpeechSynthesizer` | Speaks the backend's `quickPhrase`, `spokenSummary` and `Cart.spokenSummary` through the glasses' speakers. |
 | Agent | **Claude** (Anthropic API, tool use), called **from the backend** via `POST /agent` (streamed) | Understands requests and acts through tools. The phone executes app-side actions and confirms anything with money. |
@@ -59,7 +59,6 @@ The app has **two modes and one pipeline**. In both, video goes over **WebRTC** 
 | How the user picks | **Voice**: "Spotted, how much is that lamp?" | **Tap** a hotspot (voice also works) |
 | Target resolved by | Claude parses the sentence → match against scene memory | The tapped `track_id` |
 | Results | **Spoken** in the glasses, plus a capture card, Live Activity and history on the phone | On screen, over the live view (01 / 01b) |
-| Disambiguation | Spoken ("Floor lamp or desk lamp?") | A/B card (07) |
 
 **Switching:** the app picks the mode from the glasses' connection state.
 - **Glasses connect** → glasses mode.
@@ -292,7 +291,7 @@ Spotted/
 │  ├─ WebRTCPublisher.swift     // RTCPeerConnection: signaling, video track, "detections" data channel
 │  ├─ GlassesVideoCapturer.swift// RTCVideoCapturer: DAT CMSampleBuffer → RTCCVPixelBuffer → RTCVideoFrame
 │  ├─ FrameBuffer.swift         // keeps the sharpest recent full-res frame for /detect
-│  ├─ APIClient.swift           // POST /detect (multipart JPEG), /search/{captureID}, /checkout, /cart, GET /health
+│  ├─ APIClient.swift           // POST /detect (multipart JPEG), /search/{captureID}, /checkout, /cart
 │  ├─ Config.swift              // BASE_URL = current ngrok https URL
 │  └─ Models.swift              // DetectResponse, SearchResponse, Listing, PriceVerdict (Codable)
 ├─ Agent/
@@ -315,8 +314,7 @@ Spotted/
 │  ├─ GlassTabBar.swift  MicButton.swift  Chip.swift  GlassButton.swift
 └─ Screens/
    ├─ LiveView.swift  AgentSheet.swift  ProductDetail.swift
-   ├─ SavedView.swift  CartView.swift  CheckoutSheet.swift
-   ├─ DisambiguationCard.swift  DisconnectedView.swift
+   └─ SavedView.swift  CartView.swift  CheckoutSheet.swift
 ```
 
 **Data flow:**
@@ -344,7 +342,7 @@ enum ScanState {
 
 Each screen exists in Figma in both themes: **📱 Screens** (Lime) and **📱 Screens · Visa Night**.
 
-The screens below (01–08) are **phone mode** (live video). Screens 03–06 (detail, saved, cart, checkout) are shared by both modes. The glasses-mode screens (G1–G6) are listed after them.
+The screens below (01–06) are **phone mode** (live video). Screens 03–06 (detail, saved, cart, checkout) are shared by both modes. The glasses-mode screens (G1–G6) are listed after them.
 
 | # | Frame | What it shows |
 |---|---|---|
@@ -355,8 +353,6 @@ The screens below (01–08) are **phone mode** (live video). Screens 03–06 (de
 | 04 | Saved | Saved items grouped by room ("Maya's apartment"). Saved = coral + filled bookmark + "Saved". |
 | 05 | Cart | Line items, an **Agent limit** card (Visa), the summary, and Check out. |
 | 06 | Checkout | A pay sheet showing merchants, card, limit check, the spoken confirmation, and **Pay with Face ID** / passcode. |
-| 07 | Which One? | A low-confidence state: A/B options, prompted with "Say 'chair' or 'lamp', or tap." |
-| 08 | Glasses Disconnected | The feed paused, a banner, **Try again**, and **Use phone camera**. |
 | 01b | Searching | After `/detect`: brackets, cutout thumbnail, the spoken quick phrase, skeleton prices and "Checking 3 stores…". Only Save is active. |
 | 01c | Couldn't Tell | `/detect` failed: "Couldn't tell what that is", **Try again** / **Take a photo**. |
 | 01d | Stream Reconnecting | 01a with a "Reconnecting…" pill and dimmed hotspots (WebRTC dropped). |
@@ -391,9 +387,8 @@ The screens below (01–08) are **phone mode** (live video). Screens 03–06 (de
 | # | Frame | What it shows |
 |---|---|---|
 | G1 | Glasses Home | No video. A calm "Listening" state: a glasses-connected pill, "Glasses camera on · not recording" with **Pause**, a big push-to-talk mic, a hint ("Say 'Spotted, how much is that lamp?'"), and the latest captures below. |
-| G2 | Voice Command | While the user speaks: waveform, live transcript, the parsed action + target chips ("Price check · lamp"), and the earcon state. |
+| G2 | Voice Command | While the user speaks: waveform, live transcript and the earcon state. |
 | G3 | Capture Card | The **frame the backend used, with the item highlighted** (brackets on `segmentation.bbox`), then the searching → matched states (same content as 01b / 01), plus "Not this one" (re-resolve). |
-| G4 | Voice Which-One | The spoken question ("Floor lamp or desk lamp?"), mirrored on the phone as two cropped thumbnails, so the user can tap or answer by voice. |
 | G5 | Spotted Today | A feed of captures grouped by room: frame thumbnail, item, price, verdict, and Save/Add. It doubles as history and privacy proof ("every capture you asked for"). |
 | G6 | Live Activity / Dynamic Island | Compact: "Finding prices · lamp…" → "Lamp · $189 · Fair". Expanded: thumbnail plus Save / Add to cart. Also the lock-screen push-to-talk entry. |
 | G7 | Room Recap (optional) | "You looked at 4 things at Maya's", with Save all / pick. |
@@ -484,7 +479,6 @@ The mockups use **Inter**, a stand-in for SF Pro, which doesn't render in Figma'
 | Unselected (01a) | **Hotspot**: pulsing dot, no tag | none | tap / focus / "What's this?" |
 | Focused / hover | Hotspot brightens; **item tag appears** ("Lounge chair · Tap to view") | none | tap or confirm |
 | Selected (01) | **Accent brackets** + "Name · Likely" tag | Product card | Save / Add / Search |
-| Low confidence (07) | White brackets with A/B badges | Disambiguation card | "chair" / "lamp" / tap |
 
 **Hover on iPhone:** there's no pointer hover on touch. Map the Figma Hover state to:
 1. **Glasses gaze:** the user's view stays centered on the object for about 0.5 s (preferred).
@@ -515,13 +509,12 @@ The full guide is on the Figma **🎨 Style Guide** page (Verbal). Core rules:
 | State | Glasses say | Phone shows | Earcon |
 |---|---|---|---|
 | Identified | "Lounge chair. $1,299." | Product card (01) | Two-note chime |
-| Low confidence | "Chair or lamp?" | A/B card (07) | Question tone |
 | Added | "Chair added. Undo?" | Cart +1 | Coin clack |
 | Saved | "Saved." | Coral bookmark + "Saved" | Soft whoosh |
 | Over limit | "Over your limit. Approve on your phone." | Limit approval sheet | Low double tone |
 | Checkout | "$1,642 to Visa 4242. Confirm on your phone." | Pay sheet (06) | Heartbeat |
 | Paid | "Done. Receipt's on your phone." | Receipt | Success chord |
-| Disconnected | Phone speaks: "Glasses disconnected." | Banner (08) | Falling tone |
+| Disconnected | Phone speaks: "Glasses disconnected." | Toast; switches to the phone camera | Falling tone |
 | Camera paused | "Camera paused." | Dimmed feed | Click |
 
 **Vocabulary:** Spot / spotted · Save (not "favorite") · Add to cart · Check out (only at payment) · Room · Agent limit.
@@ -556,10 +549,8 @@ Base URL: the current **ngrok HTTPS** URL, set in `Config.swift`. It changes eac
 |---|---|---|---|
 | `POST /detect` | multipart `image` (JPEG, quality ~0.8, long side ≤ 2048 px); soon optional `hint_box`; **requested:** `track_id` (use buffered frame), `hint_text`, `hint_point` | `DetectResponse` | Live (~1.5 s); new fields requested |
 | `POST /search/{captureID}` | no body | `SearchResponse` (404 if unknown id) | Live (~4 s now, 8–10 s with real store search) |
-| `POST /identify` | multipart `image` | `IdentifyResponse` (detect + search) | Live; **testing only** |
 | `POST /checkout` | `CheckoutRequest` | `CheckoutResponse` | Live (test "Order placed!" page; Stripe test mode coming) |
 | `POST /cart` · `GET /cart` · `DELETE /cart/{index}` | `AddToCartRequest` | `Cart` (with `spokenSummary`) | Coming with the search/cart PR |
-| `GET /health` | — | `HealthResponse` | Live; use for the connection indicator |
 | `POST /offer` + data channel `detections` | `SessionDescription` | `SessionDescription`, `DetectionsMessage` | Our format, adopted by the backend; not live yet |
 
 ### WebRTC page (continuous stream)
@@ -669,12 +660,6 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 - Each returns `Cart { items, total, spokenSummary }`. Speak `spokenSummary` after adds and removes.
 - Until the PR lands, keep the cart in `AppState` and switch to the server cart when the endpoints are live.
 
-### `GET /health` → `HealthResponse`
-Poll every ~10 s while the app is open.
-- `ok` drives the status pill.
-- `modelService == false` → show "Segmentation offline".
-- `fixtures == true` → show a small **"Test data"** badge in debug builds so nobody mistakes canned results for real ones.
-
 ### UI rules
 - **Hotspots from the stream:**
   - Each `objects[]` entry with `score ≥ 0.6` becomes an **unselected Hotspot** (01a) at the center of its `box`.
@@ -682,7 +667,6 @@ Poll every ~10 s while the app is open.
   - While the data channel is disconnected, show the stream as "Reconnecting…" in the status pill.
 - **Selected:** tapping a hotspot, gaze dwell or "what's this?" makes that object **selected** (brackets from `segmentation.bbox`) and starts `/detect`.
 - **Nothing found:** `foundSomething == false` → speak `quickPhrase`, show **Couldn't tell** (01c), and don't call `/search`.
-- **Low confidence:** if `segmentation.maskScore < 0.5`, show **Which one?** (07) when there are two hotspots, otherwise proceed.
 - **Similarity:** show "Exact match" only when `product.isExactMatch` (`matchScore ≥ 85`). While `matchScore` is `nil` (today), show **"Similar"**.
 - **Price verdict chip:** text is `bestMatchVerdict.label`. Color: Low = success, Fair = secondary, High = warning. Always text plus color.
 - **Empty states:** `bestMatch == nil` → "No exact match for sale"; empty `dupes` or `used` → "No dupes found" / "No used listings".
@@ -714,7 +698,7 @@ Poll every ~10 s while the app is open.
 
 - [ ] 1. Meta sample app running with the glasses' camera visible on the phone
 - [ ] 2. Own app with the live preview + `AppState`
-- [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/health`, `/detect`, `/search`, `/checkout`) against the real backend (or `/identify` for quick tests)
+- [ ] 3. Drop in the backend's `Models.swift`, then `APIClient` (`/detect`, `/search`, `/checkout`) against the real backend
 - [ ] 4a. WebRTC: add `stasel/WebRTC`, publish a test track (phone camera) to the backend page via `POST /offer`, and confirm it plays on the laptop
 - [ ] 4b. Swap in `GlassesVideoCapturer` (DAT frames → track); handle `detections` → live hotspots
 - [ ] 4c. Select a hotspot → best full-res frame → `/detect` → speak `quickPhrase` → card in searching state (01b)
@@ -727,7 +711,7 @@ Poll every ~10 s while the app is open.
 - [ ] 10a. `AgentClient` against a mock `/agent` SSE stream; `AgentTools` for save / add / remove / undo
 - [ ] 10b. Agent sheet (02) with action cards + typed input; `ConfirmGate` for removals and checkout (Face ID)
 - [ ] 10c. Point at the real `/agent`; test the guardrails (over-limit, removal confirm, barge-in)
-- [ ] 11. Error / timeout states, Which one? (07), Disconnected (08)
+- [ ] 11. Error / timeout states
 - [ ] 12. Point at the real ngrok backend
 - [ ] 13. Demo polish: pre-staged room with 3 products that segment and match reliably
 
@@ -739,7 +723,6 @@ Poll every ~10 s while the app is open.
 - [ ] M5. Capture card (G3) with highlighted frame; "Not this one" → next track
 - [ ] M6. Spotted Today feed (G5)
 - [ ] M7. Live Activity (G6) via ActivityKit
-- [ ] M8. Voice which-one (G4)
 - [ ] M9. Stretch: Siri / App Intents + Action Button trigger; room recap (G7)
 
 ---

@@ -11,7 +11,7 @@ final class AppState {
     }
 
     enum Connection {
-        case live, reconnecting, disconnected
+        case live, reconnecting
     }
 
     enum DetailTab: String, CaseIterable {
@@ -53,8 +53,6 @@ final class AppState {
     var modeBanner: String?
     /// Every Look the user asked for: Spotted Today and the room recap.
     var captures: [Capture] = []
-    /// What the assistant understood (G2). Mock only until the agent reports it.
-    var parsedRequest: ParsedRequest?
     var isShowingRoomRecap = false
     private let lookActivity = LookActivityController()
 
@@ -66,8 +64,6 @@ final class AppState {
 
     // Saved + cart
     var rooms = MockData.rooms
-    // Start empty so a first scan behaves like a real first run. The Saved, Cart and Checkout
-    // mockup frames load the sample items (see show(_:)).
     var saved: [SavedItem] = []
     var cart: [CartItem] = []
     var agentLimit = AgentLimit(amount: 2000, cardLast4: "4242")
@@ -133,14 +129,6 @@ final class AppState {
     func retry() {
         if let detection = selectedDetection ?? detections.first {
             select(detection)
-        }
-    }
-
-    /// Re-runs /search for the current scan. Mocked: every source answers this time.
-    func retrySearch() {
-        guard live == nil else { return retry() }
-        if case let .matched(look, _) = scan {
-            scan = .matched(look, MockData.search)
         }
     }
 
@@ -561,121 +549,4 @@ final class AppState {
             break
         }
     }
-
-    // MARK: - Mockup states
-
-    /// Jumps straight to one of the Figma frames. Used by the Profile tab's state list and previews.
-    func show(_ frame: MockFrame) {
-        connection = .live
-        captureMode = .phone
-        modeBanner = nil
-        parsedRequest = nil
-        isShowingRoomRecap = false
-        lookActivity.end()
-        isListening = false
-        isShowingDetail = false
-        isShowingCheckout = false
-        detailTab = .bestMatch
-        tab = .live
-        switch frame {
-        case .unselected: clearScan()
-        case .searching:
-            selectedTrackID = MockData.chair.trackID
-            finishedSources = [.shopping]
-            scan = .detected(Look(MockData.detect))
-        case .matched:
-            selectedTrackID = MockData.chair.trackID
-            scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.search)
-        case .couldntTell:
-            selectedTrackID = nil
-            scan = .failed("Couldn't tell. Try again closer.")
-        case .reconnecting:
-            clearScan()
-            connection = .reconnecting
-        case .listening:
-            show(.matched)
-            isListening = true
-        case .productDetail:
-            show(.matched)
-            isShowingDetail = true
-        case .usedTimeout:
-            selectedTrackID = MockData.chair.trackID
-            scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.searchShoppingTimeout)
-            detailTab = .used
-            isShowingDetail = true
-        case .saved:
-            loadSampleItems()
-            tab = .saved
-        case .cart:
-            loadSampleItems()
-            tab = .cart
-        case .checkout:
-            loadSampleItems()
-            tab = .cart
-            isShowingCheckout = true
-        case .whichOne:
-            selectedTrackID = nil
-            scan = .ambiguous(MockData.candidates)
-        case .disconnected:
-            clearScan()
-            connection = .disconnected
-        case .glassesHome:
-            enterGlasses()
-            modeBanner = "Glasses connected. Say “Spotted” to capture."
-        case .voiceCommand:
-            show(.glassesHome)
-            parsedRequest = MockData.parsedRequest
-            isListening = true
-        case .captureCard, .liveActivity:
-            enterGlasses()
-            selectedTrackID = MockData.lamp.trackID
-            scan = .matched(Look(MockData.lampDetect).finished(with: MockData.lampSearch), MockData.lampSearch)
-        case .voiceWhichOne:
-            enterGlasses()
-            scan = .ambiguous(MockData.candidates)
-        case .spottedToday:
-            enterGlasses()
-            tab = .saved
-        case .roomRecap:
-            show(.glassesHome)
-            isShowingRoomRecap = true
-        }
-    }
-
-    private func enterGlasses() {
-        clearScan()
-        captureMode = .glasses
-        captures = MockData.captures
-    }
-
-    /// The saved items and cart drawn in the 04 / 05 / 06 mockups.
-    private func loadSampleItems() {
-        saved = MockData.saved
-        cart = MockData.cart
-    }
-}
-
-enum MockFrame: String, CaseIterable, Identifiable {
-    case unselected = "01a · Object Detected"
-    case searching = "01b · Searching"
-    case matched = "01 · Live View"
-    case couldntTell = "01c · Couldn't Tell"
-    case reconnecting = "01d · Stream Reconnecting"
-    case listening = "02 · Listening"
-    case productDetail = "03 · Product Detail"
-    case usedTimeout = "03b · Dupes & Used"
-    case saved = "04 · Saved"
-    case cart = "05 · Cart"
-    case checkout = "06 · Checkout"
-    case whichOne = "07 · Which One?"
-    case disconnected = "08 · Glasses Disconnected"
-    case glassesHome = "G1 · Glasses Home"
-    case voiceCommand = "G2 · Voice Command"
-    case captureCard = "G3 · Capture Card"
-    case voiceWhichOne = "G4 · Voice Which-One"
-    case spottedToday = "G5 · Spotted Today"
-    case liveActivity = "G6 · Live Activity"
-    case roomRecap = "G7 · Room Recap"
-
-    var id: String { rawValue }
 }

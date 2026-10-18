@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The Live tab in glasses mode: no video is shown. Home at rest (G1), the capture card once a Look
-/// starts (G3), and the spoken which-one (G4) when it's unsure.
+/// The Live tab in glasses mode: no video is shown. Home at rest (G1) and the capture card once a Look
+/// starts (G3).
 struct GlassesLiveView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -11,8 +11,6 @@ struct GlassesLiveView: View {
             switch app.scan {
             case .idle:
                 GlassesHomeView()
-            case .ambiguous:
-                VoiceWhichOneView()
             case .looking, .detected, .matched, .failed:
                 CaptureCardView()
             }
@@ -195,6 +193,6 @@ struct CameraStatusCard: View {
 
 #Preview("G1 · Glasses Home") {
     let app = AppState()
-    app.show(.glassesHome)
+    app.captureMode = .glasses
     return RootView().environment(app)
 }

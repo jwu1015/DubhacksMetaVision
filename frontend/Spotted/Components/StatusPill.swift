@@ -28,7 +28,6 @@ struct StatusPill: View {
         switch connection {
         case .live: return isGlassesMode ? "Glasses · Connected" : "Glasses · Live"
         case .reconnecting: return "Reconnecting…"
-        case .disconnected: return "Disconnected"
         }
     }
 }

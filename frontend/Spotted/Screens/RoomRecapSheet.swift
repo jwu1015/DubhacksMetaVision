@@ -116,6 +116,8 @@ struct RoomRecapSheet: View {
 
 #Preview("G7 · Room Recap") {
     let app = AppState()
-    app.show(.roomRecap)
+    app.captureMode = .glasses
+    app.captures = MockData.captures
+    app.isShowingRoomRecap = true
     return RootView().environment(app)
 }

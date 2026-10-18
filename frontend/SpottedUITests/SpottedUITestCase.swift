@@ -1,7 +1,7 @@
 import XCTest
 
-/// Base class for UI journeys. Launches the app, optionally on a Figma frame (see MockFrame),
-/// and saves named screenshots into the test results.
+/// Base class for UI journeys. Launches the app on mock data and saves named screenshots into the
+/// test results.
 class SpottedUITestCase: XCTestCase {
     var app: XCUIApplication!
 
@@ -9,12 +9,18 @@ class SpottedUITestCase: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// `frame` is a MockFrame case name, e.g. "matched" or "checkout". Nil starts at 01a.
-    func launch(frame: String? = nil, environment: [String: String] = [:]) {
+    func launch() {
         app = XCUIApplication()
-        if let frame { app.launchEnvironment["SPOTTED_FRAME"] = frame }
-        app.launchEnvironment.merge(environment) { $1 }
         app.launch()
+    }
+
+    /// Taps the chair's hotspot and waits for the mocked results. The searching card also has
+    /// "Add to cart", so wait for the results' price range instead.
+    func openChairCard() {
+        let hotspot = app.buttons["Chair"]
+        XCTAssertTrue(hotspot.waitForExistence(timeout: 5))
+        hotspot.tap()
+        XCTAssertTrue(app.staticTexts["typical $899–$1,349"].waitForExistence(timeout: 8))
     }
 
     func snapshot(_ name: String) {

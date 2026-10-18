@@ -69,8 +69,6 @@ enum ScanState: Equatable {
     case detected(Look)
     /// Full card + verdict.
     case matched(Look, SearchResponse)
-    /// Low confidence: ask "Which one?" (07).
-    case ambiguous([Candidate])
     case failed(String)
 }
 
@@ -108,21 +106,6 @@ extension Look {
     }
 }
 
-// MARK: - App-side state
-
-/// One A/B option on the "Which one?" card.
-struct Candidate: Identifiable, Hashable {
-    let detection: Detection
-    let title: String
-    let price: Double
-    let store: String
-    let image: String
-    /// Where scene memory last saw it (glasses mode), e.g. "Seen 4 s ago · left".
-    var seen: String? = nil
-
-    var id: String { detection.trackID }
-}
-
 // MARK: - Glasses mode
 
 /// Glasses connected: video is processed but not shown, and the user picks by voice.
@@ -142,13 +125,6 @@ struct Capture: Identifiable, Hashable {
     let date: Date
     /// The best match, so it can be added to the cart from the feed.
     let product: Product?
-}
-
-/// What the assistant understood from a spoken request (G2's chips): "Price check · lamp".
-struct ParsedRequest: Hashable {
-    let action: String
-    let target: String
-    var context: String? = nil
 }
 
 struct SavedItem: Identifiable, Hashable {

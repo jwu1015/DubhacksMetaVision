@@ -66,13 +66,6 @@ enum MockData {
         item: finishedItem
     )
 
-    /// 03b: Google Shopping timed out.
-    static let searchShoppingTimeout = SearchResponse(
-        captureID: search.captureID, bestMatch: search.bestMatch, dupes: [], used: search.used,
-        priceInsight: search.priceInsight, spokenSummary: search.spokenSummary, timingMS: [:],
-        sourcesOK: [.amazon], item: finishedItem
-    )
-
     // MARK: Glasses mode (G1–G7)
 
     /// G3: the lamp the user asked about by voice.
@@ -111,9 +104,6 @@ enum MockData {
                    quickPhrase: "Lamp. Finding prices.")
     )
 
-    /// G2: what the assistant understood from "Spotted, how much is that lamp?"
-    static let parsedRequest = ParsedRequest(action: "Price check", target: "lamp", context: "In view · centered")
-
     /// G5 and G7: today's captures.
     static let captures: [Capture] = {
         let today = Calendar.current.startOfDay(for: .now)
@@ -137,16 +127,6 @@ enum MockData {
                                      matchReason: nil)),
         ]
     }()
-
-    /// 07 uses tighter boxes than the stream so both options clear the taller card.
-    static let candidates = [
-        Candidate(detection: Detection(trackID: "t3", box: [0.234, 0.350, 0.763, 0.566], label: "chair", score: 0.52),
-                  title: "Walnut Lounge Chair", price: 1299, store: "Article", image: "asset:art-lounge-chair",
-                  seen: "Seen 4 s ago · left"),
-        Candidate(detection: Detection(trackID: "t4", box: [0.799, 0.371, 0.982, 0.561], label: "lamp", score: 0.48),
-                  title: "Brass Arc Lamp", price: 189, store: "West Elm", image: "asset:art-arc-lamp",
-                  seen: "In view · centered"),
-    ]
 
     static let rooms = [
         Room(name: "Maya’s apartment", visited: "Today · 2:41 PM"),

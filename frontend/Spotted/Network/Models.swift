@@ -11,12 +11,9 @@
 //                              optional fields "hint_box" (the object the user tapped: JSON
 //                              {"x","y","w","h"} or [x1,y1,x2,y2], normalized) and "hint_label"
 //   POST   /search/{captureID}  no body                               -> SearchResponse (404 if unknown id)
-//   POST   /identify           multipart "image" (+ the same hints)  -> IdentifyResponse (/detect + /search)
 //   GET    /ice-servers                                              -> {"iceServers": [...]} (WebRTC)
 //   POST   /offer              SessionDescription (the offer)        -> SessionDescription (the answer)
-//   POST   /checkout           CheckoutRequest (JSON)                -> CheckoutResponse
 //   POST   /voice/token        VoiceTokenRequest (JSON, optional)    -> VoiceToken (LiveKit voice assistant)
-//   GET    /health                                                   -> HealthResponse
 // Errors come back as {"detail": "..."} (APIError).
 
 import CoreGraphics
@@ -241,60 +238,7 @@ struct SearchResponse: Codable, Hashable, Identifiable {
     }
 }
 
-// MARK: - POST /identify
-
-/// /detect and /search in one call (handy for testing; the app should use the two calls).
-struct IdentifyResponse: Codable, Hashable {
-    let detect: DetectResponse
-    let search: SearchResponse?  // nil when nothing was found
-}
-
-// MARK: - Cart and checkout
-
-struct CheckoutItem: Codable, Hashable {
-    let title: String
-    let price: Double
-    let url: String
-}
-
-extension CheckoutItem {
-    init(_ product: Product) {
-        self.init(title: product.title, price: product.price, url: product.url)
-    }
-}
-
-struct CheckoutRequest: Codable, Hashable {
-    let items: [CheckoutItem]
-}
-
-struct CheckoutResponse: Codable, Hashable {
-    let checkoutURL: String      // open in SFSafariViewController
-
-    enum CodingKeys: String, CodingKey {
-        case checkoutURL = "checkout_url"
-    }
-}
-
-// MARK: - GET /health and errors
-
-struct HealthResponse: Codable, Hashable {
-    let ok: Bool
-    let modelService: Bool       // the segmentation server is reachable
-    let fixtures: Bool           // true = the backend is returning canned test data
-    let demoMode: Bool
-    // For debug builds; nil from an older backend.
-    var webrtcSessions: Int? = nil   // phones streaming now (0 or 1)
-    var sceneMemory: Bool? = nil     // scene memory is live (the stream is tracking)
-    var voice: Bool? = nil           // the voice assistant is set up (LiveKit)
-
-    enum CodingKeys: String, CodingKey {
-        case ok, fixtures, voice
-        case modelService = "model_service"
-        case demoMode = "demo_mode"
-        case webrtcSessions = "webrtc_sessions"
-        case sceneMemory = "scene_memory"
-    }
-}
+// MARK: - Errors
 
 /// Any non-2xx response: 400 (not an image), 404 (unknown capture id), 422 (bad request body), 500.
 struct APIError: Decodable, Error, Hashable {

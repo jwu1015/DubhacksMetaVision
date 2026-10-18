@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 01 · Live: the glasses' feed with hotspots, the selected object's brackets and the product card.
-/// Covers 01a, 01, 01b, 01c, 01d, 07 and 08 depending on `scan` and `connection`.
+/// Covers 01a, 01, 01b, 01c and 01d depending on `scan` and `connection`.
 struct LiveView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -12,7 +12,6 @@ struct LiveView: View {
             GeometryReader { geo in
                 ZStack(alignment: .topLeading) {
                     feed
-                        .opacity(app.connection == .disconnected ? 0.35 : 1)
                         // Tapping the feed outside the card dismisses the selection.
                         .contentShape(Rectangle())
                         .onTapGesture(perform: dismissSelection)
@@ -27,10 +26,7 @@ struct LiveView: View {
             VStack(spacing: 0) {
                 if !app.isListening { topBar }
                 Spacer(minLength: 0)
-                if app.connection == .disconnected {
-                    DisconnectedView()
-                    Spacer(minLength: 0)
-                } else if !app.isListening {
+                if !app.isListening {
                     bottomContent
                 }
             }
@@ -66,51 +62,34 @@ struct LiveView: View {
         focusedTrackID = nil
         switch app.scan {
         case .looking, .detected, .matched, .failed: app.clearScan()
-        case .idle, .ambiguous: break
+        case .idle: break
         }
     }
 
     private var dimsFeed: Bool {
-        app.connection == .disconnected || app.isListening || app.isCameraPaused
+        app.isListening || app.isCameraPaused
     }
 
     // MARK: - Top
 
     @ViewBuilder private var topBar: some View {
-        if app.connection == .disconnected {
-            DisconnectedBanner()
-                .padding(.horizontal, 16)
-                .padding(.top, 54)
-        } else {
-            HStack(alignment: .top) {
-                StatusPill(connection: app.connection, isPaused: app.isCameraPaused)
-                Spacer()
-                GlassIconButton(icon: "icon-pause", iconSize: 18,
-                                label: app.isCameraPaused ? "Resume camera" : "Pause camera") {
-                    app.isCameraPaused.toggle()
-                }
+        HStack(alignment: .top) {
+            StatusPill(connection: app.connection, isPaused: app.isCameraPaused)
+            Spacer()
+            GlassIconButton(icon: "icon-pause", iconSize: 18,
+                            label: app.isCameraPaused ? "Resume camera" : "Pause camera") {
+                app.isCameraPaused.toggle()
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Markers on the feed
 
     @ViewBuilder
     private func markers(in size: CGSize) -> some View {
-        if app.connection == .disconnected || app.isCameraPaused {
+        if app.isCameraPaused {
             EmptyView()
-        } else if case let .ambiguous(candidates) = app.scan {
-            ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
-                let rect = feedRect(candidate.detection.bbox, in: size)
-                DetectionBrackets(style: .white)
-                    .frame(width: rect.width, height: rect.height)
-                    .contentShape(Rectangle())
-                    .offset(x: rect.minX, y: rect.minY)
-                    .onTapGesture { app.select(candidate.detection) }
-                OptionBadge(letter: OptionBadge.letter(for: index), size: 32)
-                    .offset(x: rect.minX - 12, y: rect.minY - 16)
-            }
         } else {
             // Detections also list objects that left the view in the last 15 s (for voice); only
             // the ones in view get a hotspot.
@@ -189,12 +168,6 @@ struct LiveView: View {
                         onAdd: app.addCurrentToCart)
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-        case let .ambiguous(candidates):
-            DisambiguationCard(candidates: candidates,
-                               onPick: { app.select($0.detection) },
-                               onNeither: app.clearScan)
-                .padding(.horizontal, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
         case let .failed(spokenLine):
             // TODO: "Take a photo" should grab a 12 MP capturePhoto still once GlassesManager exists.
             CouldntTellCard(spokenLine: spokenLine, onRetry: app.retry, onTakePhoto: app.retry)
@@ -206,7 +179,8 @@ struct LiveView: View {
 
 #Preview("01 · Live View") {
     let app = AppState()
-    app.show(.matched)
+    app.selectedTrackID = MockData.chair.trackID
+    app.scan = .matched(Look(MockData.detect).finished(with: MockData.search), MockData.search)
     return RootView().environment(app)
 }
 
@@ -216,6 +190,7 @@ struct LiveView: View {
 
 #Preview("01b · Searching") {
     let app = AppState()
-    app.show(.searching)
+    app.selectedTrackID = MockData.chair.trackID
+    app.scan = .detected(Look(MockData.detect))
     return RootView().environment(app)
 }

@@ -6,20 +6,8 @@ struct SpottedApp: App {
 
     init() {
         let state = AppState()
-        var mockFrame: MockFrame?
-        #if DEBUG
-        // Launch straight into a Figma frame, e.g. SPOTTED_FRAME=matched (see MockFrame).
-        if let name = ProcessInfo.processInfo.environment["SPOTTED_FRAME"],
-           let frame = MockFrame.allCases.first(where: { "\($0)" == name }) {
-            mockFrame = frame
-            state.show(frame)
-        }
-        #endif
-        // Stream to the backend when Config.xcconfig has its URL; mockup frames stay on mock data.
-        if mockFrame == nil {
-            state.startLive()
-            state.startGlasses()
-        }
+        state.startLive()
+        state.startGlasses()
         _appState = State(initialValue: state)
     }
 

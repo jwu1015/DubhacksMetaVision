@@ -143,6 +143,7 @@ private struct CapturedFrame: View {
 
 #Preview("G3 · Capture Card") {
     let app = AppState()
-    app.show(.captureCard)
+    app.captureMode = .glasses
+    app.scan = .matched(Look(MockData.lampDetect).finished(with: MockData.lampSearch), MockData.lampSearch)
     return RootView().environment(app)
 }

@@ -23,7 +23,7 @@ final class LookActivityController {
                 artAsset: Self.asset(search.bestMatch?.imageURL ?? look.cutoutURL)))
         case .idle, .failed:
             end()
-        case .looking, .ambiguous:
+        case .looking:
             break
         }
     }

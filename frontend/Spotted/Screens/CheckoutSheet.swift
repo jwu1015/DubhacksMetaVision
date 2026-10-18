@@ -192,6 +192,8 @@ private struct MiniVisaCard: View {
 
 #Preview("06 · Checkout") {
     let app = AppState()
-    app.show(.checkout)
+    app.cart = MockData.cart
+    app.tab = .cart
+    app.isShowingCheckout = true
     return RootView().environment(app)
 }
