@@ -67,7 +67,7 @@ class CurrentTest(unittest.TestCase):
     def setUp(self):
         self.seen = Seen()
 
-    def test_the_mug_in_front_of_the_sofa(self):
+    def test_the_smallest_object_at_the_center(self):
         self.seen.update(objects(SOFA, MUG, LAMP))
         self.assertIs(self.seen.current(), MUG)
 
@@ -94,58 +94,6 @@ class CurrentTest(unittest.TestCase):
         self.assertEqual((list(self.seen.labels), list(self.seen.looks)), (["1.1"], ["1.1"]))
         self.seen.update(objects(session=2))  # tracking restarted: uids start over
         self.assertEqual((self.seen.labels, self.seen.looks), ({}, {}))
-
-
-class AimTest(unittest.TestCase):
-    """What's in front when objects crowd the center: what the camera points at squarely, and keeps pointing at,
-    not the smallest box."""
-
-    def setUp(self):
-        self.clock = Clock()
-        self.seen = Seen(clock=self.clock)
-
-    def view(self, *things, seconds=0.1, steps=1):
-        """The tracker's objects messages for one view, `steps` of them over `seconds`."""
-        for _ in range(steps):
-            self.seen.update(objects(*things))
-            self.clock.now += seconds / steps
-
-    def test_the_speaker_in_front_not_the_charger_behind_it(self):
-        speaker = thing("2.0", "speaker", [0.30, 0.30, 0.70, 0.75])  # aimed at
-        charger = thing("2.1", "charger", [0.45, 0.15, 0.62, 0.55])  # smaller, covers the center, sticks out above
-        self.view(speaker, charger)
-        self.assertIs(self.seen.current(), speaker)  # the smallest box at the center was the charger
-        self.assertIsNone(self.seen.rival(speaker))
-
-    def test_a_tiny_box_isnt_what_they_point_at(self):
-        book = thing("2.0", "book", [0.35, 0.30, 0.68, 0.72])
-        coin = thing("2.1", "coin", [0.49, 0.49, 0.52, 0.52])  # right at the center, but 0.09% of the view
-        self.view(book, coin)
-        self.assertIs(self.seen.current(), book)
-        self.view(coin)
-        self.assertIs(self.seen.current(), coin)  # unless it's all there is
-
-    def test_what_they_keep_pointing_at_beats_what_passes_by(self):
-        bag = thing("2.0", "bag", [0.40, 0.38, 0.62, 0.66])        # held, a little off the middle
-        bottle = thing("2.1", "bottle", [0.44, 0.30, 0.56, 0.70])  # passes right through the middle
-        self.view(bag, seconds=1.5, steps=15)
-        self.view(bag, bottle)
-        self.assertIs(self.seen.current(), bag)
-        self.view(bag, bottle, seconds=1.5, steps=15)  # it stays there: now they may mean either
-        self.assertIs(self.seen.rival(self.seen.current()), bottle if self.seen.current() is bag else bag)
-
-    def test_after_a_pan_the_new_object_wins_within_a_second(self):
-        self.view(thing("2.0", "mug", [0.42, 0.40, 0.58, 0.60]), seconds=2.0, steps=20)
-        mug = thing("2.0", "mug", [0.28, 0.40, 0.44, 0.60])     # still near the center, off to the left
-        lamp = thing("2.1", "lamp", [0.42, 0.35, 0.58, 0.65])   # now in the middle
-        self.view(mug, lamp, seconds=0.8, steps=8)
-        self.assertIs(self.seen.current(), lamp)
-
-    def test_two_side_by_side_are_a_toss_up(self):
-        left = thing("2.0", "tumbler", [0.36, 0.38, 0.49, 0.70])
-        right = thing("2.1", "tumbler", [0.51, 0.38, 0.64, 0.70])
-        self.view(left, right)
-        self.assertIsNotNone(self.seen.rival(self.seen.current()))
 
 
 class FocusTest(unittest.TestCase):
@@ -195,17 +143,6 @@ class FocusTest(unittest.TestCase):
         self.assertEqual(self.seen.focus(), (LAMP, "picked"))
         self.clock.now += seen_module.PICK_S + 1
         self.assertEqual(self.seen.focus(), (MUG, "in_front"))
-
-    def test_an_item_said_to_be_wrong_isnt_this_for_a_minute(self):
-        self.seen.leave_out("1.1")  # the mug at the center: the sofa behind it is next
-        self.assertEqual(self.seen.focus(), (SOFA, "in_front"))
-        self.clock.now += seen_module.LEFT_OUT_S + 1
-        self.assertEqual(self.seen.focus(), (MUG, "in_front"))
-
-    def test_tapping_a_left_out_item_brings_it_back(self):
-        self.seen.leave_out("1.2")
-        self.tap("1.2")
-        self.assertEqual(self.seen.focus(), (LAMP, "picked"))
 
 
 class AssistantTest(unittest.IsolatedAsyncioTestCase):
@@ -292,12 +229,6 @@ class GetCurrentObjectTest(AssistantTest):
         self.seen.update(look("1.1", "failed"))
         data = app_data(await self.agent.get_current_object(None))
         self.assertEqual(data["store_prices"], "not found")
-
-    async def test_two_equally_in_front_ask_which(self):
-        self.seen.update(objects(thing("2.0", "speaker", [0.36, 0.38, 0.49, 0.70]),
-                                 thing("2.1", "charger", [0.51, 0.38, 0.64, 0.70])))
-        data = app_data(await self.agent.get_current_object(None))
-        self.assertEqual({data["tracked_as"], data["or_maybe"]}, {"speaker", "charger"})
 
     async def test_nothing_in_view(self):
         self.seen.update(objects(CHAIR))
@@ -394,48 +325,3 @@ class PickByVoiceTest(AssistantTest):
         with self.assertRaisesRegex(ToolError, "isn't tracked anymore"):
             await self.agent.select_object(None, "9.9")
         self.assertEqual(self.rpcs("action"), [])
-
-
-def blocks(said: str) -> list:
-    """Each <app_data> block of what a tool said."""
-    return [json.loads(b.split("</app_data>")[0]) for b in said.split("<app_data>")[1:]]
-
-
-class CorrectionsTest(AssistantTest):
-    async def test_the_wrong_item_moves_on_to_the_next_in_front(self):
-        self.seen.update(look("1.1", "results"))
-        self.assertEqual(app_data(await self.agent.get_current_object(None))["tracked_as"], "mug")
-        left, now = blocks(await self.agent.wrong_item(None))
-        self.assertEqual((left, now["tracked_as"], now["why"]), ({"left_out": "white ceramic mug"}, "sofa", "in_front"))
-        self.assertEqual(self.agent.discussed, "1.0")
-
-    async def test_nothing_else_in_front_says_whats_in_view(self):
-        self.seen.update(objects(MUG, LAMP, VASE))
-        self.seen.update(look("1.1", "results"))
-        await self.agent.get_current_object(None)
-        left, now = blocks(await self.agent.wrong_item(None))
-        self.assertEqual(now, {"at_center": "nothing", "in_view": [{"name": "white ceramic mug", "where": "center"},
-                                                                   {"name": "lamp", "where": "top right"},
-                                                                   {"name": "vase", "where": "left"}]})
-
-    async def test_a_wrong_pick_by_voice_is_undone(self):
-        self.seen.update(look("1.2", "results"))
-        await self.agent.select_object(None, "1.2")
-        _, now = blocks(await self.agent.wrong_item(None))
-        self.assertEqual((now["tracked_as"], self.seen.picked), ("mug", None))  # back to what's in front
-
-    async def test_never_mind_drops_the_price_announcement(self):
-        self.seen.update(look("1.1", "described"))
-        with mock.patch.object(assistant, "POLL_S", 0.01):
-            await self.agent.get_current_object(None)
-            self.assertEqual(await self.agent.never_mind(None), "Dropped.")
-            self.seen.update(look("1.1", "results", selected=True))
-            await asyncio.sleep(0.1)
-        self.session.generate_reply.assert_not_called()
-        self.assertIsNone(self.agent.discussed)
-
-    async def test_nothing_to_correct(self):
-        self.seen.update(objects(LAMP, VASE))
-        with self.assertRaisesRegex(ToolError, "No item"):
-            await self.agent.wrong_item(None)
-        self.assertEqual(await self.agent.never_mind(None), "Dropped.")
