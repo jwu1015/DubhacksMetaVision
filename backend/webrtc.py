@@ -25,7 +25,8 @@ as stream.py's "look" event, with its track_id as "t3" too:
      ...}   ("detected": label, quick_phrase, box, cutout_path; "described": item; "results": search,
             the whole /search answer; "failed": message)
 
-One phone at a time: a new offer closes the previous connection.
+One phone at a time: a new offer closes the previous connection. Its video is also relayed to the
+browser viewers of rtc_viewer.py (/rtc/viewer), through phones.viewer_track().
 
 TURN: the phone and the laptop are on different networks, so media relays through Cloudflare's TURN
 service. Credentials are minted with our TURN key (CF_TURN_KEY_ID, CF_TURN_KEY_API_TOKEN) and cached;
@@ -40,6 +41,7 @@ import itertools
 import json
 import logging
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
 from typing import Awaitable, Callable
@@ -47,6 +49,7 @@ from typing import Awaitable, Callable
 import httpx
 import uvicorn
 from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
+from aiortc.contrib.media import MediaRelay
 from aiortc.mediastreams import MediaStreamError
 from aiortc.rtcicetransport import parse_stun_turn_uri
 from aiortc.sdp import SessionDescription as ParsedSDP
@@ -271,6 +274,8 @@ class Phone:
         self.mode: str | None = None  # "glasses" or "phone", as the phone last said
         self.frames = self.sent = self.skipped = 0
         self.size: tuple[int, int] | None = None
+        self.video = None  # the phone's video track; tracking and each browser viewer read it through relay
+        self.relay = MediaRelay()
         self._tasks: set[asyncio.Task] = set()
         pc.on("signalingstatechange", lambda: self._log("signaling", pc.signalingState))
         pc.on("icegatheringstatechange", lambda: self._log("ICE gathering", pc.iceGatheringState))
@@ -305,6 +310,11 @@ class Phone:
         log.info("webrtc: %s sends %s", self, track.kind)
         if track.kind != "video":
             log.warning("webrtc: %s sent a %s track; only video is used", self, track.kind)
+        elif self.video is None:
+            self.video = track
+            self._spawn(self._receive(self.relay.subscribe(track)))
+            self.phones.video_changed()
+            return
         self._spawn(self._receive(track))  # other kinds are read too, or their frames would pile up
 
     async def _receive(self, track):
@@ -452,6 +462,24 @@ class Phones:
         self.ice = ice
         self.current: Phone | None = None
         self.lock = asyncio.Lock()
+        self.listeners: set[Callable[[], None]] = set()  # called when the phone's video comes or goes
+
+    @property
+    def live(self) -> bool:
+        """A phone is sending video right now."""
+        return bool(self.current and self.current.video and not self.current.closed)
+
+    def viewer_track(self):
+        """A copy of the phone's video for one browser viewer (newest frame only, so a slow viewer
+        skips frames), or None without a phone."""
+        return self.current.relay.subscribe(self.current.video, buffered=False) if self.live else None
+
+    def video_changed(self):
+        for listener in list(self.listeners):
+            try:
+                listener()
+            except Exception:
+                log.exception("webrtc: a video listener failed")
 
     async def answer(self, offer: RTCSessionDescription) -> RTCSessionDescription:
         """Close the previous phone, then answer this one. ValueError if the offer is unusable."""
@@ -512,6 +540,8 @@ class Phones:
         phone, self.current = self.current, None
         if phone:
             await phone.close()
+            if phone.video:
+                self.video_changed()
             if phone.started:
                 await stream.live.stop()  # deletes the tracking session
 
@@ -568,17 +598,21 @@ def main():
     async def lifespan(app: FastAPI):
         warm = asyncio.create_task(phones.ice.get())  # mint now, so the phone's first call is fast
         log.info("webrtc: POST /offer on http://localhost:%d  viewer: http://localhost:%d/stream/viewer  "
-                 "ICE: %s  tracking: %s", args.port, args.port, phones.ice.mode,
-                 config.MODEL_SERVICE_URL or "MODEL_SERVICE_URL unset")
+                 "WebRTC viewer: http://localhost:%d/rtc/viewer  ICE: %s  tracking: %s", args.port, args.port,
+                 args.port, phones.ice.mode, config.MODEL_SERVICE_URL or "MODEL_SERVICE_URL unset")
         yield
         warm.cancel()
+        await rtc_viewer.close()
         await close()
         await stream.live.stop()
         await net.close()
 
     app = FastAPI(title="Get the Look WebRTC", lifespan=lifespan)
+    sys.modules.setdefault("webrtc", sys.modules[__name__])  # run as a script: rtc_viewer gets this module
+    import rtc_viewer
     app.include_router(stream.router)
     app.include_router(router)
+    app.include_router(rtc_viewer.router)
 
     @app.get("/", include_in_schema=False)
     async def index():

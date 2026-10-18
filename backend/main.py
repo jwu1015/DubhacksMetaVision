@@ -29,6 +29,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 import cart
 import config
 import net
+import rtc_viewer
 import stream
 import webrtc
 from models import (
@@ -476,6 +477,7 @@ async def lifespan(app: FastAPI):
     yield
     for task in background + list(search_tasks.values()):
         task.cancel()
+    await rtc_viewer.close()  # the browser viewers' connections
     await webrtc.close()      # the phone's connection
     await stream.live.stop()  # deletes the tracking session on the segmentation server
     await net.close()
@@ -554,6 +556,8 @@ app.include_router(stream.router)
 # Look (its DetectResponse isn't needed: the steps go to the phone and the projector as "look" events).
 app.include_router(webrtc.router)
 webrtc.select_handler = look
+# The phone's video relayed to browsers over WebRTC, boxes on top (rtc_viewer.py): /rtc/viewer.
+app.include_router(rtc_viewer.router)
 
 
 _checkout = None if config.USE_FIXTURES else stage("checkout")

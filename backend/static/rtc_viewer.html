@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get the Look · WebRTC</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0c;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --off: #71717a;
+    --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--fg); font: 600 16px/1.25 var(--font);
+  }
+  /* Drawn onto the canvas, rotated upright. Rendered but invisible: Chrome stops decoding a display: none video. */
+  #video { position: fixed; top: 0; left: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+  #canvas { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #waiting {
+    position: fixed; top: 50%; left: 16px; right: 16px; transform: translateY(-50%);
+    text-align: center; color: var(--muted); font-size: clamp(20px, 4vh, 48px);
+  }
+  #badge {
+    position: fixed; top: 16px; right: 16px;
+    display: flex; align-items: center; gap: 0.5em; padding: 0.45em 0.95em;
+    border-radius: 999px; background: rgba(0, 0, 0, 0.65);
+    font-size: clamp(14px, 2.4vh, 28px); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  #badge .dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--off); }
+  #badge[data-state="ok"] .dot { background: var(--ok); }
+  #badge[data-state="warn"] .dot { background: var(--warn); }
+</style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+<div id="waiting">Connecting…</div>
+<div id="badge" data-state="off"><span class="dot"></span><span id="badge-text">Connecting</span></div>
+<script>
+"use strict";
+// Protocol: rtc_viewer.py. Video over WebRTC; signaling, ICE candidates and boxes over one WebSocket.
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const waiting = document.getElementById("waiting");
+const badge = document.getElementById("badge");
+const badgeText = document.getElementById("badge-text");
+
+const STALE_MS = 2000;  // boxes older than this are hidden
+
+let ws = null;
+let pc = null;
+let iceServers = [];
+let rotate = 0;          // degrees counterclockwise to turn the video upright, as the server's WEBRTC_ROTATE
+let live = false;        // a phone is streaming
+let tracking = "stopped";
+let objects = [];
+let boxesAt = 0;
+let retry = null;
+
+function send(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+// ---------- WebSocket ----------
+
+function connect() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/rtc/ws");
+  ws.onmessage = (e) => onMessage(JSON.parse(e.data));
+  ws.onclose = () => {
+    stopPeer();
+    live = false;
+    render("Reconnecting…");
+    setTimeout(connect, 1000);
+  };
+}
+
+function onMessage(msg) {
+  switch (msg.type) {
+    case "hello":
+      iceServers = msg.iceServers || [];
+      rotate = msg.rotate || 0;
+      setLive(msg.live);
+      break;
+    case "live":
+      setLive(msg.live);
+      break;
+    case "answer":
+      if (pc && pc.signalingState === "have-local-offer") {
+        pc.setRemoteDescription({ type: "answer", sdp: msg.sdp }).catch((e) => fail(e.message));
+      }
+      break;
+    case "error":
+      fail(msg.message);
+      break;
+    case "status":
+      tracking = msg.tracking;
+      render();
+      break;
+    case "boxes":
+      objects = msg.objects;
+      boxesAt = performance.now();
+      render();
+      break;
+  }
+}
+
+function setLive(isLive) {
+  live = !!isLive;
+  if (live) startPeer();
+  else stopPeer();
+  render();
+}
+
+function fail(message) {
+  console.warn("viewer:", message);
+  stopPeer();
+  render(message);
+  clearTimeout(retry);
+  retry = setTimeout(() => { if (live) startPeer(); }, 2000);
+}
+
+// ---------- WebRTC ----------
+
+async function startPeer() {
+  stopPeer();
+  const peer = pc = new RTCPeerConnection({ iceServers });
+  peer.addTransceiver("video", { direction: "recvonly" });
+  peer.ontrack = (e) => {
+    video.srcObject = e.streams[0] || new MediaStream([e.track]);
+    video.play().catch(() => {});  // muted, so autoplay is allowed
+  };
+  peer.onconnectionstatechange = () => {
+    if (peer !== pc) return;
+    if (peer.connectionState === "failed") fail("connection failed");
+    render();
+  };
+  // Trickle ICE: the server ignores candidates that arrive before its offer, so hold them until it's sent.
+  let pending = [];
+  peer.onicecandidate = (e) => {
+    const msg = { type: "candidate", candidate: e.candidate ? e.candidate.candidate : null,
+                  sdpMid: e.candidate ? e.candidate.sdpMid : null,
+                  sdpMLineIndex: e.candidate ? e.candidate.sdpMLineIndex : null };
+    if (pending) pending.push(msg); else send(msg);
+  };
+  try {
+    await peer.setLocalDescription(await peer.createOffer());
+  } catch (e) {
+    return fail(e.message);
+  }
+  if (peer !== pc) return;
+  send({ type: "offer", sdp: peer.localDescription.sdp });
+  pending.forEach(send);
+  pending = null;
+  render();
+}
+
+function stopPeer() {
+  clearTimeout(retry);
+  if (pc) { pc.close(); pc = null; }
+  video.srcObject = null;
+}
+
+// ---------- drawing ----------
+
+function render(message) {
+  const connected = pc && pc.connectionState === "connected";
+  const fresh = performance.now() - boxesAt < STALE_MS;
+  let text, state = "off";
+  if (!ws || ws.readyState !== WebSocket.OPEN) text = "Connecting";
+  else if (!live) text = "No phone";
+  else if (!connected) text = "Connecting video";
+  else if (tracking === "offline") { text = "Tracking offline"; state = "warn"; }
+  else if (tracking !== "ok") { text = "Starting tracking"; state = "warn"; }
+  else { text = `Live · ${fresh ? objects.length : 0} objects`; state = "ok"; }
+  badge.dataset.state = state;
+  badgeText.textContent = text;
+  waiting.hidden = connected;
+  waiting.textContent = message || (live ? "Connecting video…" : "Waiting for the phone to stream…");
+}
+
+function color(trackId) {
+  const n = parseInt(String(trackId).slice(1), 10) || 0;
+  return `hsl(${(n * 67) % 360} 90% 60%)`;
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh || !video.srcObject) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const r = ((rotate % 360) + 360) % 360;
+  const swap = r === 90 || r === 270;
+  const W = swap ? vh : vw, H = swap ? vw : vh;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-r * Math.PI / 180);
+  ctx.drawImage(video, -vw / 2, -vh / 2);
+  ctx.restore();
+
+  if (performance.now() - boxesAt > STALE_MS) return;
+  const line = Math.max(2, W / 300);
+  const size = Math.max(12, Math.round(W / 40));
+  ctx.font = `700 ${size}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.textBaseline = "top";
+  for (const o of objects) {
+    const [x1, y1, x2, y2] = o.box;
+    const x = x1 * W, y = y1 * H, w = (x2 - x1) * W, h = (y2 - y1) * H;
+    const c = color(o.track_id);
+    ctx.lineWidth = line;
+    ctx.strokeStyle = c;
+    ctx.strokeRect(x, y, w, h);
+    const label = `${o.label} ${Math.round(o.score * 100)}%`;
+    const pad = size * 0.3;
+    const tw = ctx.measureText(label).width + pad * 2, th = size + pad * 2;
+    const ty = y - th >= 0 ? y - th : y;  // above the box, or inside it at the top edge
+    ctx.fillStyle = c;
+    ctx.fillRect(x - line / 2, ty, tw, th);
+    ctx.fillStyle = "#0a0a0c";
+    ctx.fillText(label, x - line / 2 + pad, ty + pad);
+  }
+}
+
+setInterval(() => render(), 1000);  // so stale boxes and the count clear without new messages
+connect();
+render();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
