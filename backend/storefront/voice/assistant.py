@@ -28,18 +28,11 @@ the things in front of their camera.
 - Speak only when they speak to you, in one or two short sentences.
 - Before you say anything about an item (what it is, its brand, its price, where to buy it, whether it's a good
   deal), call get_current_object: it says which item they mean, and its prices.
-- If it also gives "or_maybe", that item is just as much in front of them: unless their words already say which
-  one ("the speaker"), ask which one they mean, in a few words, before answering.
 - Name the item as specifically as you can: the tool's "brand" and "name", made more precise by what you can read
   or recognize on it in the camera, such as a brand or product name printed on it, its logo or its packaging
   ("Busch Light can", not "grey can"). Reading the label isn't guessing, and a generic name from the tool doesn't
   mean it has no brand. Only name a brand the tool gives or you can see.
 - Prices and stores come only from the tool: never guess them.
-- If they say it's the wrong item ("no, not that one", "wrong one"), call wrong_item: it drops that item and gives
-  the next one in front, or what's in view. Say which item you have now, or ask which one they mean. If they name
-  the one they mean ("no, the speaker"), call whats_here and select_object instead.
-- If they call off what they asked ("never mind", "cancel", "forget it"), call never_mind and drop the subject.
-  An item already added to the cart stays: undo_last takes it out.
 - "why" says how the tool chose it: "picked" (they tapped it in the app, or picked it by voice) or "in_front" (it's
   at the center of the camera). If they seem to mean something else, ask them to tap it in the app or point the
   camera at it.
@@ -134,8 +127,6 @@ class Assistant(Agent):
         front = self.seen.current() if why == "picked" else None
         if front is not None and front["uid"] != uid:
             data["in_front"] = self.call(front["uid"])  # what the camera is on now, if they mean that instead
-        if why == "in_front" and (rival := self.seen.rival(o)) is not None:
-            data["or_maybe"] = self.call(rival["uid"])  # as squarely in front: they may mean that one
         if data.get("store_prices") == "checking":
             self.wait_for_prices(uid)
         log.info("voice: talking about %s, %r (%s): %s", uid, data["name"], why, data.get("store_prices", "prices in"))
@@ -189,38 +180,6 @@ class Assistant(Agent):
             self.unopened.add(object_id)
             log.info("voice: the app didn't open %s (%s)", object_id, e)
         return await self.get_current_object(context)
-
-    # ---------- corrections ----------
-
-    @function_tool()
-    async def wrong_item(self, context: RunContext) -> str:
-        """They say the item you're talking about isn't the one they mean ("no, not that one", "wrong one"). Drops
-        it: it isn't "this" for a minute, and its prices won't be announced. Then answers like get_current_object,
-        about the next item in front, or says what's in view."""
-        uid = self.discussed or (self.seen.focus()[0] or {}).get("uid")
-        if uid is None:
-            raise ToolError("No item is being talked about.")
-        wrong = self.call(uid)
-        self.drop(uid)
-        self.seen.leave_out(uid)
-        log.info("voice: %s (%r) is the wrong item", uid, wrong)
-        return app_data({"left_out": wrong}) + "\n" + await self.get_current_object(context)
-
-    @function_tool()
-    async def never_mind(self, context: RunContext) -> str:
-        """They call off what they asked ("never mind", "cancel", "forget it"): drops the item being talked about,
-        and its prices won't be announced. An item already added to the cart stays: undo_last takes it out."""
-        if self.discussed is not None:
-            log.info("voice: never mind %s", self.discussed)
-            self.drop(self.discussed)
-        return "Dropped."
-
-    def drop(self, uid: str):
-        """Stop talking about this item: the action tools no longer act on it, and its prices won't be announced."""
-        if self._prices and self._prices_uid == uid:
-            self._prices.cancel()
-        if self.discussed == uid:
-            self.discussed = None
 
     # ---------- prices as they come in ----------
 
