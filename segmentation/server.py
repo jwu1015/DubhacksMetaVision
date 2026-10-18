@@ -107,7 +107,7 @@ Every label:
   "bottle"), never a compound or a description ("desk lamp", "cell phone", "phone charger",
   "water bottle", "blue mug")
 - a concrete, physical object that can be outlined in an image; not terrain (snow, grass) or markings
-- not a person, body part, animal, plant or flower
+- not a person or body part
 - not a wall, floor, ceiling, window, door or other part of the building
 - no duplicates or synonyms of another label ("tv" and "television")"""
 
