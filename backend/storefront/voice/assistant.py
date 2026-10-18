@@ -169,6 +169,10 @@ class Assistant(Agent):
         if not any(o["uid"] == object_id for o in self.seen.objects):
             raise ToolError("That item isn't tracked anymore. Call whats_here again.")
         self.seen.pick(object_id)
+        try:  # the backend picks it as a tap does: its Look goes to everyone in the room, the viewer included
+            await actions.select(object_id)
+        except ToolError as e:
+            log.info("voice: the backend didn't pick %s (%s)", object_id, e)
         try:
             await actions.phone_action("select_item", uid=object_id)  # the app opens it, as if tapped
             self.unopened.discard(object_id)

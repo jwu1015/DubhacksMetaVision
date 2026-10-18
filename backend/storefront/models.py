@@ -105,6 +105,7 @@ class LookMessage(BaseModel):
     label: str                        # SAM's prompt, until Claude's item names it
     box: Corners
     selected: bool = False            # the user picked this object
+    picked_at: int | None = None      # when they last picked it (Unix ms): the latest pick is the one to show
     crop_url: str | None = None       # the crop, once the user picked the object
     item: Item | None = None          # from "described" on
     search: SearchResponse | None = None  # "results"

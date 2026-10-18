@@ -306,6 +306,7 @@ class PickByVoiceTest(AssistantTest):
     async def test_a_pick_opens_it_in_the_app_and_makes_it_this(self):
         self.seen.update(look("1.2", "results"))
         data = app_data(await self.agent.select_object(None, "1.2"))
+        self.assertEqual(self.rpcs("select"), [{"uid": "1.2"}])  # the backend picks it: the viewer shows it
         self.assertEqual(self.rpcs("action"), [{"name": "select_item", "uid": "1.2"}])
         self.assertEqual((data["tracked_as"], data["why"], data["in_front"]), ("lamp", "picked", "white ceramic mug"))
         self.assertEqual(self.seen.focus(), (LAMP, "picked"))  # over the mug in front, from now on

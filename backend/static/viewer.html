@@ -70,6 +70,18 @@
   h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--label-secondary); }
   .group { display: flex; flex-direction: column; gap: 10px; }
   @keyframes pulse { 50% { opacity: 0.4; } }
+  #look.flash { animation: flash 0.6s ease-out; }
+  @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--accent); } to { box-shadow: inset 0 0 0 2px transparent; } }
+  /* Narrow and portrait screens: the video on top, the item under it. */
+  @media (max-width: 760px), (orientation: portrait) {
+    #app { flex-direction: column; }
+    #look { flex: 0 1 auto; max-height: 48%; padding: 16px; gap: 12px;
+            border-left: 0; border-top: 1px solid var(--separator); }
+    #crop { aspect-ratio: auto; height: 120px; flex: none; }
+    #name { font-size: 19px; }
+    #status { top: 12px; left: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { #look.flash, #look-status.busy { animation: none; } }
 </style>
 </head>
 <body>
@@ -103,7 +115,7 @@ const MOVE_MS = 150;      // a label glides to its new position
 const FADE_IN_MS = 80;
 const FADE_OUT_MS = 200;  // a label missing from the latest update fades out
 const DIM = 0.35;         // the other labels, while one is picked
-const TOP = 4;            // labels shown in full; the other labeled objects get a dot
+const TOP = 4;            // labels shown in full, the picked one included; the other labeled objects get a dot
 const W_SCORE = 0.2, W_SIZE = 0.8; // how labels are ranked: SAM's score and the box's share of the frame
 
 // Positions arrive a few times a second; between updates each label stays where it was last seen.
@@ -171,17 +183,26 @@ function handle(ev) {
 const $ = (id) => document.getElementById(id);
 const VERDICT = { low: "Good price", fair: "Fair price", high: "Pricey" };
 const EXACT = 85;         // match_score from here up is an "Exact match", as in the app
-let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price}
-const picks = new Set();  // look_ids of every pick so far: the newest one is in the sidebar
+let look = null;          // the picked Look in the sidebar: {look_id, uid, name, price, picked_at}
 
-// Each "look" message carries the whole Look so far, so the sidebar is drawn from it alone.
+// The latest pick takes the sidebar, whether it's a tap in the app or a pick by voice, and picking an older
+// item again brings it back. Each "look" message carries the whole Look so far, so the sidebar is drawn from
+// it alone.
 function showLook(ev) {
-  if (!picks.has(ev.look_id)) picks.add(ev.look_id); // a new pick takes the sidebar
-  else if (!look || ev.look_id !== look.look_id) return; // an older pick, already replaced
+  const at = ev.picked_at || 0;
+  if (look && ev.look_id !== look.look_id && at <= look.picked_at) return; // an older pick, already replaced
+  const fresh = !look || ev.look_id !== look.look_id || at > look.picked_at;
   const s = ev.stage === "results" ? ev.search : null, best = s && s.best_match;
   look = { look_id: ev.look_id, uid: ev.uid, name: cap((ev.item && ev.item.category) || ev.label),
-           price: best ? money(best.price, best.currency) : null };
-  $("look").hidden = false;
+           price: best ? money(best.price, best.currency) : null, picked_at: at };
+  const panel = $("look");
+  panel.hidden = false;
+  if (fresh) { // a new pick: back to its top, and a short flash so it's seen to change
+    panel.scrollTop = 0;
+    panel.classList.remove("flash");
+    void panel.offsetWidth;
+    panel.classList.add("flash");
+  }
   $("crop").hidden = !ev.crop_url;
   $("crop").style.backgroundImage = cssUrl(ev.crop_url);
   $("name").textContent = look.name;
@@ -305,7 +326,8 @@ function drawLabel(t, b, alpha, v, font, full, picked) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.fill();
   } else {
-    const name = picked ? picked.name : cap(q.name), price = picked ? picked.price || "" : estimate(q);
+    const name = picked ? picked.name : cap(q.name);
+    const price = picked ? picked.price || (q ? estimate(q) : "") : estimate(q); // the estimate until prices are in
     ctx.font = "500 " + font + "px " + FONT;
     const gap = font * 0.5, nw = ctx.measureText(name).width, pw = price ? ctx.measureText(price).width : 0;
     const w = font * 0.85 + nw + (price ? gap + pw : 0) + font, h = font * 2;
@@ -359,7 +381,8 @@ function draw() {
     const picked = look ? tracks.get(look.uid) : undefined;
     const labeled = [...tracks.values()].filter((t) => t !== picked && names.has(t.uid) && t.gone === null)
       .map((t) => ({ t, b: boxAt(t, now) })).sort((a, z) => rank(z.t, z.b) - rank(a.t, a.b));
-    const top = new Set(labeled.slice(0, TOP).map((x) => x.t));
+    const slots = TOP - (picked && picked.gone === null ? 1 : 0); // the picked label is one of the TOP
+    const top = new Set(labeled.slice(0, slots).map((x) => x.t));
     for (const t of tracks.values()) {
       if (t !== picked) drawLabel(t, boxAt(t, now), alphaAt(t, now) * (picked ? DIM : 1), v, font, top.has(t));
     }
