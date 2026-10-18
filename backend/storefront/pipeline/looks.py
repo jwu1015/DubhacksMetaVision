@@ -48,6 +48,7 @@ class Look:
     label: str            # SAM's prompt
     box: BBox             # the object's box in the frame it was cropped from
     cutout: bytes         # the crop, a JPEG in memory
+    category: str | None = None  # what the user was looking for when it started
     look_id: str = field(default_factory=lambda: "l_" + uuid.uuid4().hex[:8])
     stage: LookStage = "started"
     item: Item | None = None
@@ -72,12 +73,12 @@ class Looks:
     def get(self, uid: str) -> Look | None:
         return self.looks.get(uid)
 
-    def start(self, uid: str, label: str, box: BBox, cutout: bytes) -> Look:
-        """A Look on this object, unless it has one."""
+    def start(self, uid: str, label: str, box: BBox, cutout: bytes, category: str | None = None) -> Look:
+        """A Look on this object, unless it has one. category: what the user is looking for."""
         look = self.looks.get(uid)
         if look:
             return look
-        look = self.looks[uid] = Look(uid, label.strip() or "item", box, cutout)
+        look = self.looks[uid] = Look(uid, label.strip() or "item", box, cutout, category)
         self._send(look)
         if self._running() < self.max_running:
             self._run(look)
@@ -137,7 +138,7 @@ class Looks:
         """Describe the crop, then search on Claude's queries; Claude failing leaves the label."""
         t0 = time.perf_counter()
         try:
-            item = await vision.detect(look.cutout)
+            item = await vision.detect(look.cutout, category=look.category, label=look.label)
         except Exception as e:
             log.warning("look %s: Claude failed (%r); searching with the label", look.look_id, e)
             item = None
