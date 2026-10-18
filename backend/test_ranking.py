@@ -243,7 +243,7 @@ TEMPLATE = "That's a West Elm floor lamp, about 349 dollars. Target has a lookal
 
 class RankTest(unittest.IsolatedAsyncioTestCase):
     async def choose(self, *replies, products=RANKED, insight=INSIGHT) -> SearchResponse:
-        with mock.patch.object(rank, "call_model", mock.AsyncMock(side_effect=list(replies))) as model:
+        with mock.patch.object(rank.vlm.haiku, "call", mock.AsyncMock(side_effect=list(replies))) as model:
             resp = await rank.choose(ITEM, products, insight)
         self.model = model
         self.check_rules(resp, products)
@@ -364,14 +364,14 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.spoken_summary, EXAMPLE.spoken_summary)
 
     async def test_no_retry_once_budget_is_spent(self):
-        async def slow_failure(user, timeout):
+        async def slow_failure(system, content, schema, max_tokens, timeout):
             await asyncio.sleep(0.2)
             raise anthropic.AnthropicError("timeout")
         with mock.patch.object(rank, "BUDGET_S", 1.1), \
-                mock.patch.object(rank, "call_model", mock.AsyncMock(side_effect=slow_failure)) as model:
+                mock.patch.object(rank.vlm.haiku, "call", mock.AsyncMock(side_effect=slow_failure)) as model:
             resp = await rank.choose(ITEM, RANKED, INSIGHT)
         self.assertEqual(model.await_count, 1)
-        self.assertLessEqual(model.await_args.args[1], 1.1)
+        self.assertLessEqual(model.await_args.args[4], 1.1)
         self.assertEqual(resp.best_match.url, WEST_ELM)
 
     async def test_lists_are_capped_and_never_repeat(self):
@@ -449,7 +449,7 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_prompt_sends_only_the_listed_fields(self):
         await self.choose(reply())
-        user = self.model.await_args.args[0]
+        user = self.model.await_args.args[1]  # (system, user, schema, max_tokens, timeout)
         item_line, insight_line, results_line = user.splitlines()
         self.assertNotIn("bbox", json.loads(item_line.removeprefix("Item: ")))
         self.assertEqual(json.loads(insight_line.removeprefix("Price insight: ")),
@@ -490,7 +490,7 @@ class RankTest(unittest.IsolatedAsyncioTestCase):
         async def linked(best):
             return best.model_copy(update={"url": "https://store.example/p"})
 
-        with mock.patch.object(rank, "call_model", mock.AsyncMock(return_value=reply())), \
+        with mock.patch.object(rank.vlm.haiku, "call", mock.AsyncMock(return_value=reply())), \
                 mock.patch.object(rank.search, "with_store_link", linked):
             resp = await rank.choose(ITEM, RANKED, INSIGHT)
         self.assertEqual(resp.best_match.url, "https://store.example/p")

@@ -18,7 +18,6 @@ camera switch, the phone disconnecting).
 PREFETCH=false turns both off. A background Look costs about 3 SerpAPI searches; quick labels cost none.
 """
 import asyncio
-import base64
 import io
 import logging
 import os
@@ -26,11 +25,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-import anthropic
 from PIL import Image
 from pydantic import BaseModel
 
 import config
+import vlm
 from models import BBox
 from scene import WINDOW_S
 from tracker import TrackResult
@@ -38,7 +37,6 @@ from tracker import TrackResult
 log = logging.getLogger("gtl.prefetch")
 
 ENABLED = os.getenv("PREFETCH", "true").strip().lower() in ("1", "true", "yes") and not config.USE_FIXTURES
-MODEL = "claude-haiku-5-5"
 QUICK_AFTER_S = 0.5      # in view this long before it gets a quick label, so flicker costs nothing
 PREFETCH_AFTER_S = 2.0   # in view this long before its whole Look starts in the background
 PREFETCH_MAX = 3         # background Looks among the objects in view
@@ -58,8 +56,6 @@ class QuickLabel(BaseModel):
     price_low: int
     price_high: int
 
-
-OUTPUT_FORMAT = {"type": "json_schema", "schema": anthropic.transform_schema(QuickLabel)}
 
 
 @dataclass
@@ -97,14 +93,6 @@ class Seen:
 
 seen: dict[int, Seen] = {}
 _last_frame_idx = -1
-_client: anthropic.AsyncAnthropic | None = None
-
-
-def client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(max_retries=0, default_headers=config.ANTHROPIC_HEADERS)
-    return _client
 
 
 def ms_since(t0: float) -> int:
@@ -124,29 +112,12 @@ def crop_jpeg(frame: Image.Image, box: BBox) -> bytes:
     return buf.getvalue()
 
 
-async def call_model(jpeg: bytes) -> str:
-    """One Claude call; returns the reply text."""
-    msg = await client().messages.create(
-        model=MODEL, max_tokens=200, system=SYSTEM, timeout=TIMEOUT_S,
-        messages=[{"role": "user", "content": [
-            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                                         "data": base64.standard_b64encode(jpeg).decode()}},
-            {"type": "text", "text": "Label this item."},
-        ]}],
-        thinking={"type": "disabled"},
-        output_config={"effort": "low", "format": OUTPUT_FORMAT},
-    )
-    if msg.stop_reason != "end_turn":
-        raise ValueError(f"stop_reason={msg.stop_reason}")
-    return "".join(b.text for b in msg.content if b.type == "text")
-
-
 async def quick_label(jpeg: bytes) -> QuickLabel | None:
     """A short name and a price range for the item in this crop. Never raises: None if Claude fails."""
     try:
-        q = QuickLabel.model_validate_json(await call_model(jpeg))
-    except Exception as e:  # API error, timeout, bad JSON or schema
-        log.warning("prefetch: quick label failed: %s: %s", type(e).__name__, " ".join(str(e).split())[:200])
+        q = await vlm.haiku.ask("prefetch", SYSTEM, [vlm.image(jpeg), {"type": "text", "text": "Label this item."}],
+                                QuickLabel, max_tokens=200, timeout=TIMEOUT_S)
+    except vlm.VLMError:
         return None
     name = " ".join(q.name.split())[:60]
     low, high = sorted((q.price_low, q.price_high))
