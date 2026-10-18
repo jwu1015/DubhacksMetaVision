@@ -1,7 +1,7 @@
 """Tests for segment.py against a fake segmentation server (httpx.MockTransport): no GPU, no network.
 
-Since 18 Oct the server's /segment only takes a category (its Claude picks the labels), so a photo with
-our own labels goes through a one-frame tracking session: POST /session, POST /session/{id}/frame, DELETE.
+The server only takes tracking sessions with labels (18 Oct), so a photo goes through a one-frame session:
+POST /session, POST /session/{id}/frame, DELETE. Without labels, Claude picks them first (labels.py).
 
     python -m unittest test_segment -v      (from backend/)
 """
@@ -33,10 +33,10 @@ def reply(*objects):
 
 
 class FakeServer:
-    """Baptiste's API: sessions take our labels; /segment takes only a category."""
+    """Baptiste's API: sessions take our labels."""
 
-    def __init__(self, frame=None, create=200, segment=None, delay=0.0):
-        self.frame, self.create, self.segment, self.delay = frame or reply(), create, segment, delay
+    def __init__(self, frame=None, create=200, delay=0.0):
+        self.frame, self.create, self.delay = frame or reply(), create, delay
         self.requests: list[httpx.Request] = []
         self.sessions: dict[str, str] = {}
 
@@ -57,8 +57,6 @@ class FakeServer:
         if request.method == "DELETE":
             self.sessions.pop(path.rsplit("/", 1)[1], None)
             return httpx.Response(200, json={"deleted": True})
-        if request.method == "POST" and path == "/segment":
-            return httpx.Response(200, json=self.segment or reply())
         return httpx.Response(404, json={"detail": "no route"})
 
     def calls(self) -> list[str]:
@@ -105,11 +103,19 @@ class SegmentTest(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(lamp.h, (409.4 - 66.9) / 480, places=3)
         self.assertEqual(server.sessions, {})  # nothing left on the server
 
-    async def test_no_labels_use_the_servers_own_for_a_category(self):
-        server = self.serve(FakeServer(segment=reply((LAMP, 0.92, "lamp"))))
-        found = await segment.sam_objects(PHOTO, None)
-        self.assertEqual(server.calls(), ["POST /segment"])
-        self.assertEqual(server.requests[0].url.params["category"], config.SAM_AUTO_CATEGORY)
+    async def test_no_labels_has_claude_pick_them_before_the_session(self):
+        server = self.serve(FakeServer(reply((LAMP, 0.92, "lamp"))))
+        picks = []
+
+        async def fake_labels(image, category):
+            picks.append((max(image.size), category, len(server.requests)))
+            return ["lamp", "rug"]
+        with mock.patch("labels.labels_or_fallback", fake_labels):
+            found = await segment.sam_objects(PHOTO, None)
+        await self.settle()
+        self.assertEqual(picks, [(640, config.SAM_AUTO_CATEGORY, 0)])  # the photo sent, before any request
+        self.assertEqual(server.calls(), ["POST /session", "POST /session/s1/frame", "DELETE /session/s1"])
+        self.assertEqual(json.loads(server.requests[0].content), {"prompt": "lamp,rug"})
         self.assertEqual([f.label for f in found], ["lamp"])
 
     async def test_failures_give_none_and_never_leave_a_session(self):
