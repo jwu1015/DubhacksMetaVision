@@ -5,13 +5,10 @@ import time
 from dataclasses import dataclass
 from itertools import takewhile
 
-from storefront import config
-
 MEMORY_S = 15         # the stream's scene memory keeps an object this long after it was last seen
 CLOSE = 0.15          # two objects that fit what was said and score this close: ask which, don't guess
 
-# What people call the tracker's labels (config.SAM_CATEGORIES). A desk is a table: SAM has no desk
-# category, so a desk is tracked as a table.
+# What people call some of SAM's prompts. A desk is a table: with no "desk" prompt, a desk is tracked as a table.
 SPOKEN = {
     "couch": "sofa", "loveseat": "sofa", "sectional": "sofa", "settee": "sofa",
     "armchair": "chair", "recliner": "chair", "stool": "chair",
@@ -36,10 +33,9 @@ NOT_LOOKS = CUT | OTHER | HERE | PASSED | BEFORE | {w for side, _ in SIDES for w
     "what", "how", "much", "about", "look", "like", "see", "saw", "seen", "was", "are", "its", "walked"}
 
 # ---------- which object "that lamp" is ----------
-# Scene objects come from the stream's "objects" events: {"id", "label", "score", "box": {"x","y","w","h"},
-# "in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts"}, in view first, then those seen
-# in the last MEMORY_S seconds, most recent first. Events from before scene memory have only what's in
-# view and none of its fields: an object then counts as in view, just now, centered as its box is.
+# Scene objects come from the stream's "objects" messages (models.LiveObject): {"uid", "box": [x1, y1, x2, y2],
+# "prompt", "score", "in_view", "last_seen_ts"}, in view first, then those seen in the last MEMORY_S seconds,
+# most recent first. Missing fields count as in view, just now.
 
 def now_ms() -> float:
     return time.time() * 1000  # as the scene memory's timestamps
@@ -50,15 +46,15 @@ def in_view(o: dict) -> bool:
 
 
 def middle(o: dict) -> tuple[float, float]:
-    b = o["box"]
-    return b["x"] + b["w"] / 2, b["y"] + b["h"] / 2
+    x1, y1, x2, y2 = o["box"]
+    return (x1 + x2) / 2, (y1 + y2) / 2
 
 
 def distance(o: dict) -> float:
     """From the center of the view to the object's box; 0 when the box covers it."""
-    b = o["box"]
-    dx = max(b["x"] - 0.5, 0.0, 0.5 - (b["x"] + b["w"]))
-    dy = max(b["y"] - 0.5, 0.0, 0.5 - (b["y"] + b["h"]))
+    x1, y1, x2, y2 = o["box"]
+    dx = max(x1 - 0.5, 0.0, 0.5 - x2)
+    dy = max(y1 - 0.5, 0.0, 0.5 - y2)
     return math.hypot(dx, dy)
 
 
@@ -74,7 +70,8 @@ def score(o: dict, now: float) -> float:
     if not in_view(o):
         return max(0.0, 1 - (now - o.get("last_seen_ts", now)) / 1000 / MEMORY_S)
     if covers(o):
-        return 4 - o["box"]["w"] * o["box"]["h"]
+        x1, y1, x2, y2 = o["box"]
+        return 4 - (x2 - x1) * (y2 - y1)
     near = max(0.0, 1 - distance(o) / 0.5)
     return 1 + (near + o.get("centered", near)) / 2
 
@@ -83,10 +80,10 @@ def words(text: str) -> list[str]:
     return re.findall(r"[a-z]+", text.lower())
 
 
-def known_nouns(objects: list[dict]) -> dict[str, str]:
-    """The tracker's labels by their last word ("art": "wall art"), each one a kind of object."""
-    labels = [o["label"] for o in objects] + config.SAM_CATEGORIES.split(",")
-    return {w[-1]: label.strip() for label in labels if (w := words(label))}
+def known_nouns(objects: list[dict], prompts=()) -> dict[str, str]:
+    """SAM's prompts (the session's, and those of the objects seen) by their last word ("art": "wall art"),
+    each one a kind of object."""
+    return {w[-1]: p.strip() for p in [*prompts, *(o["prompt"] for o in objects)] if (w := words(p))}
 
 
 def noun(word: str, known: dict[str, str]) -> tuple[str, str] | None:
@@ -125,7 +122,7 @@ class Resolved:
     say: str | None = None  # instead of looking: a question when the best two are too close to call, or why none fit
 
 
-def narrow(pool: list[dict], said: list[str], known: dict[str, str], described: dict[int, str]):
+def narrow(pool: list[dict], said: list[str], known: dict[str, str], described: dict[str, str]):
     """Apply the rest of what they said to the ranked objects: where it is ("on the left", "in front of
     you", "I just passed", "the one before") or what it looks like, by Claude's descriptions of those
     already looked at ("the green one"). Returns the objects, those that fit first, and True when that
@@ -141,7 +138,7 @@ def narrow(pool: list[dict], said: list[str], known: dict[str, str], described: 
     elif cues & HERE and here:
         pool = here
     looks = {w for w in said if len(w) > 2 and w not in NOT_LOOKS and not noun(w, known)}
-    fit = [o for o in pool if looks & set(words(described.get(o["id"], "")))]
+    fit = [o for o in pool if looks & set(words(described.get(o["uid"], "")))]
     if fit:
         pool, decided = fit + [o for o in pool if o not in fit], True
     return pool, decided
@@ -149,9 +146,9 @@ def narrow(pool: list[dict], said: list[str], known: dict[str, str], described: 
 
 def question(a: dict, b: dict) -> str:
     """A short question that tells two objects apart."""
-    if a["label"] != b["label"]:
-        return f"The {a['label']} or the {b['label']}?"
-    label = a["label"]
+    if a["prompt"] != b["prompt"]:
+        return f"The {a['prompt']} or the {b['prompt']}?"
+    label = a["prompt"]
     if in_view(a) and in_view(b):
         (ax, ay), (bx, by) = middle(a), middle(b)
         if abs(ax - bx) >= abs(ay - by):
@@ -162,24 +159,25 @@ def question(a: dict, b: dict) -> str:
     return f"The {label} you just passed, or the one before?"
 
 
-def resolve(objects: list[dict], target: str, exclude=(), among=(), described: dict[int, str] | None = None,
-            now: float | None = None) -> Resolved:
+def resolve(objects: list[dict], target: str, exclude=(), among=(), described: dict[str, str] | None = None,
+            prompts=(), now: float | None = None) -> Resolved:
     """The scene object a spoken target means. objects: the scene memory. target: what the user called
-    it ("lamp", "the green couch", "the chair I just passed"), or "" for "that". exclude: track ids it
+    it ("lamp", "the green couch", "the chair I just passed"), or "" for "that". exclude: uids it
     isn't. among: the two objects the last question asked about, which a target without a noun ("the
     left one") then picks between. described: Claude's description of each object already looked at.
+    prompts: what SAM tracks this session, so "mirror" is known as a kind of object even with none seen.
 
     The label first (what people call it counts: a couch is the sofa); then in view and at the center of
     it now; then the most recently seen; then the longest viewed. A target without a noun means what's in
     view. When the best two are too close to call, it asks which."""
     now = now_ms() if now is None else now
-    known, said = known_nouns(objects), words(target)
+    known, said = known_nouns(objects, prompts), words(target)
     thing = named(said, known)
-    fits = [o for o in objects if thing is None or kind_of(o["label"], known) == thing[1]]
-    pool = [o for o in fits if o["id"] not in exclude]
+    fits = [o for o in objects if thing is None or kind_of(o["prompt"], known) == thing[1]]
+    pool = [o for o in fits if o["uid"] not in exclude]
     if thing is None:
-        if any(o["id"] in among for o in pool):  # their answer to the last question
-            pool = [o for o in pool if o["id"] in among]
+        if any(o["uid"] in among for o in pool):  # their answer to the last question
+            pool = [o for o in pool if o["uid"] in among]
         elif not set(said) & (PASSED | BEFORE):
             pool = [o for o in pool if in_view(o)]
     if not pool:

@@ -16,9 +16,12 @@ from fastapi.staticfiles import StaticFiles
 
 from storefront import config, net
 from storefront.api import cart, checkout, health, look, session, viewer
-from storefront.live import prefetch, stream
+from storefront.live import stream
+from storefront.live.trigger import Dwell
 from storefront.models import Item, Product
-from storefront.pipeline import looks, pricing, rank, vision
+from storefront.pipeline import pricing, rank, vision
+from storefront.pipeline.looks import Looks
+from storefront.pipeline.runner import Runner
 from storefront.rtc import legacy_webrtc
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -47,14 +50,14 @@ async def warm_up():
             log.warning("warm-up: %s call failed: %r", name, e)
 
 
-def wire():
-    """Connect the parts: a tap on a hotspot starts a Look, and every tracking result feeds the quick
-    labels and background Looks (prefetch.py), which a purge (pause, camera switch, disconnect) forgets."""
-    legacy_webrtc.select_handler = looks.look
-    stream.live.on_objects = prefetch.observe
-    stream.live.object_fields = prefetch.fields
-    stream.live.on_purge = prefetch.reset
-    prefetch.start_look = looks.background_look
+def wire() -> Runner:
+    """Connect the parts: every tracking result feeds the pipeline (quick labels and Looks), a purge (pause,
+    camera switch, disconnect) resets it, and a tap on a hotspot picks an object."""
+    runner = Runner(stream.live, Looks(stream.live.publish), Dwell(config.QUICK_LABEL_DWELL_MS, config.LOOK_DWELL_MS))
+    stream.live.on_result = runner.observe
+    stream.live.on_purge = runner.reset
+    legacy_webrtc.select_handler = runner.select
+    return runner
 
 
 @asynccontextmanager
@@ -67,7 +70,7 @@ async def lifespan(app: FastAPI):
     log.info("ready: warmup=%s ICE=%s base=%s", config.WARMUP, legacy_webrtc.phones.ice.mode,
              config.PUBLIC_BASE_URL)
     yield
-    for task in background + list(looks.search_tasks.values()):
+    for task in background:
         task.cancel()
     await legacy_webrtc.close()  # the phone's connection
     await stream.live.stop()     # deletes the tracking session on the segmentation server
@@ -81,4 +84,4 @@ app = FastAPI(title="Storefront backend", lifespan=lifespan)
 app.mount("/uploads", StaticFiles(directory=config.UPLOADS), name="uploads")
 for module in (cart, checkout, health, look, session, viewer, legacy_webrtc):
     app.include_router(module.router)
-wire()
+app.state.runner = wire()

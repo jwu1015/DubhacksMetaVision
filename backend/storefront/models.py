@@ -1,7 +1,5 @@
-"""Shared contracts (spec Section 4a). Change only after agreeing with the team.
-
-Additions beyond the spec are marked PROPOSED and are all optional/additive.
-"""
+"""Shared contracts: the REST bodies, and the live messages the phone and the projector page get.
+Mirrored in the app's Models.swift; change them together."""
 from typing import Literal
 
 from pydantic import BaseModel
@@ -12,6 +10,10 @@ class BBox(BaseModel):            # normalized 0-1, x/y = top-left
     y: float
     w: float
     h: float
+
+    def corners(self) -> list[float]:
+        """[x1, y1, x2, y2], as the live messages send boxes."""
+        return [self.x, self.y, min(round(self.x + self.w, 4), 1.0), min(round(self.y + self.h, 4), 1.0)]
 
 
 class Item(BaseModel):
@@ -25,16 +27,6 @@ class Item(BaseModel):
     search_queries: list[str] = []
     bbox: BBox | None = None          # rough box from Claude
     quick_phrase: str = ""
-
-
-class Segmentation(BaseModel):
-    method: Literal["sam3", "roboflow_sam3", "bbox_fallback"]
-    bbox: BBox                        # tight box from the mask (or padded Claude box on fallback)
-    mask_score: float | None = None
-    cutout_path: str                  # item on white background, cropped
-    cutout_url: str
-    mask_preview_url: str | None = None   # original with mask overlay, for debugging/app
-    latency_ms: int
 
 
 class Product(BaseModel):
@@ -61,35 +53,72 @@ class PriceInsight(BaseModel):
     verdict_text: str
 
 
-class Capture(BaseModel):
-    capture_id: str
-    image_path: str
-    image_url: str
-    item: Item
-    segmentation: Segmentation | None
-
-
-class DetectResponse(BaseModel):
-    capture_id: str
-    image_url: str
-    item: Item
-    segmentation: Segmentation | None
-    quick_phrase: str
-    latency_ms: int
-
-
 class SearchResponse(BaseModel):
-    capture_id: str
+    capture_id: str                   # the Look's id (named for the app's current decoder)
     best_match: Product | None
     dupes: list[Product]
     used: list[Product]
     price_insight: PriceInsight
     spoken_summary: str
     timing_ms: dict[str, int]
-    item: Item | None = None          # ADDED: the finished item (Claude's name, description, queries)
+    item: Item | None = None          # the finished item (Claude's name, description, queries)
 
 
-# --- Request/response bodies for the remaining routes (typed versions of Section 4e) ---
+# ---------- live messages: backend -> phone and projector ----------
+
+Corners = list[float]  # [x1, y1, x2, y2], normalized 0-1
+
+
+class LiveObject(BaseModel):
+    uid: str                          # never repeats within a session: "<tracking session>.<SAM id>"
+    box: Corners                      # the last one seen
+    prompt: str                       # SAM's prompt that matched, e.g. "lamp"
+    score: float
+    in_view: bool                     # false: left the view in the last 15 s; not a hotspot
+    last_seen_ts: int                 # ms since epoch
+
+
+class ObjectsMessage(BaseModel):
+    type: Literal["objects"] = "objects"
+    session: int                      # goes up when tracking restarts and uids start over
+    age_ms: int                       # how old the frame behind these boxes is
+    objects: list[LiveObject]         # in view first, in the tracker's order, then the rest
+
+
+class LabelMessage(BaseModel):
+    type: Literal["label"] = "label"
+    uid: str
+    box: Corners
+    name: str                         # e.g. "black insulated water bottle"
+    price_low: int                    # whole dollars, a rough estimate
+    price_high: int
+
+
+LookStage = Literal["started", "described", "results", "failed"]
+
+
+class LookMessage(BaseModel):
+    type: Literal["look"] = "look"
+    uid: str
+    look_id: str
+    stage: LookStage
+    label: str                        # SAM's prompt, until Claude's item names it
+    box: Corners
+    selected: bool = False            # the user picked this object
+    crop_url: str | None = None       # the crop, once the user picked the object
+    item: Item | None = None          # from "described" on
+    search: SearchResponse | None = None  # "results"
+    message: str | None = None        # "failed": why, in a short sentence
+
+
+class StatusMessage(BaseModel):
+    type: Literal["status"] = "status"
+    tracking: Literal["stopped", "starting", "ok", "offline"]
+    category: str                     # what the prompts were picked within
+    prompts: list[str]                # what SAM tracks; empty until the first frame
+
+
+# ---------- REST bodies ----------
 
 class AddToCartRequest(BaseModel):
     product: Product

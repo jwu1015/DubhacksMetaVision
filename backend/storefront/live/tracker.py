@@ -1,15 +1,16 @@
 """Live tracking on Baptiste's SAM server (segmentation/server.py, the /session routes).
 
 One Tracker per stream: one session, one frame in flight. The caller always passes the newest
-frame (Stream does this), so frames that arrive meanwhile are skipped, never queued. Object ids
-stay the same for the life of a session; when the server expires it (404) a new one starts and
-the ids restart. send() never raises: on failure it waits out a backoff and returns None.
+frame (Stream does this), so frames that arrive meanwhile are skipped, never queued. Each object gets
+a uid, "<session number>.<SAM id>", that stays the same for the life of a session; when the server
+expires it (404) a new one starts, with new uids. send() never raises: on failure it waits out a
+backoff and returns None.
 
-What a session tracks: SAM_CATEGORIES, or with that empty, labels Claude picks (labels.py) within
-SAM_AUTO_CATEGORY from the session's first frame. The session isn't created until those labels are
-back, and that frame is then its first.
+What a session tracks: the prompts Claude picks (labels.py) within the tracker's category from the
+session's first frame. The session isn't created until those prompts are back, and that frame is then
+its first.
 
-    python -m storefront.live.tracker fixtures/lamp_room.jpg [more.jpg ...]   # one session, these frames, then delete it
+    python -m storefront.live.tracker fixtures/lamp_room.jpg [more.jpg ...]   # one session, then delete it
 """
 import asyncio
 import io
@@ -36,8 +37,8 @@ AUTH_RETRY_S = 30.0  # token rejected: retrying sooner won't help
 
 
 class TrackedObject(BaseModel):
-    id: int          # stable for the life of the session
-    label: str       # the category that matched, e.g. "sofa"
+    uid: str         # "<session number>.<SAM id>": stable for the life of the session
+    label: str       # SAM's prompt that matched, e.g. "lamp"
     score: float
     box: BBox        # normalized 0-1 of the frame
 
@@ -70,7 +71,7 @@ def encode(image: Image.Image, width: int = EDGE, quality: int = QUALITY) -> byt
     return buf.getvalue()
 
 
-def parse(data: dict, latency_ms: int, captured_at: float) -> TrackResult:
+def parse(data: dict, latency_ms: int, captured_at: float, session: int = 0) -> TrackResult:
     """The server's reply, with boxes ([x1, y1, x2, y2] in pixels of the JPEG sent) normalized to 0-1."""
     W, H = data["width"], data["height"]
     objects = []
@@ -78,7 +79,8 @@ def parse(data: dict, latency_ms: int, captured_at: float) -> TrackResult:
         x1, y1, x2, y2 = (min(max(v / d, 0.0), 1.0) for v, d in zip(o["box"], (W, H, W, H)))
         if x2 > x1 and y2 > y1:
             box = BBox(x=round(x1, 4), y=round(y1, 4), w=round(x2 - x1, 4), h=round(y2 - y1, 4))
-            objects.append(TrackedObject(id=o["id"], label=o.get("prompt") or "object", score=o["score"], box=box))
+            objects.append(TrackedObject(uid=f"{session}.{o['id']}", label=o.get("prompt") or "object",
+                                         score=o["score"], box=box))
     return TrackResult(frame_idx=data["frame_idx"], width=W, height=H, objects=objects,
                        latency_ms=latency_ms, captured_at=captured_at)
 
@@ -88,13 +90,14 @@ def describe(e: Exception) -> str:
 
 
 class Tracker:
-    def __init__(self, base_url: str | None = None, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep,
-                 categories: str | None = None):
+    def __init__(self, base_url: str | None = None, client: httpx.AsyncClient | None = None, sleep=asyncio.sleep):
         self.base_url = (config.MODEL_SERVICE_URL if base_url is None else base_url).rstrip("/")
-        self.categories = config.SAM_CATEGORIES if categories is None else categories  # "": Claude picks them
         self.client = client  # None: the shared net.client()
         self.sleep = sleep
+        self.category = config.DEFAULT_CATEGORY  # the next session's prompts are picked within it
+        self.prompts: list[str] = []  # what the current (or last) session tracks
         self.session_id: str | None = None
+        self.sessions = 0  # sessions started so far: the current one's number, in its uids
         self.error: str | None = None  # the last failure; None once a frame goes through
         self.failures = 0
         self._lock = asyncio.Lock()    # frames of a session must never overlap
@@ -114,14 +117,15 @@ class Tracker:
                            "CF_ACCESS_CLIENT_ID/SECRET and the server's access policy")
         return r
 
-    async def _create(self, image: Image.Image | None = None):
-        """Start a session tracking our categories, or with none, the labels Claude picks from `image`
-        (the session's first frame): the session starts only once they are back."""
-        prompt = self.categories or await labels.labels_or_fallback(image, config.SAM_AUTO_CATEGORY)
-        r = await self._request("POST", "/session", json={"prompt": prompt})
+    async def _create(self, image: Image.Image):
+        """Start a session tracking the prompts Claude picks from `image` (the session's first frame)
+        within our category: the session starts only once they are back."""
+        prompts = await labels.labels_or_fallback(image, self.category)
+        r = await self._request("POST", "/session", json={"prompt": prompts})
         r.raise_for_status()
-        self.session_id = r.json()["session_id"]
-        log.info("tracker: session %s started for %s", self.session_id[:8], prompt)
+        self.session_id, self.prompts = r.json()["session_id"], prompts
+        self.sessions += 1
+        log.info("tracker: session %s (#%d) started for %s", self.session_id[:8], self.sessions, prompts)
 
     async def _frame_request(self, jpeg: bytes) -> httpx.Response:
         try:
@@ -146,18 +150,6 @@ class Tracker:
         r.raise_for_status()
         return r
 
-    async def start(self) -> bool:
-        """Create the session now so the first frame is fast; send() retries if this fails. Never raises.
-        Without categories there is nothing to do yet: the labels come from the first frame."""
-        if self.session_id or not self.categories:
-            return True
-        try:
-            await self._create()
-            return True
-        except Exception as e:
-            self._note(e)
-            return False
-
     async def send(self, image: Image.Image, captured_at: float | None = None) -> TrackResult | None:
         """Track one frame; None if that failed (after waiting out the backoff). Never raises."""
         captured_at = captured_at or time.time()
@@ -166,7 +158,7 @@ class Tracker:
             try:
                 jpeg = await asyncio.to_thread(encode, image)
                 r = await self._post_frame(jpeg, image)
-                result = parse(r.json(), ms_since(t0), captured_at)
+                result = parse(r.json(), ms_since(t0), captured_at, self.sessions)
             except Exception as e:  # rejected, unreachable, slow, error status, unexpected JSON
                 await self.sleep(self._note(e, ms_since(t0)))
                 return None

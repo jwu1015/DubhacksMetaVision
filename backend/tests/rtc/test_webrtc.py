@@ -26,7 +26,7 @@ from fastapi import FastAPI
 from fakes.tracking import fake_server, make_video
 from storefront import config
 from storefront.api import viewer
-from storefront.live import stream
+from storefront.live import labels, stream
 from storefront.live.stream import Stream
 from storefront.live.tracker import Tracker
 from storefront.rtc import legacy_webrtc as webrtc
@@ -35,11 +35,16 @@ PHONE_SIZE = (504, 896)  # the glasses' portrait frames, as the app sends them
 PHONE_FPS = 15
 
 
+async def fake_prompts(image, category) -> list[str]:
+    return ["sofa", "lamp", "table"]
+
+
 def setUpModule():
-    # Nothing here may reach Cloudflare, the shared GPU, or a TURN server set in .env.
+    # Nothing here may reach Cloudflare, the shared GPU, Claude, or a TURN server set in .env.
     for target, name, value in ((config, "CF_ACCESS_CLIENT_ID", ""), (config, "MODEL_SERVICE_URL", ""),
                                 (webrtc, "CF_TURN_KEY_ID", ""), (webrtc, "CF_TURN_KEY_API_TOKEN", ""),
-                                (webrtc, "TURN_URLS", []), (webrtc, "ROTATE", 0)):
+                                (webrtc, "TURN_URLS", []), (webrtc, "ROTATE", 0),
+                                (labels, "labels_or_fallback", fake_prompts)):
         patcher = mock.patch.object(target, name, value)
         patcher.start()
         unittest.addModuleCleanup(patcher.stop)
@@ -319,32 +324,34 @@ class IceServersTest(unittest.IsolatedAsyncioTestCase):
 # ---------- channel messages ----------
 
 class MessageTest(unittest.TestCase):
-    def test_corners(self):
-        self.assertEqual(webrtc.corners({"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4}), [0.1, 0.2, 0.4, 0.6])
-        self.assertEqual(webrtc.corners({"x": 0.6667, "y": 0.0, "w": 0.3334, "h": 1.0}), [0.6667, 0.0, 1.0, 1.0])
-
     def test_detections_message(self):
-        event = {"type": "objects", "frame_idx": 7, "width": 504, "height": 896, "age_ms": 1200, "objects": [
-            {"id": 3, "label": "chair", "score": 0.88, "box": {"x": 0.31, "y": 0.22, "w": 0.27, "h": 0.49}},
-            {"id": 12, "label": "lamp", "score": 0.74, "box": {"x": 0.7, "y": 0.3, "w": 0.28, "h": 0.3}}]}
+        objects = {"type": "objects", "session": 1, "age_ms": 1200, "objects": [
+            {"uid": "1.3", "box": [0.31, 0.22, 0.58, 0.71], "prompt": "chair", "score": 0.88, "in_view": True,
+             "last_seen_ts": 1},
+            {"uid": "1.12", "box": [0.7, 0.3, 0.98, 0.6], "prompt": "lamp", "score": 0.74, "in_view": False,
+             "last_seen_ts": 1}]}
+        labels = {"1.12": {"type": "label", "uid": "1.12", "name": "brass lamp", "price_low": 40, "price_high": 90}}
         before = time.time() * 1000
-        msg = webrtc.detections(event)
+        msg = webrtc.detections(objects, labels)
         self.assertLessEqual(before - 1, msg.pop("ts"), time.time() * 1000 + 1)
         self.assertEqual(msg, {"type": "detections", "objects": [
-            {"track_id": "t3", "box": [0.31, 0.22, 0.58, 0.71], "label": "chair", "score": 0.88},
-            {"track_id": "t12", "box": [0.7, 0.3, 0.98, 0.6], "label": "lamp", "score": 0.74}]})
-        self.assertEqual(webrtc.detections({**event, "objects": []})["objects"], [])
+            {"track_id": "1.3", "box": [0.31, 0.22, 0.58, 0.71], "label": "chair", "score": 0.88, "in_view": True},
+            {"track_id": "1.12", "box": [0.7, 0.3, 0.98, 0.6], "label": "lamp", "score": 0.74, "in_view": False,
+             "name": "brass lamp", "price_low": 40, "price_high": 90}]})
 
-    def test_look_message(self):
-        event = {"type": "look", "stage": "detected", "capture_id": "c_1", "track_id": 3, "label": "lamp"}
-        self.assertEqual(webrtc.look_message(event), {**event, "track_id": "t3"})
-        self.assertEqual(event["track_id"], 3)  # the stream's own event is left alone
-
-    def test_track_number(self):
-        for track_id, number in (("t3", 3), ("t12", 12), ("t0", 0)):
-            self.assertEqual(webrtc.track_number(track_id), number)
-        for track_id in ("3", "t", "tx", "t-1", "t1.5", "t²", "T3", 3, None, ["t3"]):
-            self.assertIsNone(webrtc.track_number(track_id), track_id)
+    def test_look_steps(self):
+        look = {"type": "look", "uid": "1.2", "look_id": "l_1", "stage": "described", "label": "lamp",
+                "box": [0.1, 0.2, 0.4, 0.6], "selected": True, "crop_url": f"{config.PUBLIC_BASE_URL}/uploads/l_1.jpg",
+                "item": {"category": "floor lamp"}, "search": None, "message": None}
+        sent = set()
+        base = {"type": "look", "capture_id": "l_1", "track_id": "1.2"}
+        self.assertEqual(webrtc.look_steps(look, sent), [
+            base | {"stage": "detected", "label": "lamp", "quick_phrase": "Lamp. Finding prices.",
+                    "box": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4}, "cutout_path": "uploads/l_1.jpg"},
+            base | {"stage": "described", "item": {"category": "floor lamp"}}])
+        self.assertEqual(webrtc.look_steps(look, sent), [])  # had those already
+        done = look | {"stage": "results", "search": {"best_match": None}}
+        self.assertEqual(webrtc.look_steps(done, sent), [base | {"stage": "results", "search": {"best_match": None}}])
 
     def test_describe(self):
         self.assertEqual(webrtc.describe("not sdp"), "no media")
@@ -420,24 +427,22 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(msg["ts"], int)
         self.assertLess(abs(msg["ts"] - time.time() * 1000), 5000)
         for o in msg["objects"]:
-            self.assertEqual(set(o), {"track_id", "box", "label", "score", *webrtc.SCENE_FIELDS})
-            self.assertEqual(o["label"], {"t1": "sofa", "t2": "lamp", "t3": "table"}[o["track_id"]])
+            self.assertEqual(set(o), {"track_id", "box", "label", "score", "in_view"})
+            self.assertEqual(o["label"], {"1.1": "sofa", "1.2": "lamp", "1.3": "table"}[o["track_id"]])
             x1, y1, x2, y2 = o["box"]
             self.assertTrue(0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1, o)
-            self.assertTrue(o["in_view"] and 0 <= o["centered"] <= 1 and o["seconds_viewed"] >= 0, o)
 
-        # Exactly the objects of an "objects" event, boxes as corners.
-        def as_corners(event):
-            return [{"track_id": f"t{o['id']}", "label": o["label"], "score": o["score"],
-                     "box": [o["box"]["x"], o["box"]["y"], round(o["box"]["x"] + o["box"]["w"], 4),
-                             round(o["box"]["y"] + o["box"]["h"], 4)],
-                     **{k: o[k] for k in webrtc.SCENE_FIELDS}} for o in event["objects"]]
-        self.assertIn(msg["objects"], [as_corners(e) for e in self.events])
+        # Exactly the objects of an "objects" message.
+        def as_detections(m):
+            return [{"track_id": o["uid"], "box": o["box"], "label": o["prompt"], "score": o["score"],
+                     "in_view": o["in_view"]} for o in m["objects"]]
+        self.assertIn(msg["objects"], [as_detections(m) for m in self.events])
 
         # The phone's frames reached the stream as sent, portrait and upright, and went on to tracking.
         self.assertEqual(set(self.pushed), {PHONE_SIZE})
         self.assertEqual(self.live.latest_frame().size, PHONE_SIZE)
-        self.assertEqual({(e["width"], e["height"]) for e in self.events}, {PHONE_SIZE})
+        result = self.live.latest_objects()
+        self.assertEqual((result.width, result.height), PHONE_SIZE)
         for _ in range(3):
             await phone.detections()  # and they keep coming
         self.assertEqual(self.stats()["overlaps"], 0)
@@ -448,40 +453,53 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
         await phone.detections()
         self.assertEqual(set(self.pushed), {PHONE_SIZE})
 
-    async def test_select_calls_the_hook_with_the_tracker_id(self):
+    async def test_select_calls_the_hook_with_the_uid(self):
         selected: asyncio.Queue = asyncio.Queue()
-
-        async def look(oid: int):
-            selected.put_nowait(oid)
-        webrtc.select_handler = look
+        webrtc.select_handler = selected.put_nowait
         phone = await self.phone()
         msg = await phone.detections()
         for junk in ("not json", "[1]", '{"type": "hello"}', '{"type": "select"}',
-                     '{"type": "select", "track_id": 3}', '{"type": "select", "track_id": "x3"}'):
+                     '{"type": "select", "track_id": 3}', '{"type": "select", "track_id": ""}'):
             phone.channel.send(junk)
         track_id = msg["objects"][-1]["track_id"]
         phone.select(track_id)
-        self.assertEqual(await asyncio.wait_for(selected.get(), 5), int(track_id[1:]))
+        self.assertEqual(await asyncio.wait_for(selected.get(), 5), track_id)
         await asyncio.sleep(0.2)
         self.assertTrue(selected.empty())  # the junk before it called nothing
 
-    async def test_the_steps_of_a_look_go_back_to_the_phone(self):
-        def look(stage, capture_id, track_id, **extra):
-            return {"type": "look", "stage": stage, "capture_id": capture_id, "track_id": track_id, **extra}
-        self.live.publish(look("detected", "c_old", 1, label="sofa"))  # before this phone connected
+    async def test_a_picked_objects_look_and_quick_labels_go_back_to_the_phone(self):
+        def look(uid, stage, selected=True, **extra):
+            return {"type": "look", "uid": uid, "look_id": f"l_{uid}", "stage": stage, "label": "lamp",
+                    "box": [0.1, 0.2, 0.4, 0.6], "selected": selected, "crop_url": None, "item": None, "search": None,
+                    "message": None, **extra}
+        picked = asyncio.Event()
+
+        def select(uid):
+            self.live.publish(look(uid, "described", item={"category": "floor lamp"}))
+            picked.set()
+        webrtc.select_handler = select
         phone = await self.phone()
-        await phone.detections()
-        self.live.publish(look("detected", "c_photo", None, label="vase"))  # a photo, not the stream
-        sent = [look("detected", "c_1", 2, label="lamp"), look("described", "c_1", 2, item={"category": "floor lamp"}),
-                look("results", "c_1", 2, search={"best_match": None, "dupes": [], "used": []})]
-        for event in sent:
-            self.live.publish(event)
+        msg = await phone.detections()
+        uid = msg["objects"][0]["track_id"]
+        self.live.publish({"type": "label", "uid": uid, "box": [0, 0, 1, 1], "name": "brass lamp", "price_low": 40,
+                           "price_high": 90})
+        self.live.publish(look("9.9", "results", selected=False))  # not picked: not sent
+        phone.select(uid)
+        await asyncio.wait_for(picked.wait(), 5)
+        self.live.publish(look(uid, "results", item={"category": "floor lamp"}, search={"best_match": None}))
         got = []
         async with asyncio.timeout(5):
-            while len(got) < len(sent):
-                if (msg := await phone.messages.get())["type"] == "look":
-                    got.append(msg)
-        self.assertEqual(got, [{**e, "track_id": "t2"} for e in sent])  # only these, in order, ids as "t2"
+            while len(got) < 3:
+                if (m := await phone.messages.get())["type"] == "look":
+                    got.append(m)
+        self.assertEqual([(m["stage"], m["track_id"], m["capture_id"]) for m in got],
+                         [("detected", uid, f"l_{uid}"), ("described", uid, f"l_{uid}"), ("results", uid, f"l_{uid}")])
+        async with asyncio.timeout(5):
+            while True:
+                labeled = [o for o in (await phone.detections())["objects"] if o["track_id"] == uid]
+                if labeled and "name" in labeled[0]:
+                    break
+        self.assertEqual((labeled[0]["name"], labeled[0]["price_low"], labeled[0]["price_high"]), ("brass lamp", 40, 90))
 
     async def test_a_mode_switch_forgets_what_was_tracked(self):
         phone = await self.phone()
@@ -519,7 +537,7 @@ class PhoneTest(unittest.IsolatedAsyncioTestCase):
             phone.select("t1")
             await until(lambda: any("no select handler" in line for line in logs.output))
 
-        async def broken(oid):
+        def broken(uid):
             raise RuntimeError("look failed")
         webrtc.select_handler = broken
         with self.assertLogs("storefront.webrtc", logging.ERROR) as logs:

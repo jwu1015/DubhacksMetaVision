@@ -19,11 +19,12 @@ MODEL_SERVICE_TOKEN = os.getenv("MODEL_SERVICE_TOKEN", "")  # bearer token for t
 # The segmentation server sits behind Cloudflare Access: every request needs this service token.
 CF_ACCESS_CLIENT_ID = os.getenv("CF_ACCESS_CLIENT_ID", "")
 CF_ACCESS_CLIENT_SECRET = os.getenv("CF_ACCESS_CLIENT_SECRET", "")
-# What SAM tracks (tracker.py), comma-separated; empty = labels Claude picks from the first frame (labels.py)
-SAM_CATEGORIES = os.getenv(
-    "SAM_CATEGORIES", "sofa,chair,table,lamp,rug,bed,shelf,mirror,wall art,vase,pillow,blanket").strip()
-# With SAM_CATEGORIES empty, Claude picks labels within this category instead (2-4.5s more)
-SAM_AUTO_CATEGORY = os.getenv("SAM_AUTO_CATEGORY", "furniture and home decor").strip()
+# SAM's prompts are picked from each tracking session's first frame, within a category (labels.py)
+DEFAULT_CATEGORY = "small things to buy"
+# An object on screen this long without a break gets a quick label, and then a Look (pipeline/runner.py)
+QUICK_LABEL_DWELL_MS = int(os.getenv("QUICK_LABEL_DWELL_MS", "500"))
+LOOK_DWELL_MS = int(os.getenv("LOOK_DWELL_MS", "500"))
+MAX_LOOKS = int(os.getenv("MAX_LOOKS", "3"))  # Looks running at once; each costs a few store searches
 
 
 def segmentation_headers() -> dict[str, str]:

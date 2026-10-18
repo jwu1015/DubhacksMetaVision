@@ -1,10 +1,9 @@
 """Which objects SAM should look for: Claude picks them from a frame, within a category (moved here from
 the segmentation server on 18 Oct; the server now only takes labels).
 
-tracker.py asks before starting a session, whenever SAM_CATEGORIES is empty; the session starts once
-the labels are back.
+tracker.py asks before starting each session; the session starts once the labels are back.
 
-    python -m storefront.live.labels fixtures/lamp_room.jpg "furniture and home decor"
+    python -m storefront.live.labels fixtures/lamp_room.jpg "small things to buy"
 """
 import asyncio
 import logging
@@ -92,4 +91,4 @@ async def _cli(path: str, category: str):
 
 
 if __name__ == "__main__":
-    asyncio.run(_cli(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else config.SAM_AUTO_CATEGORY))
+    asyncio.run(_cli(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else config.DEFAULT_CATEGORY))

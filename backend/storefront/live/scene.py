@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image
 
 from storefront.live.tracker import TrackResult
-from storefront.models import BBox
+from storefront.models import BBox, LiveObject
 
 WINDOW_S = 15.0    # a track is forgotten this long after it was last seen
 MAX_GAP_S = 1.0    # a stall between tracked frames counts as at most this much viewing time
@@ -26,7 +26,7 @@ SHARP_EDGE = 128   # sharpness is measured on the box scaled to at most this man
 
 @dataclass
 class Track:
-    id: int
+    uid: str
     label: str
     score: float
     box: BBox                  # the last one seen, normalized to the frame
@@ -44,12 +44,10 @@ class Track:
     def centered(self) -> float:
         return self.centered_sum / self.weight if self.weight else 0.0
 
-    def as_event(self) -> dict:
-        """One object of the stream's "objects" event."""
-        return {"id": self.id, "label": self.label, "score": self.score, "box": self.box.model_dump(),
-                "in_view": self.in_view, "centered": round(self.centered, 2),
-                "seconds_viewed": round(self.seconds_viewed, 1),
-                "first_seen_ts": round(self.first_seen * 1000), "last_seen_ts": round(self.last_seen * 1000)}
+    def live_object(self) -> LiveObject:
+        """This object in an "objects" message."""
+        return LiveObject(uid=self.uid, box=self.box.corners(), prompt=self.label, score=round(self.score, 3),
+                          in_view=self.in_view, last_seen_ts=round(self.last_seen * 1000))
 
 
 def centeredness(box: BBox) -> float:
@@ -73,8 +71,8 @@ def sharpness(image: Image.Image, box: BBox) -> float:
 class Scene:
     def __init__(self, window_s: float = WINDOW_S, clock=time.time):
         self.window_s, self.clock = window_s, clock
-        self.tracks: dict[int, Track] = {}
-        self._in_view: list[int] = []  # ids of the latest tracked frame, in the tracker's order
+        self.tracks: dict[str, Track] = {}
+        self._in_view: list[str] = []  # uids of the latest tracked frame, in the tracker's order
         self._last: float | None = None  # when the latest tracked frame was captured
 
     def update(self, result: TrackResult, frame: Image.Image):
@@ -83,9 +81,9 @@ class Scene:
         dt = min(max(t - self._last, 0.0), MAX_GAP_S) if self._last is not None else 0.0
         self._last = t
         for o in result.objects:
-            track = self.tracks.get(o.id)
+            track = self.tracks.get(o.uid)
             if track is None:
-                track = self.tracks[o.id] = Track(o.id, o.label, o.score, o.box, first_seen=t, last_seen=t)
+                track = self.tracks[o.uid] = Track(o.uid, o.label, o.score, o.box, first_seen=t, last_seen=t)
             elif track.in_view:  # in view since the previous frame too
                 track.seconds_viewed += dt
             track.label, track.score, track.box, track.last_seen, track.in_view = o.label, o.score, o.box, t, True
@@ -96,28 +94,28 @@ class Scene:
             value = sharpness(frame, o.box) * o.box.w * o.box.h * c
             if value > track.frame_value:
                 track.frame, track.frame_box, track.frame_value = frame, o.box, value
-        self._in_view = [o.id for o in result.objects]
+        self._in_view = [o.uid for o in result.objects]
         for track in self.tracks.values():
-            if track.id not in self._in_view:
+            if track.uid not in self._in_view:
                 track.in_view = False
         self.expire(t)
 
     def expire(self, now: float | None = None):
         now = self.clock() if now is None else now
-        for track_id in [i for i, track in self.tracks.items() if now - track.last_seen > self.window_s]:
-            del self.tracks[track_id]
+        for uid in [u for u, track in self.tracks.items() if now - track.last_seen > self.window_s]:
+            del self.tracks[uid]
 
-    def objects(self) -> list[dict]:
+    def objects(self) -> list[LiveObject]:
         """Every remembered object: those in view first, in the tracker's order, then the rest, most
         recently seen first."""
-        in_view = [self.tracks[i] for i in self._in_view if i in self.tracks]
+        in_view = [self.tracks[u] for u in self._in_view if u in self.tracks]
         gone = sorted((t for t in self.tracks.values() if not t.in_view), key=lambda t: -t.last_seen)
-        return [t.as_event() for t in in_view + gone]
+        return [t.live_object() for t in in_view + gone]
 
-    def best(self, track_id: int) -> tuple[Image.Image, Track] | None:
+    def best(self, uid: str) -> tuple[Image.Image, Track] | None:
         """A remembered track's best frame (with the track: its frame_box is the box in that frame)."""
         self.expire()
-        track = self.tracks.get(track_id)
+        track = self.tracks.get(uid)
         return (track.frame, track) if track and track.frame is not None else None
 
     def clear(self):

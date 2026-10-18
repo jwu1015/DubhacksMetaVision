@@ -1,29 +1,29 @@
-"""WebRTC: the phone streams the glasses' live video in, and gets the tracked objects back.
+"""WebRTC (legacy, until the app moves to LiveKit): the phone streams the glasses' live video in, and gets
+the tracked objects back in the format the current app reads.
 
     GET  /ice-servers  -> {"iceServers": [...]}    STUN/TURN servers; the phone and this server use the same
     POST /offer        {"sdp", "type": "offer"} -> {"sdp", "type": "answer"}
 
 The phone's offer has one video track (sendonly, H.264 or VP8) and a data channel the phone creates,
 "detections". Each video frame goes to stream.live.push_frame() (tracking, and the projector page at
-/stream/viewer). Each "objects" event from stream.live goes back on the channel as
+/stream/viewer). Each "objects" message from stream.live goes back on the channel as
 
     {"type": "detections", "ts": <ms since epoch>,
-     "objects": [{"track_id": "t3", "box": [x1, y1, x2, y2], "label": "sofa", "score": 0.93,   (box normalized 0-1)
-                  "in_view": true, "centered": 0.82, "seconds_viewed": 3.4, "first_seen_ts", "last_seen_ts",
-                  "name": "gray linen sofa", "price_low": 800, "price_high": 1500}]}
+     "objects": [{"track_id": "3.17", "box": [x1, y1, x2, y2], "label": "lamp", "score": 0.93, "in_view": true,
+                  "name": "brass desk lamp", "price_low": 40, "price_high": 90}]}   (box normalized 0-1)
 
 listing every object scene memory holds (scene.py): those that left the view in the last 15 s too, with
-in_view false. name, price_low and price_high are prefetch.py's quick label, there once an object has been in
-view half a second. The phone's control messages on the same channel:
+in_view false. track_id is the object's uid; name, price_low and price_high are its quick label, once it
+has one. The phone's control messages on the same channel:
 
     {"type": "mode", "mode": "glasses" | "phone"}   on connect and on every camera switch: forget what was tracked
     {"type": "pause", "paused": true | false}       stop tracking and purge it / start again
 
-When the user taps a hotspot the phone sends {"type": "select", "track_id": "t3"}, which calls
-select_handler(3): main.py's Look. Each step of a Look on a tracked object then comes back on the channel
-as stream.py's "look" event, with its track_id as "t3" too:
+When the user taps a hotspot the phone sends {"type": "select", "track_id": "3.17"}, which calls
+select_handler("3.17"): the pipeline's select. That object's Look then comes back on the channel, its
+steps so far at once:
 
-    {"type": "look", "stage": "detected" | "described" | "results" | "failed", "capture_id", "track_id": "t3",
+    {"type": "look", "stage": "detected" | "described" | "results" | "failed", "capture_id", "track_id",
      ...}   ("detected": label, quick_phrase, box, cutout_path; "described": item; "results": search,
             the whole search answer; "failed": message)
 
@@ -40,7 +40,7 @@ import json
 import logging
 import os
 import time
-from typing import Awaitable, Callable
+from typing import Callable
 
 import httpx
 from aiortc import (
@@ -55,9 +55,7 @@ from aiortc.sdp import SessionDescription as ParsedSDP
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from storefront import (
-    net,
-)
+from storefront import config, net
 from storefront.live import stream
 
 log = logging.getLogger("storefront.webrtc")
@@ -83,8 +81,8 @@ MAX_BUFFERED = 64 * 1024   # bytes waiting on the channel; past this the phone i
 FPS_LOG_S = 10.0           # log the incoming frame rate this often
 SLOW_ANSWER_MS = 3000      # aioice gives up on an unreachable STUN/TURN server after 5s
 
-# Set by main.py: called with the tracker's id when the user taps a hotspot ("t3" -> 3).
-select_handler: Callable[[int], Awaitable[None]] | None = None
+# Set by app.py: called with the object's uid when the user taps a hotspot.
+select_handler: Callable[[str], object] | None = None
 
 
 def ms_since(t0: float) -> int:
@@ -192,35 +190,38 @@ def rtc_configuration(servers: list[dict]) -> RTCConfiguration:
 
 # ---------- channel messages ----------
 
-def corners(box: dict) -> list[float]:
-    """A stream box {"x", "y", "w", "h"} as the phone's [x1, y1, x2, y2], all normalized 0-1."""
-    return [box["x"], box["y"], min(round(box["x"] + box["w"], 4), 1.0), min(round(box["y"] + box["h"], 4), 1.0)]
+def detections(objects: dict, labels: dict[str, dict]) -> dict:
+    """An "objects" message as the app's DetectionsMessage, each object with its quick label once it has one.
+    Those out of view (in_view false) aren't hotspots, but a voice command can name them."""
+    out = []
+    for o in objects["objects"]:
+        d = {"track_id": o["uid"], "box": o["box"], "label": o["prompt"], "score": o["score"], "in_view": o["in_view"]}
+        if label := labels.get(o["uid"]):
+            d |= {k: label[k] for k in ("name", "price_low", "price_high")}
+        out.append(d)
+    return {"type": "detections", "ts": round(time.time() * 1000), "objects": out}
 
 
-SCENE_FIELDS = ("in_view", "centered", "seconds_viewed", "first_seen_ts", "last_seen_ts")  # scene memory's
-QUICK_FIELDS = ("name", "price_low", "price_high")  # prefetch.py's quick label, once an object has one
-
-
-def detections(event: dict) -> dict:
-    """A stream "objects" event as the phone's DetectionsMessage: every object scene memory holds, with
-    its scene fields and, once it has one, its quick label. Those out of view (in_view false) aren't
-    hotspots, but a voice command can name them."""
-    return {"type": "detections", "ts": round(time.time() * 1000), "objects": [
-        {"track_id": f"t{o['id']}", "box": corners(o["box"]), "label": o["label"], "score": o["score"],
-         **{k: o[k] for k in SCENE_FIELDS + QUICK_FIELDS if k in o}}
-        for o in event["objects"]]}
-
-
-def look_message(event: dict) -> dict:
-    """A stream "look" event on a tracked object, with the track_id as the phone knows it ("t3")."""
-    return {**event, "track_id": f"t{event['track_id']}"}
-
-
-def track_number(track_id) -> int | None:
-    """The tracker's id in a track_id ("t3" -> 3); None if it isn't one."""
-    if isinstance(track_id, str) and track_id[:1] == "t" and track_id[1:].isascii() and track_id[1:].isdigit():
-        return int(track_id[1:])
-    return None
+def look_steps(look: dict, sent: set[str]) -> list[dict]:
+    """A picked object's "look" message as the app's Look steps it hasn't had yet (sent): "detected" first,
+    then "described", then "results" or "failed"."""
+    base = {"type": "look", "capture_id": look["look_id"], "track_id": look["uid"]}
+    x1, y1, x2, y2 = look["box"]
+    label = look["label"]
+    steps = []
+    if "detected" not in sent:
+        cutout = (look["crop_url"] or "").removeprefix(config.PUBLIC_BASE_URL + "/")
+        steps.append(base | {"stage": "detected", "label": label, "quick_phrase": f"{label.capitalize()}. Finding prices.",
+                             "box": {"x": x1, "y": y1, "w": round(x2 - x1, 4), "h": round(y2 - y1, 4)},
+                             "cutout_path": cutout})
+    if look["item"] and "described" not in sent:
+        steps.append(base | {"stage": "described", "item": look["item"]})
+    if look["stage"] == "results" and "results" not in sent:
+        steps.append(base | {"stage": "results", "search": look["search"]})
+    if look["stage"] == "failed" and "failed" not in sent:
+        steps.append(base | {"stage": "failed", "message": look["message"]})
+    sent.update(step["stage"] for step in steps)
+    return steps
 
 
 def describe(sdp: str) -> str:
@@ -251,16 +252,6 @@ def route(pc: RTCPeerConnection) -> str:
 # ---------- one phone ----------
 
 _ids = itertools.count(1)
-_selects: set[asyncio.Task] = set()  # running select_handler calls, kept so they aren't garbage-collected
-
-
-async def run_select(handler: Callable[[int], Awaitable[None]], oid: int):
-    t0 = time.perf_counter()
-    try:
-        await handler(oid)
-        log.info("webrtc: select t%d handled in %dms", oid, ms_since(t0))
-    except Exception:
-        log.exception("webrtc: select t%d failed after %dms", oid, ms_since(t0))
 
 
 class Phone:
@@ -275,6 +266,8 @@ class Phone:
         self.mode: str | None = None  # "glasses" or "phone", as the phone last said
         self.frames = self.sent = self.skipped = 0
         self.size: tuple[int, int] | None = None
+        self.labels: dict[str, dict] = {}         # uid -> its "label" message
+        self.picked: dict[str, set[str]] = {}     # uid this phone selected -> the Look steps it was sent
         self._tasks: set[asyncio.Task] = set()
         pc.on("signalingstatechange", lambda: self._log("signaling", pc.signalingState))
         pc.on("icegatheringstatechange", lambda: self._log("ICE gathering", pc.iceGatheringState))
@@ -359,30 +352,32 @@ class Phone:
             sender.cancel()
 
     async def _send(self, channel):
-        """Every "objects" event as a detections message, and each step of a Look on a tracked object.
+        """Every "objects" message as a detections message, and the steps of each Look this phone picked.
         send() only queues, so a slow phone never holds up the stream; one that falls far behind misses
         detections instead (never a Look step)."""
-        events = stream.live.subscribe(replay_look=False)  # a Look from before this phone isn't its own
+        messages = stream.live.subscribe()
         try:
-            async for event in events:
-                looked = event["type"] == "look" and event.get("track_id") is not None  # not a photo's
-                if event["type"] != "objects" and not looked:
-                    continue
+            async for m in messages:
                 if channel.readyState != "open":
                     return
-                if looked:
-                    channel.send(json.dumps(look_message(event)))
-                    log.info("webrtc: %s look %s sent for t%d", self, event["stage"], event["track_id"])
-                    continue
-                if channel.bufferedAmount > MAX_BUFFERED:
-                    self.skipped += 1
-                    continue
-                channel.send(json.dumps(detections(event)))
-                if not self.sent:
-                    self._log("first detections", f"sent ({len(event['objects'])} objects)")
-                self.sent += 1
+                if m["type"] == "label":
+                    self.labels[m["uid"]] = m
+                elif m["type"] == "look" and m["selected"] and m["uid"] in self.picked:
+                    for step in look_steps(m, self.picked[m["uid"]]):
+                        channel.send(json.dumps(step))
+                        log.info("webrtc: %s look %s sent for %s", self, step["stage"], m["uid"])
+                elif m["type"] == "objects":
+                    if not m["objects"]:  # tracking restarted: uids start over
+                        self.labels.clear()
+                    if channel.bufferedAmount > MAX_BUFFERED:
+                        self.skipped += 1
+                        continue
+                    channel.send(json.dumps(detections(m, self.labels)))
+                    if not self.sent:
+                        self._log("first detections", f"sent ({len(m['objects'])} objects)")
+                    self.sent += 1
         finally:
-            await events.aclose()
+            await messages.aclose()
 
     def _on_message(self, message):
         try:
@@ -416,19 +411,19 @@ class Phone:
             return
         self._spawn(self.phones.pause(self, paused))
 
-    def _on_select(self, track_id):
-        oid = track_number(track_id)
-        if oid is None:
-            log.info("webrtc: %s selected %.40r, which isn't a track_id; ignored", self, track_id)
+    def _on_select(self, uid):
+        if not isinstance(uid, str) or not uid:
+            log.info("webrtc: %s selected %.40r, which isn't a track_id; ignored", self, uid)
             return
-        handler = select_handler
-        if handler is None:
-            log.info("webrtc: %s selected t%d; no select handler is set, ignored", self, oid)
+        if select_handler is None:
+            log.info("webrtc: %s selected %s; no select handler is set, ignored", self, uid)
             return
-        log.info("webrtc: %s selected t%d", self, oid)
-        task = asyncio.create_task(run_select(handler, oid))
-        _selects.add(task)
-        task.add_done_callback(_selects.discard)
+        log.info("webrtc: %s selected %s", self, uid)
+        self.picked.setdefault(uid, set())
+        try:
+            select_handler(uid)
+        except Exception:
+            log.exception("webrtc: %s select %s failed", self, uid)
 
     # ---------- the end ----------
 
