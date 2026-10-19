@@ -138,3 +138,7 @@ backend/logs/*
 # ---- Frontend local config (backend base URL is secret; repo is public) ----
 frontend/**/Config.xcconfig
 frontend/**/Config.swift
+
+# ---- Deploy config (holds secrets) and the env files deploy.sh writes from it ----
+backend/deploy.yaml
+backend/.deploy/

@@ -44,11 +44,33 @@ The phone draws labels and product cards from the room's `updates` topic. Taps g
 |------|------------|
 | `frontend/` | Spotted, the SwiftUI iPhone app. Screen-level detail is in [`frontend/FRONTEND.md`](frontend/FRONTEND.md). |
 | `backend/` | FastAPI app (`storefront.app`): tracking, Looks, cart, checkout, and the voice worker. |
-| `segmentation/` | SAM server the backend calls for object tracking. It runs on the GPU box, not on the laptop. |
+| `backend/segmentation/` | SAM server the backend calls for object tracking. It runs on the GPU box, not on the laptop. |
 
 ---
 
-## Getting started
+## Deploy
+
+Runs the segmentation server, the backend and the voice agent on one GPU machine.
+
+1. **Install** `tmux`, `uv`, `curl` and `cloudflared`.
+2. **Configure:**
+   ```bash
+   cd backend
+   cp deploy.example.yaml deploy.yaml
+   ```
+   Fill in the API keys in `deploy.yaml`. It's gitignored, so your keys stay out of the repo.
+3. **Deploy:**
+   ```bash
+   ./deploy.sh
+   ```
+   It prints the backend's public URL when it's done.
+4. **Check on it:** `tmux attach -t spotted` (one window per service; detach with `Ctrl-b d`).
+
+**After pulling new code:** `./deploy.sh --restart`. To restart only some services, name them, e.g. `./deploy.sh --restart backend voice`.
+
+---
+
+## Getting started (local development)
 
 ### Backend
 
@@ -70,8 +92,6 @@ Voice worker, in a second terminal from `backend/` (also needs `GOOGLE_API_KEY`)
 python -m storefront.voice.agent start
 ```
 
-On the GPU box, `./deploy.sh` starts the API, the tunnel, and the voice worker. `./deploy.sh --restart` relaunches them after a pull.
-
 Tests (live tests stay off unless you pass `-m live`):
 
 ```bash
@@ -86,4 +106,4 @@ Open `frontend/Spotted.xcodeproj` in Xcode and run the **Spotted** scheme on a p
 
 ### Segmentation server
 
-The backend sends frames to `MODEL_SERVICE_URL` (Cloudflare Access headers `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` when the server is not on localhost). `segmentation/` is that server: `server.py` and `run_tmux.sh`.
+The backend sends frames to `MODEL_SERVICE_URL` (Cloudflare Access headers `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` when the server is not on localhost). `backend/segmentation/server.py` is that server; on the GPU box, `deploy.sh` runs it (see [Deploy](#deploy)).

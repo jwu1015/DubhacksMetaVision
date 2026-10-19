@@ -1,4 +1,4 @@
-"""A fake SAM tracking server (segmentation/server.py's /session routes) with moving boxes, and a
+"""A fake SAM tracking server (backend/segmentation/server.py's /session routes) with moving boxes, and a
 synthetic room video for the WebRTC tests.
 
     python tests/fakes/tracking.py [--port 8003] [--latency 1.5]   # the fake server, for a manual run

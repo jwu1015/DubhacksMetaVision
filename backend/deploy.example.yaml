@@ -1,0 +1,62 @@
+# Config for deploy.sh: the segmentation server, the backend and the voice agent on one GPU box.
+# Copy to deploy.yaml (gitignored: it holds secrets), fill it in, then run ./deploy.sh.
+# Each service's `env` is passed to it as environment variables; deploy.sh adds the ones that wire the
+# services together (HOST/PORT, MODEL_SERVICE_URL, PUBLIC_BASE_URL), so leave those out.
+
+session: spotted  # the tmux session; attach with: tmux attach -t spotted   (detach: Ctrl-b d)
+
+tunnel:
+  # quick: a Cloudflare quick tunnel to the backend (https://<random>.trycloudflare.com, new on every start)
+  # named: a named tunnel; in the Cloudflare dashboard, route the backend's hostname to http://127.0.0.1:8000
+  #        (backend.port), and optionally a path like /inference to http://127.0.0.1:10100 (segmentation.port,
+  #        keep Cloudflare Access on that one)
+  # none:  no tunnel; set public_url yourself if the backend is reachable some other way
+  mode: quick
+  token: ""       # named: the tunnel's token
+  public_url: ""  # named/none: the backend's public URL, e.g. https://spotted.example.com
+
+segmentation:
+  venv: /venv/main   # needs torch (deploy.sh installs segmentation/requirements.txt into it)
+  host: 127.0.0.1    # 0.0.0.0 to serve it beyond this machine (the backend and the tunnel use localhost)
+  port: 10100
+  env:
+    SAM_MODEL: facebook/sam3.1
+    ROOT_PATH: /inference  # the path prefix behind a named tunnel; unprefixed paths still work
+    HF_TOKEN: ""           # Hugging Face token with access to SAM_MODEL
+    # More knobs (see segmentation/server.py): SAM_THRESHOLD, MERGE_IOU, NEST_FRACTION, MAX_SESSIONS,
+    # SESSION_TTL, KEEP_FRAMES, LOST_FRAMES, MAX_OBJECTS, SAM_DTYPE, BATCH_PROMPTS
+
+backend:
+  venv: /venv/backend  # its own venv: the backend pins av/aiortc, which shouldn't touch the torch stack
+  port: 8000
+  env:
+    ANTHROPIC_API_KEY: ""
+    ANTHROPIC_WORKSPACE_ID: ""  # only for a key that isn't scoped to a workspace
+    # Shopping and Amazon searches: OpenWeb Ninja when its key is set, else SerpAPI.
+    # SHOPPING_PROVIDER / AMAZON_PROVIDER = openwebninja | serpapi override it.
+    OPENWEB_NINJA_API_KEY: ""
+    SERPAPI_KEY: ""
+    # LiveKit Cloud: the session's room and the voice agent
+    LIVEKIT_URL: wss://<project>.livekit.cloud
+    LIVEKIT_API_KEY: ""
+    LIVEKIT_API_SECRET: ""
+    GOOGLE_API_KEY: ""  # the voice agent's Gemini Live model
+    # WebRTC: a Cloudflare TURN key (dashboard: Realtime > TURN) so a phone on another network can connect;
+    # or static TURN_URLS (comma-separated), TURN_USERNAME, TURN_CREDENTIAL; else STUN only
+    CF_TURN_KEY_ID: ""
+    CF_TURN_KEY_API_TOKEN: ""
+    WEBRTC_ROTATE: 0  # degrees to turn the phone's frames if they arrive sideways (90, 180, 270)
+    # CLIP /embed service (not built yet): its URL and bearer token
+    EMBED_SERVICE_URL: ""
+    MODEL_SERVICE_TOKEN: ""
+    WARMUP: true  # one vision call at start (under a cent) so the first real request is fast
+    # an object on screen this long gets a quick label, then a Look; MAX_LOOKS run at once
+    QUICK_LABEL_DWELL_MS: 500
+    LOOK_DWELL_MS: 500
+    MAX_LOOKS: 3
+
+voice:
+  # The voice agent's worker (storefront.voice.agent) uses backend.env. It waits for the backend to send for
+  # it, so it runs all the time; Gemini only runs while voice is on in the app. Needs GOOGLE_API_KEY and
+  # LIVEKIT_URL.
+  enabled: true
