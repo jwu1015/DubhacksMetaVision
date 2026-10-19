@@ -154,13 +154,15 @@ class Stream:
     def tracking(self) -> str:
         if self._task is None:
             return "stopped"
+        if self.tracker.blocked:
+            return "blocked"
         if self.tracker.error:
             return "offline"
         return "ok" if self._result else "starting"
 
     def _status_message(self) -> dict:
         return StatusMessage(tracking=self.tracking, category=self.tracker.category,
-                             prompts=self.tracker.prompts).model_dump(mode="json")
+                             prompts=self.tracker.prompts, message=self.tracker.blocked).model_dump(mode="json")
 
     def _objects_message(self) -> dict:
         age_ms = round((time.time() - self._result.captured_at) * 1000)  # how old the frame behind the boxes is

@@ -8,7 +8,8 @@ backoff and returns None.
 
 What a session tracks: the prompts Claude picks (labels.py) within the tracker's category from the
 session's first frame. The session isn't created until those prompts are back, and that frame is then
-its first.
+its first. A security check (security.py) runs on the same frame at the same time: if recording isn't OK
+there, no session starts and the tracker stays blocked (self.blocked, the reason) until stop().
 
     python -m storefront.live.tracker fixtures/lamp_room.jpg [more.jpg ...]   # one session, then delete it
 """
@@ -23,7 +24,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from storefront import config, net
-from storefront.live import labels
+from storefront.live import labels, security
 from storefront.models import BBox
 
 log = logging.getLogger("storefront.tracker")
@@ -50,6 +51,10 @@ class TrackResult(BaseModel):
     objects: list[TrackedObject]
     latency_ms: int
     captured_at: float  # time.time() when the frame was captured
+
+
+class Blocked(Exception):
+    """The security check says recording isn't OK here; the message is its reason."""
 
 
 class Rejected(Exception):
@@ -99,6 +104,7 @@ class Tracker:
         self.session_id: str | None = None
         self.sessions = 0  # sessions started so far: the current one's number, in its uids
         self.error: str | None = None  # the last failure; None once a frame goes through
+        self.blocked: str | None = None  # why recording isn't OK here; no frames go out until stop()
         self.failures = 0
         self._lock = asyncio.Lock()    # frames of a session must never overlap
 
@@ -119,8 +125,12 @@ class Tracker:
 
     async def _create(self, image: Image.Image):
         """Start a session tracking the prompts Claude picks from `image` (the session's first frame)
-        within our category: the session starts only once they are back."""
-        prompts = await labels.labels_or_fallback(image, self.category)
+        within our category: the session starts only once they are back. Raises Blocked if the security
+        check, run at the same time, says recording isn't OK here."""
+        prompts, verdict = await asyncio.gather(labels.labels_or_fallback(image, self.category),
+                                                security.check(image))
+        if not verdict.allowed:
+            raise Blocked(verdict.reason)
         r = await self._request("POST", "/session", json={"prompt": prompts})
         r.raise_for_status()
         self.session_id, self.prompts = r.json()["session_id"], prompts
@@ -154,11 +164,17 @@ class Tracker:
         """Track one frame; None if that failed (after waiting out the backoff). Never raises."""
         captured_at = captured_at or time.time()
         async with self._lock:
+            if self.blocked:
+                return None
             t0 = time.perf_counter()
             try:
                 jpeg = await asyncio.to_thread(encode, image)
                 r = await self._post_frame(jpeg, image)
                 result = parse(r.json(), ms_since(t0), captured_at, self.sessions)
+            except Blocked as e:
+                log.warning("tracker: blocked: %s", e)
+                self.blocked = str(e)
+                return None
             except Exception as e:  # rejected, unreachable, slow, error status, unexpected JSON
                 await self.sleep(self._note(e, ms_since(t0)))
                 return None
@@ -188,7 +204,8 @@ class Tracker:
             await self.stop()
 
     async def stop(self):
-        """Delete the session, best effort. Never raises."""
+        """Delete the session, best effort, and lift a block: the next session is checked again. Never raises."""
+        self.blocked = None
         sid, self.session_id = self.session_id, None
         if not sid:
             return

@@ -114,9 +114,10 @@ class LookMessage(BaseModel):
 
 class StatusMessage(BaseModel):
     type: Literal["status"] = "status"
-    tracking: Literal["stopped", "starting", "ok", "offline"]
+    tracking: Literal["stopped", "starting", "ok", "offline", "blocked"]  # blocked: recording isn't OK here
     category: str                     # what the prompts were picked within
     prompts: list[str]                # what SAM tracks; empty until the first frame
+    message: str | None = None        # "blocked": why, in a short sentence for the user
 
 
 # ---------- REST bodies ----------

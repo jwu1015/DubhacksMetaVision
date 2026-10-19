@@ -37,6 +37,7 @@ struct LiveView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.scan)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.isFindingLabels)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.connection)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.blockedReason)
         .accessibilityAction(.escape, dismissSelection)
     }
 
@@ -175,6 +176,16 @@ struct LiveView: View {
     // MARK: - Bottom
 
     @ViewBuilder private var bottomContent: some View {
+        if let reason = app.blockedReason {
+            BlockedCard(reason: reason) { app.isCameraPaused = false }
+                .padding(.horizontal, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else {
+            scanContent
+        }
+    }
+
+    @ViewBuilder private var scanContent: some View {
         switch app.scan {
         case .idle where app.isFindingLabels:
             LabelsLoader(category: app.category)
@@ -206,6 +217,38 @@ struct LiveView: View {
                 .padding(.horizontal, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+}
+
+/// The session failed its security check: recording isn't OK here, so the camera is paused.
+private struct BlockedCard: View {
+    let reason: String
+    let onResume: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Icon(name: "icon-shield", size: 22)
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Can't record here")
+                        .font(.spottedHeadline)
+                        .foregroundStyle(.labelPrimary)
+                    Text(reason)
+                        .font(.spottedFootnote)
+                        .foregroundStyle(.labelSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text("The camera is paused. Move somewhere else, then try again.")
+                .font(.spottedFootnote)
+                .foregroundStyle(.labelSecondary)
+            PrimaryButton(title: "Try again", icon: "icon-retry-on-accent", action: onResume)
+        }
+        .padding(16)
+        .glass(in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }
 
