@@ -1,4 +1,4 @@
-"""Live tracking on Baptiste's SAM server (segmentation/server.py, the /session routes).
+"""Live tracking on Baptiste's SAM server (backend/segmentation/server.py, the /session routes).
 
 One Tracker per stream: one session, one frame in flight. The caller always passes the newest
 frame (Stream does this), so frames that arrive meanwhile are skipped, never queued. Each object gets
