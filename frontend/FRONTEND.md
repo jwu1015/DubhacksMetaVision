@@ -192,8 +192,8 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
 ## App architecture
 
 ```
-Spotted/
-├─ App/        SpottedApp, AppState (live state, cart, saved, navigation, voice actions), AppModels,
+Storefront/
+├─ App/        StorefrontApp, AppState (live state, cart, saved, navigation, voice actions), AppModels,
 │              LookActivityController
 ├─ Live/       LiveSession (the LiveKit room: video up, updates in, RPCs out)
 │              VideoFeed (phone camera, mock room or glasses → the one video track)
@@ -416,7 +416,7 @@ Target: **WCAG 2.2 AA** (the standard that the ADA, Section 508 and the European
 
 ## Backend contract
 
-Base URL: `https://dubhacks.tamkar.ai` by default, set in `Spotted.xcconfig`. Override it in the untracked `Config.xcconfig`, for example with a laptop's address or an ngrok URL.
+Base URL: `https://dubhacks.tamkar.ai` by default, set in `Storefront.xcconfig`. Override it in the untracked `Config.xcconfig`, for example with a laptop's address or an ngrok URL.
 
 > **Source of truth: `Network/Models.swift`**, which mirrors `backend/storefront/models.py`; change them together.
 > - Decode with a plain `JSONDecoder()` (all keys are mapped in `CodingKeys`; don't set `keyDecodingStrategy`).
@@ -525,9 +525,9 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
    - `UIBackgroundModes` → `bluetooth-central`, plus `NSBluetoothAlwaysUsageDescription`
    - `NSLocalNetworkUsageDescription` + `NSBonjourServices`: as required by the DAT SDK for Wi-Fi streaming
    - `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`, `NSFaceIDUsageDescription`
-5. **Base URL:** `Spotted.xcconfig` defaults to `https://dubhacks.tamkar.ai`.
+5. **Base URL:** `Storefront.xcconfig` defaults to `https://dubhacks.tamkar.ai`.
    - For another backend (a laptop or an ngrok URL, say), copy `Config.example.xcconfig` to the **untracked** `Config.xcconfig` and set `API_BASE_URL` there. Don't commit ngrok URLs: the repo is public, and every session costs LiveKit and Claude usage.
-   - Debug builds also read `SPOTTED_API_BASE_URL` from the scheme; set it empty to run on mock data, as the UI tests do.
+   - Debug builds also read `STOREFRONT_API_BASE_URL` from the scheme; set it empty to run on mock data, as the UI tests do.
 6. **Cloudflare Access:** the backend sits behind a Cloudflare tunnel protected by Access. Set the service token's `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` in `Config.xcconfig` (Cloudflare Zero Trust → Access → Service Auth). Requests to the backend's host, including crop images, carry them as `CF-Access-Client-Id` and `CF-Access-Client-Secret`; requests to other hosts never do. The token ships inside the app bundle, so use a token scoped to this app only.
 
 ---

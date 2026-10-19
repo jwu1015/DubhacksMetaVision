@@ -1,0 +1,19 @@
+// Shared build settings for the Storefront app target. Committed.
+//
+// The backend's base URL. To use another backend (a laptop or an ngrok URL, say), copy
+// Config.example.xcconfig to the untracked Config.xcconfig and set it there.
+// "//" starts a comment in xcconfig files, so write the scheme as https:/$()/
+
+API_BASE_URL = https:/$()/dubhacks.tamkar.ai
+
+// Meta Wearables DAT. Leave empty while the glasses are in Developer Mode (Meta AI app > your
+// glasses > Developer Mode); set both from the Wearables Developer Center for release.
+META_APP_ID =
+CLIENT_TOKEN =
+
+// The Cloudflare Access service token for the tunnel in front of the backend. Secret: set both in
+// Config.xcconfig. Sent only with requests to the backend's host.
+CF_ACCESS_CLIENT_ID =
+CF_ACCESS_CLIENT_SECRET =
+
+#include? "Config.xcconfig"

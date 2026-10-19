@@ -1,4 +1,4 @@
-// Copy to Config.xcconfig (git-ignored) and fill in. Everything here overrides Spotted.xcconfig.
+// Copy to Config.xcconfig (git-ignored) and fill in. Everything here overrides Storefront.xcconfig.
 
 // The Cloudflare Access service token for the tunnel in front of the backend
 // (Cloudflare Zero Trust > Access > Service Auth).

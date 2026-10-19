@@ -42,7 +42,7 @@ The phone draws labels and product cards from the room's `updates` topic. Taps g
 
 | Path | What it is |
 |------|------------|
-| `frontend/` | Storefront, the SwiftUI iPhone app (its Xcode project is still named `Spotted`). Screen-level detail is in [`frontend/FRONTEND.md`](frontend/FRONTEND.md). |
+| `frontend/` | Storefront, the SwiftUI iPhone app. Screen-level detail is in [`frontend/FRONTEND.md`](frontend/FRONTEND.md). |
 | `backend/` | FastAPI app (`storefront.app`): tracking, Looks, cart, checkout, and the voice worker. |
 | `backend/segmentation/` | SAM server the backend calls for object tracking. It runs on the GPU box, not on the laptop. |
 
@@ -100,9 +100,9 @@ pytest
 
 ### iOS app
 
-Open `frontend/Spotted.xcodeproj` in Xcode and run the **Spotted** scheme on a paired iPhone. Glasses streaming needs the Meta Wearables DAT SDK and the Meta AI app; the phone camera works without glasses.
+Open `frontend/Storefront.xcodeproj` in Xcode and run the **Storefront** scheme on a paired iPhone. Glasses streaming needs the Meta Wearables DAT SDK and the Meta AI app; the phone camera works without glasses.
 
-`Spotted.xcconfig` points at `https://dubhacks.tamkar.ai`. For a laptop or ngrok backend, copy `frontend/Config.example.xcconfig` to the untracked `Config.xcconfig` and set `API_BASE_URL` there. Setup, Info.plist keys, and Cloudflare Access headers are in [`frontend/FRONTEND.md`](frontend/FRONTEND.md#setup).
+`Storefront.xcconfig` points at `https://dubhacks.tamkar.ai`. For a laptop or ngrok backend, copy `frontend/Config.example.xcconfig` to the untracked `Config.xcconfig` and set `API_BASE_URL` there. Setup, Info.plist keys, and Cloudflare Access headers are in [`frontend/FRONTEND.md`](frontend/FRONTEND.md#setup).
 
 ### Segmentation server
 
