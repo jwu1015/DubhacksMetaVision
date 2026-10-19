@@ -424,6 +424,7 @@
 				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = "Storefront-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Storefront connects to your Meta glasses to see what you're looking at.";
@@ -459,6 +460,7 @@
 				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = "Storefront-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Storefront connects to your Meta glasses to see what you're looking at.";
