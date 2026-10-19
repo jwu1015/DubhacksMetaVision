@@ -12,7 +12,7 @@ struct StartView: View {
             Spacer()
             VStack(spacing: 10) {
                 Icon(name: "icon-glasses-accent", size: 44)
-                Text("Spotted")
+                Text("Storefront")
                     .font(.spottedLargeTitle)
                     .foregroundStyle(.labelPrimary)
                 Text("Point your camera at something to see what it is and what it costs.")

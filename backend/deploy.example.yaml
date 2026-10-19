@@ -3,7 +3,7 @@
 # Each service's `env` is passed to it as environment variables; deploy.sh adds the ones that wire the
 # services together (HOST/PORT, MODEL_SERVICE_URL, PUBLIC_BASE_URL), so leave those out.
 
-session: spotted  # the tmux session; attach with: tmux attach -t spotted   (detach: Ctrl-b d)
+session: storefront  # the tmux session; attach with: tmux attach -t storefront   (detach: Ctrl-b d)
 
 tunnel:
   # quick: a Cloudflare quick tunnel to the backend (https://<random>.trycloudflare.com, new on every start)
@@ -13,7 +13,7 @@ tunnel:
   # none:  no tunnel; set public_url yourself if the backend is reachable some other way
   mode: quick
   token: ""       # named: the tunnel's token
-  public_url: ""  # named/none: the backend's public URL, e.g. https://spotted.example.com
+  public_url: ""  # named/none: the backend's public URL, e.g. https://storefront.example.com
 
 segmentation:
   venv: /venv/main   # needs torch (deploy.sh installs segmentation/requirements.txt into it)

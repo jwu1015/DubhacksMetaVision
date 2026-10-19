@@ -75,7 +75,7 @@ final class VoiceAssistant {
             guard let self else { return }
             defer { if connectAttempt == attempt { connectTask = nil } }
             guard await GlassesAudio.requestMicPermission() else {
-                if connectAttempt == attempt { status = .failed("Allow the microphone for Spotted in Settings.") }
+                if connectAttempt == attempt { status = .failed("Allow the microphone for Storefront in Settings.") }
                 return
             }
             do {

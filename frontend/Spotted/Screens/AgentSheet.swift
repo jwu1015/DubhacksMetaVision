@@ -28,7 +28,7 @@ struct AgentSheet: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            AssistantLine(label: app.voice == nil ? "GLASSES WILL SAY" : "SPOTTED SAID", text: reply)
+            AssistantLine(label: app.voice == nil ? "GLASSES WILL SAY" : "STOREFRONT SAID", text: reply)
 
             if isGlasses {
                 HStack(spacing: 8) {
@@ -104,8 +104,8 @@ struct AgentSheet: View {
     private var status: String {
         guard let voice = app.voice else { return "Listening…" }
         return switch voice.status {
-        case .off, .connecting: "Connecting to Spotted…"
-        case .connected: "Spotted assistant · AI · Listening…"
+        case .off, .connecting: "Connecting to Storefront…"
+        case .connected: "Storefront assistant · AI · Listening…"
         case let .failed(message): message
         }
     }
@@ -154,7 +154,7 @@ struct AgentSheet: View {
             return said
         }
         if isGlasses {
-            var said = AttributedString("“Spotted, how much is that lamp?”")
+            var said = AttributedString("“Storefront, how much is that lamp?”")
             said.foregroundColor = .white
             return said
         }

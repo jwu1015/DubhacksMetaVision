@@ -91,7 +91,7 @@ def main(config_path: str, out_dir: str):
     write_env(out / "tunnel.env", {"TUNNEL_TOKEN": token})  # cloudflared reads TUNNEL_TOKEN
 
     settings = {
-        "SESSION": text(config.get("session", "spotted")),
+        "SESSION": text(config.get("session", "storefront")),
         "SEG_VENV": text(seg.get("venv", "/venv/main")),
         "SEG_PORT": seg_port,
         "BACKEND_VENV": text(backend.get("venv", "/venv/backend")),

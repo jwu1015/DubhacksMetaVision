@@ -130,7 +130,7 @@ final class GlassesManager {
                     permission = try await wearables.requestPermission(.camera)
                 }
                 guard permission == .granted else {
-                    camera = .failed("Allow camera access for Spotted in the Meta AI app.")
+                    camera = .failed("Allow camera access for Storefront in the Meta AI app.")
                     return
                 }
                 guard target != nil, session == nil else { return }

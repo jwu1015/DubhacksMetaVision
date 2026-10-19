@@ -104,7 +104,7 @@ private struct GlassesConnectionRow: View {
 
     private var subtitle: String {
         switch glasses.camera {
-        case .streaming: return "Camera streaming to Spotted"
+        case .streaming: return "Camera streaming to Storefront"
         case .connecting: return "Starting the glasses camera…"
         case .paused: return "Paused · tap the side of your glasses to resume"
         case let .failed(message): return message

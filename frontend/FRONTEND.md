@@ -1,6 +1,6 @@
-# Spotted: Frontend (iOS Companion App)
+# Storefront: Frontend (iOS Companion App)
 
-> Make any room a storefront. Look at something you like through Meta glasses, and Spotted identifies it and prices it. Then **Claude, acting as your shopping agent**, helps you save it, add it to your cart, find it cheaper or buy it, by voice.
+> Make any room a storefront. Look at something you like through Meta glasses, and Storefront identifies it and prices it. Then **Claude, acting as your shopping agent**, helps you save it, add it to your cart, find it cheaper or buy it, by voice.
 
 This document covers the **iPhone app** (SwiftUI) and how it talks to the Meta glasses and the FastAPI backend. The backend (image processing, product lookup) is owned by a separate team; see [Backend contract](#backend-contract).
 
@@ -77,8 +77,8 @@ The backend keeps a scene memory of the last ~15 s, and the voice agent's ground
 ### Voice trigger
 The glasses mode depends on this, so options are listed safest first:
 1. **In-app push-to-talk:** the mic button, the Live Activity button, or a lock-screen widget. Reliable; **demo default**.
-2. **Siri / App Intents:** "Hey Siri, Spotted this" or the iPhone **Action Button**. Hands-free, with no wake-word engine of our own.
-3. **Own wake phrase** ("Spotted, …") using on-device Speech while the app is in the foreground. Continuous background listening is limited by iOS and drains the battery.
+2. **Siri / App Intents:** "Hey Siri, ask Storefront about this" or the iPhone **Action Button**. Hands-free, with no wake-word engine of our own.
+3. **Own wake phrase** ("Storefront, …") using on-device Speech while the app is in the foreground. Continuous background listening is limited by iOS and drains the battery.
 4. **Glasses tap gesture:** only if Meta's SDK exposes touch events to third-party apps. **Unverified.**
 
 ### Privacy (glasses mode streams even when nothing is shown)
@@ -178,7 +178,7 @@ Glasses mic ─► Phone: Speech → transcript ─► POST /agent (stream) ─�
 4. **Undo always works:** save and add are instant but undoable for 10 s ("Chair added. Undo?").
 5. **Local fast path:** "stop", "never mind", "cancel" and "undo" are handled **on-device** without waiting for Claude. Speech stops immediately and any pending action is cancelled.
 6. **Follows the verbal guide:** the system prompt includes the State script and the 8 voice rules. Spoken lines are ≤ 8 words; longer explanations go to the phone as `text`.
-7. **Disclosed:** the UI labels the assistant as AI ("Spotted assistant · Claude"). The glasses don't pretend to be a person.
+7. **Disclosed:** the UI labels the assistant as AI ("Storefront assistant · Claude"). The glasses don't pretend to be a person.
 8. **Camera privacy:** the agent can't turn the camera on by itself; scans only happen on user request or an active Live view.
 
 ### Frontend responsibilities
@@ -260,7 +260,7 @@ The screens below (01–06) are the Live view and what follows it, for either ca
 
 ### Agent design updates (not in Figma yet)
 - **02 · Agent sheet:**
-  - Header "Spotted assistant · Claude" (AI disclosure).
+  - Header "Storefront assistant · Claude" (AI disclosure).
   - The user's transcript, then Claude's reply (short spoken line, plus longer phone-only `text`).
   - **Action cards** for what Claude did ("Saved · Brass Arc Lamp · Undo", "Added · Walnut Lounge Chair · Undo").
   - Suggested follow-ups ("Find it cheaper", "Any used?", "Check out").
@@ -277,7 +277,7 @@ The screens below (01–06) are the Live view and what follows it, for either ca
 | G6 | Live Activity / Dynamic Island | Compact: "Finding prices · lamp…" → "Lamp · $189 · Fair". Expanded: thumbnail plus Save / Add to cart. Also the lock-screen push-to-talk entry. |
 | G7 | Room Recap (optional) | "You looked at 4 things at Maya's", with Save all / pick. |
 
-**Mode switch toast:** "Glasses disconnected. Using your phone camera." / "Glasses connected. Say 'Spotted' to capture."
+**Mode switch toast:** "Glasses disconnected. Using your phone camera." / "Glasses connected. Say 'Storefront' to capture."
 
 **Not yet designed:** onboarding (pairing, permissions, linking a Visa card, setting the limit), the receipt, an over-limit approval sheet, empty states, and anything for the T-Mobile Matchmaker side track.
 
@@ -574,7 +574,7 @@ Send `CheckoutRequest(items: cart.items.map(CheckoutItem.init))`, then open `che
 - **Theme:** Lime (default) or Visa Night for the demo? Both are ready in Figma.
 - **Agent scope:** which tools ship for the demo? Must-haves: `save_item`, `add_to_cart`, `undo_last`, `show_results`, `start_checkout`. Stretch: `compare_items`, `list_saved(room:)`.
 - **Agent memory:** does the session persist across app launches (e.g., "what did I save yesterday?"), or only within one session?
-- **Assistant name:** "Spotted assistant" (powered by Claude) or a named persona? Keep the disclosure either way.
+- **Assistant name:** "Storefront assistant" (powered by Claude) or a named persona? Keep the disclosure either way.
 - **Phone "hover":** gaze vs press-and-hold for revealing the item tag.
 - **Visa track story:** checkout runs on **Stripe test mode**. Decide how Visa shows up for judges: Visa test cards in Stripe, the "agent limit" concept, or a Visa sandbox API (Intelligent Commerce / Token Service) layered on. Ask the Visa mentors early.
 - **`/agent` owner:** not on the backend yet. Decide who builds it, or fall back to on-device keyword commands (see the agent section).

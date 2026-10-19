@@ -42,7 +42,7 @@ final class LookActivityController {
         }
         end()
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            log.error("Live Activities are turned off for Spotted")
+            log.error("Live Activities are turned off for Storefront")
             return
         }
         do {

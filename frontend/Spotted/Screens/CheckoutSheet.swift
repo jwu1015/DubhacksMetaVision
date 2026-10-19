@@ -18,7 +18,7 @@ struct CheckoutSheet: View {
                     Text("Confirm purchase")
                         .font(.spottedTitle2)
                         .foregroundStyle(.labelPrimary)
-                    Text("Spotted agent checkout · secure handoff")
+                    Text("Storefront agent checkout · secure handoff")
                         .font(.spottedFootnote)
                         .foregroundStyle(.labelSecondary)
                 }

@@ -23,7 +23,7 @@ final class TapOutsideTests: SpottedUITestCase {
 
     func testListeningSheetClosesOnTapAbove() {
         launch()
-        let talk = app.buttons["Talk to Spotted"].firstMatch
+        let talk = app.buttons["Talk to Storefront"].firstMatch
         XCTAssertTrue(talk.waitForExistence(timeout: 5))
         talk.tap()
         let stop = app.buttons["Stop listening"]

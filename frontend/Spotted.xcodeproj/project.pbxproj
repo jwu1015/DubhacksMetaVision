@@ -425,12 +425,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Spotted-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Spotted connects to your Meta glasses to see what you're looking at.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spotted listens so you can ask the assistant about what you're looking at.";
+				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Storefront connects to your Meta glasses to see what you're looking at.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Storefront streams the camera to find products you point at.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Storefront uses Face ID to confirm purchases your assistant prepares.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Storefront connects to the Storefront server on your network to stream video.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Storefront listens so you can ask the assistant about what you're looking at.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -460,12 +460,12 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Spotted-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Spotted connects to your Meta glasses to see what you're looking at.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Spotted streams the camera to find products you point at.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Spotted uses Face ID to confirm purchases your assistant prepares.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spotted connects to the Spotted server on your network to stream video.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spotted listens so you can ask the assistant about what you're looking at.";
+				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Storefront connects to your Meta glasses to see what you're looking at.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Storefront streams the camera to find products you point at.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Storefront uses Face ID to confirm purchases your assistant prepares.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Storefront connects to the Storefront server on your network to stream video.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Storefront listens so you can ask the assistant about what you're looking at.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -526,7 +526,7 @@
 				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SpottedWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -551,7 +551,7 @@
 				DEVELOPMENT_TEAM = 9KG9W2VBC8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SpottedWidgets-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Spotted;
+				INFOPLIST_KEY_CFBundleDisplayName = Storefront;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

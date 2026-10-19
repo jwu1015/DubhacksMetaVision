@@ -26,7 +26,7 @@ struct SpottedTodayView: View {
                     SegmentedControl(options: Range.allCases, title: \.rawValue, selection: $range)
 
                     if captures.isEmpty {
-                        Text("Nothing yet. Say “Spotted” and ask about something you see.")
+                        Text("Nothing yet. Say “Storefront” and ask about something you see.")
                             .font(.spottedSubhead)
                             .foregroundStyle(.labelSecondary)
                     }

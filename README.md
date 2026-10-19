@@ -4,7 +4,7 @@
 
 A Meta glasses plug-in that turns whatever you're looking at into something you can shop. Walk into a room, look at a product, and get instant feedback on it — then act on it with your voice.
 
-The iPhone app is **Spotted**. The FastAPI service in `backend/` identifies what the camera sees, prices it, and checks out. A Gemini Live agent in the same LiveKit room handles voice.
+The iPhone app is **Storefront**. The FastAPI service in `backend/` identifies what the camera sees, prices it, and checks out. A Gemini Live agent in the same LiveKit room handles voice.
 
 ---
 
@@ -42,7 +42,7 @@ The phone draws labels and product cards from the room's `updates` topic. Taps g
 
 | Path | What it is |
 |------|------------|
-| `frontend/` | Spotted, the SwiftUI iPhone app. Screen-level detail is in [`frontend/FRONTEND.md`](frontend/FRONTEND.md). |
+| `frontend/` | Storefront, the SwiftUI iPhone app (its Xcode project is still named `Spotted`). Screen-level detail is in [`frontend/FRONTEND.md`](frontend/FRONTEND.md). |
 | `backend/` | FastAPI app (`storefront.app`): tracking, Looks, cart, checkout, and the voice worker. |
 | `backend/segmentation/` | SAM server the backend calls for object tracking. It runs on the GPU box, not on the laptop. |
 
@@ -64,7 +64,7 @@ Runs the segmentation server, the backend and the voice agent on one GPU machine
    ./deploy.sh
    ```
    It prints the backend's public URL when it's done.
-4. **Check on it:** `tmux attach -t spotted` (one window per service; detach with `Ctrl-b d`).
+4. **Check on it:** `tmux attach -t storefront` (one window per service; detach with `Ctrl-b d`).
 
 **After pulling new code:** `./deploy.sh --restart`. To restart only some services, name them, e.g. `./deploy.sh --restart backend voice`.
 
