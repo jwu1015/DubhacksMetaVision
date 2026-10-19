@@ -76,6 +76,10 @@ struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { app.appBecameActive() }
         }
+        // The screen stays on while the camera streams: auto-lock would background the app and end it.
+        .onChange(of: app.isCameraPaused, initial: true) { _, isPaused in
+            UIApplication.shared.isIdleTimerDisabled = !isPaused
+        }
     }
 
     private var voiceInUse: [Bool] {
